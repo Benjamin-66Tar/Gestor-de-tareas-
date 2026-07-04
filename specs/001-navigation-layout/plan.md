@@ -12,19 +12,19 @@ The Navigation Layout feature establishes the core shell of the "Aura" task mana
 
 **Language/Version**: Python 3.12, TypeScript 5.0+, HTML5, CSS3
 
-**Primary Dependencies**: Django (backend), React 18+, Vite (frontend), OpenAI SDK (structured outputs), Redis (cache)
+**Primary Dependencies**: Django (backend), React 18+, Vite (frontend), OpenAI SDK (structured outputs), Redis (cache), Tailwind CSS
 
 **Storage**: SQLite (development/quick mocking)
 
-**Testing**: pytest (backend), Vitest (frontend)
+**Testing**: pytest (backend)
 
 **Target Platform**: Web browsers (Chrome, Safari, Firefox, Edge)
 
-**Project Type**: Web application (Option 2: frontend + backend)
+**Project Type**: Web application (Root-level frontend + aura_backend/ directory)
 
 **Performance Goals**: UI tab transitions in under 100ms, API query caching
 
-**Constraints**: Strict Layered Architecture, CSS pure styles (no Tailwind)
+**Constraints**: Strict Layered Architecture, Tailwind CSS styling
 
 **Scale/Scope**: Navigation shell, user sessions, mock notifications count, static mock views for Calendar, Goals, Projects, Events.
 
@@ -33,7 +33,7 @@ The Navigation Layout feature establishes the core shell of the "Aura" task mana
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
 1. **Colorido y Altamente Visual**: The active navigation tabs, notification badge counts, and brand elements MUST utilize vibrant, cohesive HSL-based palettes with high visual contrast. -> **PASS**
-2. **Rendimiento Ultra Rápido**: Navigating tabs MUST perform locally in the UI in under 100ms using state management (Zustand) and optimized rendering. Backend APIs MUST support future caching. -> **PASS**
+2. **Rendimiento Ultra Rápido**: Navigating tabs MUST perform locally in the UI in under 100ms using state management (React Context) and optimized rendering. Backend APIs MUST support caching. -> **PASS**
 3. **Modularidad Estricta**: Clear boundaries between React frontend layers (UI, State, Services, Domain) and Django backend layers (API, Serializers, Services, Persistencia). -> **PASS**
 
 ## Project Structure
@@ -53,47 +53,46 @@ specs/001-navigation-layout/
 ### Source Code (repository root)
 
 ```text
-backend/
-├── src/
-│   ├── config/          # Django settings/urls
-│   ├── manage.py
-│   ├── api/             # Views, routing, serializers
-│   ├── services/        # Business logic (e.g., NPL, external integrations)
-│   └── models/          # Django database models
-└── tests/
-
-frontend/
-├── src/
-│   ├── components/      # UI components (Navbar, TabBar)
-│   ├── pages/           # Pages (Calendario, Objetivos, Proyectos, Eventos)
-│   ├── services/        # API clients (fetch/axios calls)
-│   ├── store/           # Zustand state management
-│   └── types/           # Domain and TypeScript interfaces
-└── tests/
+aura_backend/
+├── models.py            # Django database models
+├── serializers.py       # DRF serializers
+├── services.py          # Business logic & OpenAI NPL integrations
+├── views.py             # API controllers
+└── ...
+src/
+├── domain/              # Domain and TypeScript interfaces (types.ts)
+├── context/             # React Context state management (AuraState.tsx)
+├── components/          # UI components
+├── App.tsx              # Main layout, Navbar, and TabBar integration
+└── ...
 ```
-
-**Structure Decision**: Option 2: Web application (frontend + backend directories) since we are implementing both Django and React.
 
 ## Proposed Changes
 
 ### Backend (Django)
 
-#### [NEW] [models.py](file:///d:/Sistemas/Proyectos/Gestor_tareas/backend/src/models/user_profile.py)
-Profile database definition to persist active session avatar and user details.
+#### [NEW] [models.py](file:///d:/Sistemas/Proyectos/Gestor_tareas/aura_backend/models.py)
+ElementoAura database definition for persisting goals, projects, events, and activities.
 
-#### [NEW] [views.py](file:///d:/Sistemas/Proyectos/Gestor_tareas/backend/src/api/views.py)
-API endpoints for user profile metadata and notification count.
+#### [NEW] [serializers.py](file:///d:/Sistemas/Proyectos/Gestor_tareas/aura_backend/serializers.py)
+ModelSerializer for ElementoAura schema validation.
+
+#### [NEW] [services.py](file:///d:/Sistemas/Proyectos/Gestor_tareas/aura_backend/services.py)
+OpenAI integration with structured outputs format.
+
+#### [NEW] [views.py](file:///d:/Sistemas/Proyectos/Gestor_tareas/aura_backend/views.py)
+API endpoints with Redis caching.
 
 ### Frontend (React + Vite + TypeScript)
 
-#### [NEW] [Navbar.tsx](file:///d:/Sistemas/Proyectos/Gestor_tareas/frontend/src/components/Navbar.tsx)
-The persistent top bar with logo, notification icon/badge, and avatar profile.
+#### [NEW] [types.ts](file:///d:/Sistemas/Proyectos/Gestor_tareas/src/domain/types.ts)
+TypeScript interfaces for business models.
 
-#### [NEW] [TabBar.tsx](file:///d:/Sistemas/Proyectos/Gestor_tareas/frontend/src/components/TabBar.tsx)
-The tabs element for horizontal navigation between views.
+#### [NEW] [AuraState.tsx](file:///d:/Sistemas/Proyectos/Gestor_tareas/src/context/AuraState.tsx)
+Context provider and custom state hooks.
 
-#### [NEW] [store.ts](file:///d:/Sistemas/Proyectos/Gestor_tareas/frontend/src/store/navigation.ts)
-Zustand store for managing selected tabs and synchronization.
+#### [NEW] [App.tsx](file:///d:/Sistemas/Proyectos/Gestor_tareas/src/App.tsx)
+Interactive Navbar, TabBar, and dynamic layouts.
 
 ## Complexity Tracking
 
