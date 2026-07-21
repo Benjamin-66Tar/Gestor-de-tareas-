@@ -12,14 +12,14 @@ class ElementoAuraListAPI(APIView):
         datos_en_cache = cache.get(cache_key)
         
         if datos_en_cache:
-            return Response(datos_en_cache, status=status.HTTP_OK)
+            return Response(datos_en_cache, status=status.HTTP_200_OK)
             
         elementos = ElementoAura.objects.all()
         serializer = ElementoAuraSerializer(elementos, many=True)
         
         # Guardar en caché por 60 segundos
         cache.set(cache_key, serializer.data, timeout=60)
-        return Response(serializer.data, status=status.HTTP_OK)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
     def post(self, request):
         serializer = ElementoAuraSerializer(data=request.data)
@@ -27,5 +27,5 @@ class ElementoAuraListAPI(APIView):
         if serializer.is_valid():
             serializer.save()
             cache.delete("elementos_aura_all") # Invalidar caché ante cambios
-            return Response(serializer.data, status=status.HTTP_CREATED)
-        return Response(serializer.errors, status=status.HTTP_BAD_REQUEST)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
