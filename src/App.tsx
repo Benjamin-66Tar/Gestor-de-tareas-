@@ -1,16 +1,18 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { AuraProvider, useAuraState } from './context/AuraState';
-import { ElementoTipo } from './domain/types';
+import { ElementoTipo, PlanElemento } from './domain/types';
+import { CalendarGrid } from './components/CalendarGrid';
+import { ElementoModal } from './components/ElementoModal';
 
 // Navbar Component
 const Navbar: React.FC = () => (
   <header className="w-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 p-4 text-white flex justify-between items-center shadow-md">
     <h1 className="text-2xl font-black tracking-wider drop-shadow-sm">Aura</h1>
     <div className="flex items-center gap-4">
-      <button className="relative p-2 bg-white/20 rounded-full hover:bg-white/30 transition">
-        🔔 <span className="absolute top-0 right-0 bg-red-500 text-xs w-4 h-4 rounded-full flex items-center justify-center">3</span>
+      <button className="relative p-2 bg-white/20 rounded-full hover:bg-white/30 transition animate-pulse">
+        🔔 <span className="absolute top-0 right-0 bg-red-500 text-xs w-4 h-4 rounded-full flex items-center justify-center font-bold">3</span>
       </button>
-      <div className="w-9 h-9 bg-white text-indigo-600 rounded-full flex items-center justify-center font-bold shadow-inner cursor-pointer">
+      <div className="w-9 h-9 bg-white text-indigo-600 rounded-full flex items-center justify-center font-bold shadow-inner cursor-pointer hover:scale-105 transition-all">
         U
       </div>
     </div>
@@ -52,23 +54,34 @@ const TabBar: React.FC = () => {
 // Contenido Dinámico (Vistas Maquetadas)
 const ContenidoPrincipal: React.FC = () => {
   const { tabActiva } = useAuraState();
+  const [modalOpen, setModalOpen] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<string | undefined>(undefined);
+  const [editingItem, setEditingItem] = useState<PlanElemento | null>(null);
+
+  const handleDayClick = (dateStr: string) => {
+    setSelectedDate(dateStr);
+    setEditingItem(null);
+    setModalOpen(true);
+  };
+
+  const handleItemClick = (item: PlanElemento) => {
+    setSelectedDate(undefined);
+    setEditingItem(item);
+    setModalOpen(true);
+  };
 
   return (
     <main className="p-6 flex-1 bg-slate-950 text-slate-100 min-h-[calc(100vh-130px)]">
       {tabActiva === 'CALENDARIO' && (
-        <div className="animate-fadeIn">
-          <h2 className="text-xl font-bold text-amber-400 mb-4">Línea de Tiempo / Calendario</h2>
-          <div className="border-l-4 border-amber-400 pl-4 space-y-4">
-            <div className="bg-slate-900 p-4 rounded-lg border border-slate-800 shadow-sm">
-              <span className="text-xs text-amber-400 font-mono">09:00 AM</span>
-              <p className="font-semibold text-white">Revisión de Arquitectura del Sistema Aura</p>
-            </div>
-            <div className="bg-slate-900 p-4 rounded-lg border border-slate-800 shadow-sm">
-              <span className="text-xs text-amber-400 font-mono">03:00 PM</span>
-              <p className="font-semibold text-white">Maquetación de Componentes React</p>
-            </div>
-          </div>
-        </div>
+        <>
+          <CalendarGrid onDayClick={handleDayClick} onItemClick={handleItemClick} />
+          <ElementoModal
+            isOpen={modalOpen}
+            onClose={() => setModalOpen(false)}
+            selectedDateStr={selectedDate}
+            editingItem={editingItem}
+          />
+        </>
       )}
       {tabActiva === 'OBJETIVOS' && <div className="text-emerald-400 text-lg font-bold animate-fadeIn">🎯 Panel de Objetivos Estratégicos</div>}
       {tabActiva === 'PROYECTOS' && <div className="text-cyan-400 text-lg font-bold animate-fadeIn">💻 Gestión de Espacios y Proyectos Activos</div>}
