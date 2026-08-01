@@ -8,3 +8,13 @@ export interface PlanElemento {
   fecha_limite?: string;
   color_hex: string;
 }
+
+export interface CalendarDay {
+  date: Date;
+  formattedDate: string; // YYYY-MM-DD
+  dayNumber: number;
+  isCurrentMonth: boolean;
+  isToday: boolean;
+  items: PlanElemento[];
+}
+
