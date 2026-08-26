@@ -20,7 +20,7 @@ interface AuraContextProps {
 
 const AuraContext = createContext<AuraContextProps | undefined>(undefined);
 
-const API_BASE = 'http://127.0.0.1:8000/api/v1/elementos/';
+const API_BASE = 'http://127.0.0.1:6001/api/v1/elementos/';
 
 export const AuraProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [tabActiva, setTabActiva] = useState<ElementoTipo>('CALENDARIO');
