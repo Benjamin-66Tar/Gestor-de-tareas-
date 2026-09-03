@@ -1,7 +1,12 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
-import { ElementoTipo, PlanElemento } from '../domain/types';
+import { ElementoTipo, PlanElemento, VistaModoCalendario } from '../domain/types';
 import { getGridDateRange } from '../utils/dateUtils';
 
+/**
+ * Propiedades del contexto global de Aura.
+ * Incluye gestión de elementos (CRUD), navegación mensual y el nuevo estado
+ * para el modo semanal / agrandador de semanas (Vista Semanal Dedicada).
+ */
 interface AuraContextProps {
   tabActiva: ElementoTipo;
   setTabActiva: (tab: ElementoTipo) => void;
@@ -12,6 +17,17 @@ interface AuraContextProps {
   mesActivo: number;
   setAnioActivo: (year: number) => void;
   setMesActivo: (month: number) => void;
+  
+  // --- Estado del Modo Agrandador / Vista Semanal ---
+  vistaCalendario: VistaModoCalendario;
+  setVistaCalendario: (vista: VistaModoCalendario) => void;
+  fechaSemanaSeleccionada: Date;
+  setFechaSemanaSeleccionada: (fecha: Date) => void;
+  agrandarSemana: (fechaReferencia: Date) => void;
+  irSemanaAnterior: () => void;
+  irSemanaSiguiente: () => void;
+
+  // --- Operaciones Asíncronas ---
   fetchElementos: (start?: string, end?: string) => Promise<void>;
   crearElemento: (elemento: Omit<PlanElemento, 'id'>) => Promise<boolean>;
   actualizarElemento: (id: number, elemento: Partial<PlanElemento>) => Promise<boolean>;
@@ -32,6 +48,61 @@ export const AuraProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const today = new Date();
   const [anioActivo, setAnioActivo] = useState<number>(today.getFullYear());
   const [mesActivo, setMesActivo] = useState<number>(today.getMonth()); // 0-11
+
+  // --- Estado del Modo Agrandador / Vista Semanal ---
+  // Permite alternar entre la cuadrícula de 42 días ('MES') y la semana ampliada ('SEMANA')
+  const [vistaCalendario, setVistaCalendario] = useState<VistaModoCalendario>('MES');
+  // Fecha ancla utilizada para determinar qué semana se está visualizando en modo ampliado
+  const [fechaSemanaSeleccionada, setFechaSemanaSeleccionada] = useState<Date>(today);
+
+  /**
+   * Activa el modo 'Agrandador de Semana' (Zoom Semanal Dedicado) para la semana de la fecha recibida.
+   * Sincroniza automáticamente anioActivo y mesActivo para asegurar la recarga de eventos del backend.
+   */
+  const agrandarSemana = (fechaReferencia: Date) => {
+    setFechaSemanaSeleccionada(fechaReferencia);
+    if (fechaReferencia.getFullYear() !== anioActivo) {
+      setAnioActivo(fechaReferencia.getFullYear());
+    }
+    if (fechaReferencia.getMonth() !== mesActivo) {
+      setMesActivo(fechaReferencia.getMonth());
+    }
+    setVistaCalendario('SEMANA');
+  };
+
+  /**
+   * Desplaza la semana activa 7 días hacia atrás en el tiempo.
+   * Si cambia de mes o año, actualiza mesActivo y anioActivo.
+   */
+  const irSemanaAnterior = () => {
+    const nuevaFecha = new Date(
+      fechaSemanaSeleccionada.getFullYear(),
+      fechaSemanaSeleccionada.getMonth(),
+      fechaSemanaSeleccionada.getDate() - 7
+    );
+    setFechaSemanaSeleccionada(nuevaFecha);
+    if (nuevaFecha.getMonth() !== mesActivo || nuevaFecha.getFullYear() !== anioActivo) {
+      setMesActivo(nuevaFecha.getMonth());
+      setAnioActivo(nuevaFecha.getFullYear());
+    }
+  };
+
+  /**
+   * Desplaza la semana activa 7 días hacia adelante en el tiempo.
+   * Si cambia de mes o año, actualiza mesActivo y anioActivo.
+   */
+  const irSemanaSiguiente = () => {
+    const nuevaFecha = new Date(
+      fechaSemanaSeleccionada.getFullYear(),
+      fechaSemanaSeleccionada.getMonth(),
+      fechaSemanaSeleccionada.getDate() + 7
+    );
+    setFechaSemanaSeleccionada(nuevaFecha);
+    if (nuevaFecha.getMonth() !== mesActivo || nuevaFecha.getFullYear() !== anioActivo) {
+      setMesActivo(nuevaFecha.getMonth());
+      setAnioActivo(nuevaFecha.getFullYear());
+    }
+  };
 
   // Fetch items from the Django backend API
   const fetchElementos = async (start?: string, end?: string) => {
@@ -137,6 +208,15 @@ export const AuraProvider: React.FC<{ children: React.ReactNode }> = ({ children
       mesActivo,
       setAnioActivo,
       setMesActivo,
+      // Propiedades de la vista semanal / agrandador de semanas
+      vistaCalendario,
+      setVistaCalendario,
+      fechaSemanaSeleccionada,
+      setFechaSemanaSeleccionada,
+      agrandarSemana,
+      irSemanaAnterior,
+      irSemanaSiguiente,
+      // Operaciones de datos
       fetchElementos,
       crearElemento,
       actualizarElemento,
