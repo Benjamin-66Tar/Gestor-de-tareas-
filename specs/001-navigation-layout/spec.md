@@ -8,6 +8,15 @@
 
 **Input**: User description: "Navbar: Izquierda: Logotipo/Texto "Aura" con tipografía destacada y branding colorido. Derecha: Icono de notificaciones con badge de conteo y componente de perfil de usuario (Avatar). TabBar (Debajo de Navbar): Pestañas de navegación horizontal para conmutar dinámicamente entre las secciones: Calendario, Objetivos, Proyectos y Eventos."
 
+## Clarifications
+
+### Session 2026-09-03
+- Q: ¿Cuál debe ser el mecanismo y estructura central para gestionar y visualizar las metas en la sección de Objetivos? → A: Progreso cuantificable e hitos (Metas con porcentaje de avance 0-100%, fecha límite, categoría temática y lista de hitos/sub-metas clave para completarlas).
+- Q: ¿Cómo debe actualizarse el porcentaje de progreso (0-100%) de cada meta? → A: Modo híbrido configurable por meta: ajuste manual libre (0-100%) o cálculo automático basado en hitos completados, donde los hitos tienen ponderación igual por defecto con opción de asignar valores/pesos personalizados a cada hito.
+- Q: ¿Cómo debe organizarse y visualizarse la lista de objetivos dentro de la pantalla de la sección? → A: Vista dual conmutable (Tarjetas visuales con barra de progreso e hitos, o Lista compacta tipo tabla), con filtros rápidos por estado (Todas, Activas, Completadas, Pausadas) y por categorías temáticas.
+- Q: ¿Qué tipo de interfaz o flujo de interacción debe utilizarse para crear y editar los objetivos y sus hitos en pantalla? → A: Panel lateral deslizable (Slide-over drawer) desde el borde derecho, permitiendo ver y editar detalles, notas, ponderaciones e hitos sin perder el contexto de la lista de metas.
+- Q: ¿Cómo deben relacionarse las fechas límite de los objetivos e hitos con la vista de Calendario y las notificaciones? → A: Sincronización automática con Calendario (Los objetivos e hitos con fecha límite se proyectan automáticamente en la vista de Calendario con el color de su categoría y emiten notificaciones/alertas de proximidad).
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Header Navigation Bar (Navbar) (Priority: P1)
@@ -34,6 +43,10 @@ As a user, I want to switch dynamically between Calendar, Goals, Projects, and E
 **Acceptance Scenarios**:
 1. **Given** the user is viewing the application, **When** they click on the "Objetivos" tab, **Then** the main viewport MUST switch to the Goals section immediately, and the "Objetivos" tab MUST display the active visual highlight.
 2. **Given** the user is on the "Proyectos" tab, **When** they reload the page, **Then** the active tab MUST remain "Proyectos" and the viewport MUST load the Projects section.
+3. **Given** the user navigates to the "Objetivos" tab, **When** the section renders, **Then** it MUST display the user's active goals showing title, visual progress bar (0-100%), target deadline, category tag, and milestone items.
+4. **Given** the user is in the "Objetivos" section, **When** they toggle between Card and List view, **Then** the layout MUST switch immediately while preserving active status and category filters.
+5. **Given** the user is in the "Objetivos" section, **When** they click to create or edit a goal, **Then** a slide-over drawer panel MUST open from the right edge allowing them to configure properties, progress mode, and milestone weights without leaving the view.
+6. **Given** a goal or milestone has an assigned deadline, **When** the user switches to the "Calendario" tab, **Then** the deadline MUST appear marked on the corresponding date styled with the goal's category color.
 
 ---
 
@@ -70,11 +83,23 @@ As a user, I want to interact with the notification icon and profile avatar to v
 - **FR-008**: The system MUST persist the active tab state locally to maintain the user's location upon page refresh.
 - **FR-009**: Clicking the notification icon MUST toggle a notification dropdown panel.
 - **FR-010**: Clicking the user avatar MUST toggle a user settings dropdown menu.
+- **FR-011**: The "Objetivos" section MUST allow users to view and manage goals defined with measurable progress (0-100%), target deadline, category tag, and milestone items.
+- **FR-012**: The "Objetivos" section MUST support two progress tracking modes configurable per goal: manual percentage adjustment (0-100%) or automatic milestone-based calculation.
+- **FR-013**: In automatic milestone mode, the progress MUST calculate equally across milestones by default, while supporting optional custom weighting/values per milestone.
+- **FR-014**: The "Objetivos" section MUST display visual progress bars for each goal, reflecting completion percentage and status.
+- **FR-015**: The "Objetivos" section MUST provide a view switcher allowing users to toggle between a visual card grid and a compact list/table view.
+- **FR-016**: The "Objetivos" section MUST support filtering goals by status (All, Active, Completed, Paused) and by category tags across both view modes.
+- **FR-017**: The "Objetivos" section MUST provide a slide-over drawer from the right edge for creating and editing goals without navigating away from the dashboard.
+- **FR-018**: The slide-over drawer MUST allow managing milestones (add, edit title, mark complete, remove) and assigning custom weights/values when in milestone progress mode.
+- **FR-019**: Goals and dated milestones MUST automatically project onto the "Calendario" section as deadline markers, styled using the goal's category theme color.
+- **FR-020**: The system MUST issue notification alerts when a goal or milestone deadline is approaching or overdue.
 
 ### Key Entities
 - **UserSession**: Represents the currently logged-in user, exposing their avatar image URL and auth state.
 - **Notification**: Represents a single notification item, with properties for read/unread state and creation timestamp.
 - **NavigationSection**: Represents a valid section tab (Calendar, Goals, Projects, Events).
+- **Goal**: Represents an objective with title, target deadline, category tag, progress mode (`Manual` or `MilestoneBased`), progress percentage (0-100%), and status (Active, Completed, Paused).
+- **GoalMilestone**: Represents a key checkable milestone or sub-target associated with a Goal, including title, completion state, and an optional weight value.
 
 ## Success Criteria *(mandatory)*
 
