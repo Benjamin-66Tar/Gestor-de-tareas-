@@ -1,92 +1,119 @@
-# Quickstart & Validation Guide: Navigation Layout
+# Quickstart & Validation Guide: Navigation Layout & Objetivos
 
-This guide details how to run, test, and manually/automatically verify the Navigation Layout feature.
-
-## Prerequisites
-
-Ensure you have the following installed:
-- Node.js (v18+) and npm
-- Python (v3.12+)
-- SQLite3
+This guide details how to set up, run, and validate the Navigation Layout and Objetivos feature following the Layered Architecture.
 
 ---
 
-## 1. Setup & Installation
+## 1. Environment & Prerequisites
 
-### Backend Setup
-```bash
-# Navigate to backend directory
-cd backend
+Ensure the following tools are installed:
+- **Node.js**: v18+ and `npm`
+- **Python**: v3.12+
+- **SQLite3** (local dev default)
 
-# Create virtual environment and activate it
-python -m venv venv
-venv\Scripts\activate
+---
 
-# Install dependencies
-pip install django djangorestframework django-redis django-cors-headers openai pydantic pytest
+## 2. Setup & Execution
 
-# Run database migrations
+### Backend (Django + DRF)
+```powershell
+# From repository root
+# 1. Activate virtual environment
+.\venv\Scripts\activate
+
+# 2. Install dependencies
+pip install -r requirements.txt
+
+# 3. Run database migrations
+python manage.py makemigrations
 python manage.py migrate
 
-# Start backend server
-python manage.py runserver
+# 4. Start backend server
+python manage.py runserver 8000
 ```
 
-### Frontend Setup
-```bash
-# Navigate to frontend directory
-cd frontend
-
-# Install packages
+### Frontend (React + Vite + TypeScript)
+```powershell
+# In a second terminal at repository root
+# 1. Install dependencies
 npm install
 
-# Start development server
+# 2. Start Vite development server
 npm run dev
 ```
 
----
-
-## 2. Manual Verification Scenarios
-
-### Scenario 1: Verify Header Layout (Navbar)
-1. Open the application in your browser (typically `http://localhost:5173`).
-2. Verify the top header (Navbar) is present:
-   - On the left, check that the brand logo "Aura" renders with distinct typography and colorful branding.
-   - On the right, check that the notification icon and user avatar render correctly.
-   - Verify that the notification badge displays the count of unread notifications matching the backend database (or mock database).
-
-### Scenario 2: Dynamic Tab Navigation (TabBar)
-1. Verify the TabBar is displayed directly below the Navbar with four tabs: "Calendario", "Objetivos", "Proyectos", and "Eventos".
-2. Click on the **"Objetivos"** tab.
-   - Verify that the main viewport updates immediately (under 100ms) showing the Goals placeholder.
-   - Verify that the "Objetivos" tab has the active styling (highlight color).
-3. Click on **"Calendario"**.
-   - Verify that the view switches back and active styling transitions to the "Calendario" tab.
-4. Refresh the page.
-   - Verify that the active tab selection is persisted and loads the active tab view immediately.
-
-### Scenario 3: Interactivity (Dropdowns)
-1. Click on the notification icon.
-   - Verify that the notification panel toggles open, showing a list of recent notifications.
-   - Click anywhere outside the dropdown and verify it closes.
-2. Click on the user avatar.
-   - Verify that the user options menu toggles open (Profile, Settings, Log Out).
-   - Click outside and verify it closes.
+The application is available at `http://localhost:5173`.
 
 ---
 
-## 3. Automated Tests
+## 3. End-to-End Validation Scenarios
 
-To execute automated tests for this layout:
+### Scenario 1: Shell Navigation & Instant Tab Switching (<100ms)
+1. Navigate to `http://localhost:5173`.
+2. Verify the top **Navbar**:
+   - Branding "Aura" appears on the left with high-contrast colorful typography.
+   - Bell icon shows unread badge counter (e.g., "3").
+   - User avatar appears on the right; clicking it opens the profile menu.
+3. In the **TabBar**, click through `CALENDARIO`, `OBJETIVOS`, `PROYECTOS`, and `EVENTOS`.
+4. Verify the active tab switches instantly (under 100ms) with its distinct theme highlight.
+5. Reload the browser page and verify the active tab persists locally.
 
-### Backend Tests
-```bash
-cd backend
-pytest
+### Scenario 2: Objetivos Dual View (Cards vs List) & Filtering
+1. Click on the **"OBJETIVOS"** tab.
+2. Verify goals are displayed in the default **Card Grid** view:
+   - Each card displays its title, category pill, deadline, and visual progress bar (0-100%).
+3. Click the **View Switcher** to toggle to **Compact List (Table)** view.
+   - Verify layout transforms smoothly into a compact data table showing same goals.
+4. Test **Filters**:
+   - Select status filter chip `Activas`, `Completadas`, or `En pausa`.
+   - Select category filter (e.g. `Salud` or `Trabajo`).
+   - Switch between Card and List view and verify the active filter remains applied.
+
+### Scenario 3: Slide-over Drawer for Goal Creation & Milestone Weighting
+1. In the "Objetivos" section, click the **"+ Nuevo Objetivo"** button.
+2. Verify the **Slide-over Drawer** smoothly opens from the right edge without hiding the main view.
+3. Enter goal details:
+   - Title: "Aprender TypeScript Avanzado"
+   - Category: "Aprendizaje"
+   - Mode: Select `Automático por Hitos`
+4. Add 3 milestones:
+   - Hito 1: "Completar fundamentos" (Peso: 1)
+   - Hito 2: "Construir proyecto" (Peso: 2)
+   - Hito 3: "Certificación" (Peso: 1)
+5. Save the goal.
+6. Verify the goal appears in the list with `0%` progress.
+7. Click the first milestone ("Completar fundamentos").
+   - Verify progress bar recalculates automatically: `1 / 4 = 25%`.
+8. Click the second milestone ("Construir proyecto").
+   - Verify progress updates automatically: `(1 + 2) / 4 = 75%`.
+
+### Scenario 4: Manual Progress Mode
+1. In the Drawer, edit or create a goal with Mode: `Manual`.
+2. Drag or input the progress slider to `85%`.
+3. Save and verify the goal displays an 85% progress bar regardless of milestone checkboxes.
+
+### Scenario 5: Calendar Synchronization & Deadline Projections
+1. Create a goal with deadline set to the 15th of the current month.
+2. Click on the **"CALENDARIO"** tab in the TabBar.
+3. Verify that the 15th displays a deadline badge with the goal's category theme color.
+4. Click the deadline badge to view the goal quick summary.
+
+---
+
+## 4. Automated Testing
+
+### Backend Layer Tests (Django)
+```powershell
+pytest backend/tests.py -v
 ```
+Validates:
+- Domain service progress calculations (equal vs weighted milestones).
+- Serializer validation constraints (weight > 0, progress 0-100).
+- Calendar deadline projection service.
+- REST API endpoint response codes and schemas.
 
-### Frontend Tests
-```bash
-cd frontend
-npm run test
+### Frontend Compilation & Linting
+```powershell
+npm run build
 ```
+Validates that all TypeScript types, interfaces, and JSX components compile with zero type errors.
