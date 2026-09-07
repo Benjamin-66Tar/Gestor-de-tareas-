@@ -95,4 +95,54 @@ export interface GoalFilterCriteria {
   searchQuery: string;
 }
 
+// --- Proyectos Domain Models ---
 
+export type ProjectStatus = 'ACTIVE' | 'COMPLETED' | 'ARCHIVED';
+
+export type TaskStatus = 'TODO' | 'IN_PROGRESS' | 'DONE';
+
+export type TaskPriority = 'LOW' | 'MEDIUM' | 'HIGH';
+
+export type ProjectViewMode = 'KANBAN' | 'LIST';
+
+export interface TaskSubtask {
+  id: string;
+  taskId?: string;
+  title: string;
+  isCompleted: boolean;
+  order: number;
+}
+
+export interface ProjectTask {
+  id: string;
+  projectId: string;
+  title: string;
+  description?: string;
+  status: TaskStatus;
+  priority: TaskPriority;
+  deadline?: string | null;
+  order: number;
+  subtasks: TaskSubtask[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface Project {
+  id: string;
+  title: string;
+  description?: string;
+  colorHex: string;
+  status: ProjectStatus;
+  progressPercentage: number; // 0 to 100
+  goalId?: string | null; // Optional linked Goal
+  tasks?: ProjectTask[];
+  totalTasks?: number;
+  completedTasks?: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ProjectFilterCriteria {
+  status: 'ALL' | ProjectStatus;
+  searchQuery: string;
+}

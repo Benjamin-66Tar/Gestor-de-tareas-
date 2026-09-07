@@ -91,3 +91,72 @@ class GoalMilestone(models.Model):
     def __str__(self):
         return f"[{'X' if self.is_completed else ' '}] {self.title} (peso: {self.weight})"
 
+
+class Project(models.Model):
+    STATUS_CHOICES = [
+        ('ACTIVE', 'Activo'),
+        ('COMPLETED', 'Completado'),
+        ('ARCHIVED', 'Archivado'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='aura_projects', null=True, blank=True)
+    goal = models.ForeignKey(Goal, on_delete=models.SET_NULL, null=True, blank=True, related_name='projects')
+    title = models.CharField(max_length=200)
+    description = models.TextField(blank=True, null=True)
+    color_hex = models.CharField(max_length=7, default='#6366F1')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='ACTIVE')
+    progress_percentage = models.PositiveSmallIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"[{self.status}] {self.title} ({self.progress_percentage}%)"
+
+
+class ProjectTask(models.Model):
+    STATUS_CHOICES = [
+        ('TODO', 'Por hacer'),
+        ('IN_PROGRESS', 'En progreso'),
+        ('DONE', 'Completado'),
+    ]
+    PRIORITY_CHOICES = [
+        ('LOW', 'Baja'),
+        ('MEDIUM', 'Media'),
+        ('HIGH', 'Alta'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='tasks')
+    title = models.CharField(max_length=250)
+    description = models.TextField(blank=True, null=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='TODO')
+    priority = models.CharField(max_length=20, choices=PRIORITY_CHOICES, default='MEDIUM')
+    deadline = models.DateTimeField(blank=True, null=True, db_index=True)
+    order = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['order', 'created_at']
+
+    def __str__(self):
+        return f"[{self.status}] {self.title} ({self.priority})"
+
+
+class TaskSubtask(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    task = models.ForeignKey(ProjectTask, on_delete=models.CASCADE, related_name='subtasks')
+    title = models.CharField(max_length=200)
+    is_completed = models.BooleanField(default=False)
+    order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ['order', 'id']
+
+    def __str__(self):
+        return f"[{'X' if self.is_completed else ' '}] {self.title}"
+

@@ -1,4 +1,4 @@
-import { Goal, NotificationItem, UserProfile, PlanElemento } from '../domain/types';
+import { Goal, NotificationItem, UserProfile, PlanElemento, Project, ProjectTask, TaskSubtask, TaskStatus } from '../domain/types';
 
 const API_BASE = '/api/v1';
 
@@ -196,3 +196,190 @@ export async function fetchCalendarEvents(startDate?: string, endDate?: string):
     return [];
   }
 }
+
+// --- Projects & Tasks Services ---
+
+export function transformTaskFromApi(raw: any): ProjectTask {
+  return {
+    id: raw.id,
+    projectId: raw.project || raw.project_id,
+    title: raw.title,
+    description: raw.description,
+    status: raw.status,
+    priority: raw.priority,
+    deadline: raw.deadline,
+    order: raw.order ?? 0,
+    subtasks: (raw.subtasks || []).map((s: any) => ({
+      id: s.id,
+      taskId: raw.id,
+      title: s.title,
+      isCompleted: s.is_completed,
+      order: s.order ?? 0,
+    })),
+    createdAt: raw.created_at,
+    updatedAt: raw.updated_at,
+  };
+}
+
+export function transformProjectFromApi(raw: any): Project {
+  return {
+    id: raw.id,
+    title: raw.title,
+    description: raw.description,
+    colorHex: raw.color_hex,
+    status: raw.status,
+    progressPercentage: raw.progress_percentage ?? 0,
+    goalId: raw.goal,
+    totalTasks: raw.total_tasks ?? (raw.tasks ? raw.tasks.length : 0),
+    completedTasks: raw.completed_tasks ?? (raw.tasks ? raw.tasks.filter((t: any) => t.status === 'DONE').length : 0),
+    tasks: raw.tasks ? raw.tasks.map(transformTaskFromApi) : undefined,
+    createdAt: raw.created_at,
+    updatedAt: raw.updated_at,
+  };
+}
+
+export async function fetchProjects(params?: { status?: string; search?: string }): Promise<Project[]> {
+  const queryParts: string[] = [];
+  if (params?.status && params.status !== 'ALL') {
+    queryParts.push(`status=${encodeURIComponent(params.status)}`);
+  }
+  if (params?.search) {
+    queryParts.push(`search=${encodeURIComponent(params.search)}`);
+  }
+  const queryString = queryParts.length ? `?${queryParts.join('&')}` : '';
+
+  try {
+    const rawList = await apiRequest<any[]>(`/projects/${queryString}`);
+    return rawList.map(transformProjectFromApi);
+  } catch (err) {
+    console.warn('Projects API call failed, using empty fallback:', err);
+    return [];
+  }
+}
+
+export async function fetchProjectById(id: string): Promise<Project> {
+  const raw = await apiRequest<any>(`/projects/${id}/`);
+  return transformProjectFromApi(raw);
+}
+
+export async function createProjectApi(projectData: Partial<Project>): Promise<Project> {
+  const payload = {
+    title: projectData.title,
+    description: projectData.description || '',
+    color_hex: projectData.colorHex || '#6366F1',
+    status: projectData.status || 'ACTIVE',
+    goal: projectData.goalId || null,
+  };
+
+  const raw = await apiRequest<any>('/projects/', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  return transformProjectFromApi(raw);
+}
+
+export async function updateProjectApi(id: string, projectData: Partial<Project>): Promise<Project> {
+  const payload: Record<string, any> = {};
+  if (projectData.title !== undefined) payload.title = projectData.title;
+  if (projectData.description !== undefined) payload.description = projectData.description;
+  if (projectData.colorHex !== undefined) payload.color_hex = projectData.colorHex;
+  if (projectData.status !== undefined) payload.status = projectData.status;
+  if (projectData.goalId !== undefined) payload.goal = projectData.goalId;
+
+  const raw = await apiRequest<any>(`/projects/${id}/`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+  return transformProjectFromApi(raw);
+}
+
+export async function deleteProjectApi(id: string): Promise<void> {
+  await apiRequest(`/projects/${id}/`, { method: 'DELETE' });
+}
+
+export async function fetchProjectTasks(projectId: string): Promise<ProjectTask[]> {
+  try {
+    const rawList = await apiRequest<any[]>(`/projects/${projectId}/tasks/`);
+    return rawList.map(transformTaskFromApi);
+  } catch (err) {
+    console.warn('Fetch tasks failed:', err);
+    return [];
+  }
+}
+
+export async function createProjectTaskApi(projectId: string, taskData: Partial<ProjectTask>): Promise<ProjectTask> {
+  const payload = {
+    title: taskData.title,
+    description: taskData.description || '',
+    status: taskData.status || 'TODO',
+    priority: taskData.priority || 'MEDIUM',
+    deadline: taskData.deadline || null,
+    subtasks: (taskData.subtasks || []).map((s, idx) => ({
+      title: s.title,
+      is_completed: s.isCompleted,
+      order: idx,
+    })),
+  };
+
+  const raw = await apiRequest<any>(`/projects/${projectId}/tasks/`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  return transformTaskFromApi(raw);
+}
+
+export async function updateProjectTaskApi(taskId: string, taskData: Partial<ProjectTask>): Promise<ProjectTask> {
+  const payload: Record<string, any> = {};
+  if (taskData.title !== undefined) payload.title = taskData.title;
+  if (taskData.description !== undefined) payload.description = taskData.description;
+  if (taskData.status !== undefined) payload.status = taskData.status;
+  if (taskData.priority !== undefined) payload.priority = taskData.priority;
+  if (taskData.deadline !== undefined) payload.deadline = taskData.deadline;
+  if (taskData.subtasks !== undefined) {
+    payload.subtasks = taskData.subtasks.map((s, idx) => ({
+      id: s.id,
+      title: s.title,
+      is_completed: s.isCompleted,
+      order: idx,
+    }));
+  }
+
+  const raw = await apiRequest<any>(`/tasks/${taskId}/`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+  return transformTaskFromApi(raw);
+}
+
+export async function updateTaskStatusApi(taskId: string, status: TaskStatus): Promise<{
+  task: ProjectTask;
+  projectProgressPercentage: number;
+  projectStatus: string;
+}> {
+  const raw = await apiRequest<any>(`/tasks/${taskId}/status/`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status }),
+  });
+  return {
+    task: transformTaskFromApi(raw.task),
+    projectProgressPercentage: raw.project_progress_percentage,
+    projectStatus: raw.project_status,
+  };
+}
+
+export async function deleteProjectTaskApi(taskId: string): Promise<void> {
+  await apiRequest(`/tasks/${taskId}/`, { method: 'DELETE' });
+}
+
+export async function toggleSubtaskApi(subtaskId: string): Promise<TaskSubtask> {
+  const raw = await apiRequest<any>(`/subtasks/${subtaskId}/toggle/`, {
+    method: 'PATCH',
+  });
+  return {
+    id: raw.id,
+    title: raw.title,
+    isCompleted: raw.is_completed,
+    order: raw.order,
+  };
+}
+

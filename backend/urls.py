@@ -11,6 +11,12 @@ from .views import (
     GoalDetailAPI,
     GoalMilestoneToggleAPI,
     CalendarEventsAPI,
+    ProjectListCreateAPI,
+    ProjectDetailAPI,
+    ProjectTaskListCreateAPI,
+    ProjectTaskDetailAPI,
+    ProjectTaskStatusAPI,
+    TaskSubtaskToggleAPI,
 )
 
 urlpatterns = [
@@ -31,6 +37,14 @@ urlpatterns = [
     path('api/v1/goals/<uuid:pk>/', GoalDetailAPI.as_view(), name='goal-detail'),
     path('api/v1/goals/<uuid:goal_id>/milestones/<uuid:milestone_id>/toggle/', GoalMilestoneToggleAPI.as_view(), name='milestone-toggle'),
     
+    # Projects
+    path('api/v1/projects/', ProjectListCreateAPI.as_view(), name='projects-list-create'),
+    path('api/v1/projects/<uuid:pk>/', ProjectDetailAPI.as_view(), name='project-detail'),
+    path('api/v1/projects/<uuid:project_id>/tasks/', ProjectTaskListCreateAPI.as_view(), name='project-tasks-list-create'),
+    path('api/v1/tasks/<uuid:pk>/', ProjectTaskDetailAPI.as_view(), name='task-detail'),
+    path('api/v1/tasks/<uuid:pk>/status/', ProjectTaskStatusAPI.as_view(), name='task-status'),
+    path('api/v1/subtasks/<uuid:pk>/toggle/', TaskSubtaskToggleAPI.as_view(), name='subtask-toggle'),
+
     # Calendar Sync
     path('api/v1/calendar/events/', CalendarEventsAPI.as_view(), name='calendar-events-sync'),
 ]

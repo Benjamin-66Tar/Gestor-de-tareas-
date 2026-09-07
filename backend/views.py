@@ -235,13 +235,179 @@ class GoalMilestoneToggleAPI(APIView):
 
 class CalendarEventsAPI(APIView):
     def get(self, request):
-        from .services import sync_goals_to_calendar
+        from .services import sync_all_to_calendar
         from django.utils.dateparse import parse_datetime
         start_date_str = request.query_params.get('start_date')
         end_date_str = request.query_params.get('end_date')
         start_date = parse_datetime(start_date_str) if start_date_str else None
         end_date = parse_datetime(end_date_str) if end_date_str else None
 
-        events = sync_goals_to_calendar(user=request.user, start_date=start_date, end_date=end_date)
+        events = sync_all_to_calendar(user=request.user, start_date=start_date, end_date=end_date)
         return Response(events, status=status.HTTP_200_OK)
+
+
+# --- Projects & Tasks API ---
+
+class ProjectListCreateAPI(APIView):
+    def get(self, request):
+        from .models import Project
+        from .serializers import ProjectSerializer
+
+        projects = Project.objects.all()
+        if request.user.is_authenticated:
+            projects = projects.filter(user=request.user)
+
+        status_param = request.query_params.get('status')
+        if status_param and status_param != 'ALL':
+            projects = projects.filter(status=status_param)
+
+        search_query = request.query_params.get('search')
+        if search_query:
+            from django.db.models import Q
+            projects = projects.filter(Q(title__icontains=search_query) | Q(description__icontains=search_query))
+
+        serializer = ProjectSerializer(projects, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def post(self, request):
+        from .serializers import ProjectSerializer
+        data = request.data.copy()
+        if request.user.is_authenticated and 'user' not in data:
+            data['user'] = request.user.id
+        serializer = ProjectSerializer(data=data)
+        if serializer.is_valid():
+            project = serializer.save()
+            return Response(ProjectSerializer(project).data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class ProjectDetailAPI(APIView):
+    def get_object(self, pk):
+        from .models import Project
+        try:
+            return Project.objects.get(pk=pk)
+        except Project.DoesNotExist:
+            raise Http404
+
+    def get(self, request, pk):
+        from .serializers import ProjectSerializer
+        project = self.get_object(pk)
+        serializer = ProjectSerializer(project)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def put(self, request, pk):
+        from .serializers import ProjectSerializer
+        project = self.get_object(pk)
+        serializer = ProjectSerializer(project, data=request.data)
+        if serializer.is_valid():
+            updated = serializer.save()
+            return Response(ProjectSerializer(updated).data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def patch(self, request, pk):
+        from .serializers import ProjectSerializer
+        project = self.get_object(pk)
+        serializer = ProjectSerializer(project, data=request.data, partial=True)
+        if serializer.is_valid():
+            updated = serializer.save()
+            return Response(ProjectSerializer(updated).data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, pk):
+        project = self.get_object(pk)
+        project.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class ProjectTaskListCreateAPI(APIView):
+    def get(self, request, project_id):
+        from .models import ProjectTask
+        from .serializers import ProjectTaskSerializer
+        tasks = ProjectTask.objects.filter(project_id=project_id)
+        serializer = ProjectTaskSerializer(tasks, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def post(self, request, project_id):
+        from .models import Project
+        from .serializers import ProjectTaskSerializer
+        from .services import calculate_project_progress
+        try:
+            project = Project.objects.get(pk=project_id)
+        except Project.DoesNotExist:
+            raise Http404
+
+        data = request.data.copy()
+        data['project'] = str(project.id)
+        serializer = ProjectTaskSerializer(data=data)
+        if serializer.is_valid():
+            task = serializer.save()
+            calculate_project_progress(project)
+            return Response(ProjectTaskSerializer(task).data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class ProjectTaskDetailAPI(APIView):
+    def get_object(self, pk):
+        from .models import ProjectTask
+        try:
+            return ProjectTask.objects.get(pk=pk)
+        except ProjectTask.DoesNotExist:
+            raise Http404
+
+    def get(self, request, pk):
+        from .serializers import ProjectTaskSerializer
+        task = self.get_object(pk)
+        serializer = ProjectTaskSerializer(task)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def patch(self, request, pk):
+        from .serializers import ProjectTaskSerializer
+        from .services import calculate_project_progress
+        task = self.get_object(pk)
+        serializer = ProjectTaskSerializer(task, data=request.data, partial=True)
+        if serializer.is_valid():
+            updated = serializer.save()
+            calculate_project_progress(updated.project)
+            return Response(ProjectTaskSerializer(updated).data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, pk):
+        from .services import calculate_project_progress
+        task = self.get_object(pk)
+        project = task.project
+        task.delete()
+        calculate_project_progress(project)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class ProjectTaskStatusAPI(APIView):
+    def patch(self, request, pk):
+        from .services import update_project_task_status
+        from .serializers import ProjectTaskSerializer
+        new_status = request.data.get('status')
+        if not new_status or new_status not in ['TODO', 'IN_PROGRESS', 'DONE']:
+            return Response({'error': 'Invalid status. Must be TODO, IN_PROGRESS, or DONE.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            task = update_project_task_status(pk, new_status)
+            return Response({
+                'task': ProjectTaskSerializer(task).data,
+                'project_progress_percentage': task.project.progress_percentage,
+                'project_status': task.project.status
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class TaskSubtaskToggleAPI(APIView):
+    def patch(self, request, pk):
+        from .models import TaskSubtask
+        from .serializers import TaskSubtaskSerializer
+        try:
+            subtask = TaskSubtask.objects.get(pk=pk)
+            subtask.is_completed = not subtask.is_completed
+            subtask.save(update_fields=['is_completed'])
+            return Response(TaskSubtaskSerializer(subtask).data, status=status.HTTP_200_OK)
+        except TaskSubtask.DoesNotExist:
+            raise Http404
+
 

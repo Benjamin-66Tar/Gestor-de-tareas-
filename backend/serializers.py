@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import ElementoAura, UserProfile, Notification, Goal, GoalMilestone
+from .models import ElementoAura, UserProfile, Notification, Goal, GoalMilestone, Project, ProjectTask, TaskSubtask
 
 class ElementoAuraSerializer(serializers.ModelSerializer):
     class Meta:
@@ -78,4 +78,88 @@ class GoalSerializer(serializers.ModelSerializer):
             instance.milestones.exclude(id__in=existing_ids).delete()
 
         return instance
+
+
+class TaskSubtaskSerializer(serializers.ModelSerializer):
+    id = serializers.UUIDField(required=False)
+
+    class Meta:
+        model = TaskSubtask
+        fields = ['id', 'title', 'is_completed', 'order']
+
+
+class ProjectTaskSerializer(serializers.ModelSerializer):
+    id = serializers.UUIDField(required=False)
+    subtasks = TaskSubtaskSerializer(many=True, required=False)
+    project_id = serializers.UUIDField(source='project.id', read_only=True)
+
+    class Meta:
+        model = ProjectTask
+        fields = [
+            'id', 'project', 'project_id', 'title', 'description',
+            'status', 'priority', 'deadline', 'order', 'subtasks',
+            'created_at', 'updated_at'
+        ]
+        extra_kwargs = {
+            'project': {'required': False}
+        }
+
+    def create(self, validated_data):
+        subtasks_data = validated_data.pop('subtasks', [])
+        task = ProjectTask.objects.create(**validated_data)
+        for idx, s_data in enumerate(subtasks_data):
+            s_data.pop('id', None)
+            if 'order' not in s_data:
+                s_data['order'] = idx
+            TaskSubtask.objects.create(task=task, **s_data)
+        return task
+
+    def update(self, instance, validated_data):
+        subtasks_data = validated_data.pop('subtasks', None)
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+
+        if subtasks_data is not None:
+            existing_ids = []
+            for idx, s_data in enumerate(subtasks_data):
+                s_id = s_data.get('id', None)
+                if 'order' not in s_data:
+                    s_data['order'] = idx
+                if s_id and TaskSubtask.objects.filter(id=s_id, task=instance).exists():
+                    s_obj = TaskSubtask.objects.get(id=s_id, task=instance)
+                    for k, v in s_data.items():
+                        if k != 'id':
+                            setattr(s_obj, k, v)
+                    s_obj.save()
+                    existing_ids.append(s_obj.id)
+                else:
+                    s_data.pop('id', None)
+                    new_s = TaskSubtask.objects.create(task=instance, **s_data)
+                    existing_ids.append(new_s.id)
+            instance.subtasks.exclude(id__in=existing_ids).delete()
+
+        return instance
+
+
+class ProjectSerializer(serializers.ModelSerializer):
+    tasks = ProjectTaskSerializer(many=True, read_only=True)
+    total_tasks = serializers.SerializerMethodField()
+    completed_tasks = serializers.SerializerMethodField()
+    goal_title = serializers.CharField(source='goal.title', read_only=True, default=None)
+
+    class Meta:
+        model = Project
+        fields = [
+            'id', 'user', 'goal', 'goal_title', 'title', 'description',
+            'color_hex', 'status', 'progress_percentage', 'tasks',
+            'total_tasks', 'completed_tasks', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'progress_percentage', 'created_at', 'updated_at']
+
+    def get_total_tasks(self, obj):
+        return obj.tasks.count()
+
+    def get_completed_tasks(self, obj):
+        return obj.tasks.filter(status='DONE').count()
 

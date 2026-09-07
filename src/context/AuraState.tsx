@@ -8,13 +8,18 @@ import {
   GoalFilterCriteria,
   NotificationItem,
   UserProfile,
+  Project,
+  ProjectTask,
+  TaskStatus,
+  ProjectFilterCriteria,
+  ProjectViewMode,
 } from '../domain/types';
 import { getGridDateRange } from '../utils/dateUtils';
 import * as api from '../services/api';
 
 /**
  * Global application context interface for Aura.
- * Encapsulates navigation, calendar, goals management, and notifications.
+ * Encapsulates navigation, calendar, goals, projects, and notifications.
  */
 interface AuraContextProps {
   // --- Navigation & Shell ---
@@ -67,6 +72,35 @@ interface AuraContextProps {
   updateGoal: (id: string, goalData: Partial<Goal>) => Promise<boolean>;
   deleteGoal: (id: string) => Promise<boolean>;
   toggleMilestone: (goalId: string, milestoneId: string) => Promise<boolean>;
+
+  // --- Proyectos Section ---
+  projects: Project[];
+  projectsLoading: boolean;
+  projectsError: string | null;
+  activeProject: Project | null;
+  setActiveProject: (project: Project | null) => void;
+  projectViewMode: ProjectViewMode;
+  setProjectViewMode: (mode: ProjectViewMode) => void;
+  projectFilter: ProjectFilterCriteria;
+  setProjectFilter: React.Dispatch<React.SetStateAction<ProjectFilterCriteria>>;
+  projectDrawerOpen: boolean;
+  setProjectDrawerOpen: (open: boolean) => void;
+  editingProject: Project | null;
+  setEditingProject: (project: Project | null) => void;
+  taskDrawerOpen: boolean;
+  setTaskDrawerOpen: (open: boolean) => void;
+  editingTask: ProjectTask | null;
+  setEditingTask: (task: ProjectTask | null) => void;
+  fetchProjectsList: () => Promise<void>;
+  selectProject: (projectId: string) => Promise<void>;
+  createProject: (projectData: Partial<Project>) => Promise<boolean>;
+  updateProject: (id: string, projectData: Partial<Project>) => Promise<boolean>;
+  deleteProject: (id: string) => Promise<boolean>;
+  createTask: (projectId: string, taskData: Partial<ProjectTask>) => Promise<boolean>;
+  updateTask: (taskId: string, taskData: Partial<ProjectTask>) => Promise<boolean>;
+  moveTaskStatus: (taskId: string, newStatus: TaskStatus) => Promise<boolean>;
+  deleteTask: (taskId: string) => Promise<boolean>;
+  toggleSubtask: (subtaskId: string) => Promise<boolean>;
 }
 
 const AuraContext = createContext<AuraContextProps | undefined>(undefined);
@@ -340,6 +374,253 @@ export const AuraProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  // 5. Proyectos (Projects) state & operations
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [projectsLoading, setProjectsLoading] = useState<boolean>(false);
+  const [projectsError, setProjectsError] = useState<string | null>(null);
+  const [activeProject, setActiveProject] = useState<Project | null>(null);
+  const [projectViewMode, setProjectViewMode] = useState<ProjectViewMode>('KANBAN');
+  const [projectFilter, setProjectFilter] = useState<ProjectFilterCriteria>({
+    status: 'ACTIVE',
+    searchQuery: '',
+  });
+  const [projectDrawerOpen, setProjectDrawerOpen] = useState<boolean>(false);
+  const [editingProject, setEditingProject] = useState<Project | null>(null);
+  const [taskDrawerOpen, setTaskDrawerOpen] = useState<boolean>(false);
+  const [editingTask, setEditingTask] = useState<ProjectTask | null>(null);
+
+  const fetchProjectsList = useCallback(async () => {
+    setProjectsLoading(true);
+    setProjectsError(null);
+    try {
+      const data = await api.fetchProjects({
+        status: projectFilter.status,
+        search: projectFilter.searchQuery,
+      });
+      setProjects(data);
+    } catch (err) {
+      console.error('Error fetching projects:', err);
+      setProjectsError('Error al cargar proyectos');
+    } finally {
+      setProjectsLoading(false);
+    }
+  }, [projectFilter.status, projectFilter.searchQuery]);
+
+  const selectProject = async (projectId: string) => {
+    try {
+      const proj = await api.fetchProjectById(projectId);
+      setActiveProject(proj);
+    } catch (err) {
+      console.error('Error fetching project detail:', err);
+    }
+  };
+
+  const createProject = async (projectData: Partial<Project>): Promise<boolean> => {
+    try {
+      const created = await api.createProjectApi(projectData);
+      setProjects(prev => [created, ...prev]);
+      return true;
+    } catch (err) {
+      console.error('Error creating project:', err);
+      return false;
+    }
+  };
+
+  const updateProject = async (id: string, projectData: Partial<Project>): Promise<boolean> => {
+    try {
+      const updated = await api.updateProjectApi(id, projectData);
+      setProjects(prev => prev.map(p => p.id === id ? updated : p));
+      if (activeProject?.id === id) {
+        setActiveProject(prev => prev ? { ...prev, ...updated } : null);
+      }
+      return true;
+    } catch (err) {
+      console.error('Error updating project:', err);
+      return false;
+    }
+  };
+
+  const deleteProject = async (id: string): Promise<boolean> => {
+    try {
+      await api.deleteProjectApi(id);
+      setProjects(prev => prev.filter(p => p.id !== id));
+      if (activeProject?.id === id) {
+        setActiveProject(null);
+      }
+      fetchElementos();
+      return true;
+    } catch (err) {
+      console.error('Error deleting project:', err);
+      return false;
+    }
+  };
+
+  const createTask = async (projectId: string, taskData: Partial<ProjectTask>): Promise<boolean> => {
+    try {
+      const newTask = await api.createProjectTaskApi(projectId, taskData);
+      if (activeProject && activeProject.id === projectId) {
+        const currentTasks = activeProject.tasks || [];
+        const updatedTasks = [...currentTasks, newTask];
+        const completed = updatedTasks.filter(t => t.status === 'DONE').length;
+        const total = updatedTasks.length;
+        const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
+        setActiveProject({
+          ...activeProject,
+          tasks: updatedTasks,
+          totalTasks: total,
+          completedTasks: completed,
+          progressPercentage: progress,
+        });
+        setProjects(prev => prev.map(p => p.id === projectId ? {
+          ...p,
+          totalTasks: total,
+          completedTasks: completed,
+          progressPercentage: progress,
+        } : p));
+      }
+      if (newTask.deadline) {
+        fetchElementos();
+      }
+      return true;
+    } catch (err) {
+      console.error('Error creating task:', err);
+      return false;
+    }
+  };
+
+  const updateTask = async (taskId: string, taskData: Partial<ProjectTask>): Promise<boolean> => {
+    try {
+      const updated = await api.updateProjectTaskApi(taskId, taskData);
+      if (activeProject) {
+        const currentTasks = activeProject.tasks || [];
+        const updatedTasks = currentTasks.map(t => t.id === taskId ? updated : t);
+        const completed = updatedTasks.filter(t => t.status === 'DONE').length;
+        const total = updatedTasks.length;
+        const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
+        setActiveProject({
+          ...activeProject,
+          tasks: updatedTasks,
+          totalTasks: total,
+          completedTasks: completed,
+          progressPercentage: progress,
+        });
+        setProjects(prev => prev.map(p => p.id === activeProject.id ? {
+          ...p,
+          totalTasks: total,
+          completedTasks: completed,
+          progressPercentage: progress,
+        } : p));
+      }
+      fetchElementos();
+      return true;
+    } catch (err) {
+      console.error('Error updating task:', err);
+      return false;
+    }
+  };
+
+  const moveTaskStatus = async (taskId: string, newStatus: TaskStatus): Promise<boolean> => {
+    if (activeProject) {
+      const oldTasks = activeProject.tasks || [];
+      const taskIndex = oldTasks.findIndex(t => t.id === taskId);
+      if (taskIndex !== -1) {
+        const optimisticTasks = oldTasks.map(t => t.id === taskId ? { ...t, status: newStatus } : t);
+        const completed = optimisticTasks.filter(t => t.status === 'DONE').length;
+        const total = optimisticTasks.length;
+        const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
+        setActiveProject({
+          ...activeProject,
+          tasks: optimisticTasks,
+          totalTasks: total,
+          completedTasks: completed,
+          progressPercentage: progress,
+        });
+      }
+    }
+    try {
+      const res = await api.updateTaskStatusApi(taskId, newStatus);
+      if (activeProject) {
+        const currentTasks = activeProject.tasks || [];
+        const updatedTasks = currentTasks.map(t => t.id === taskId ? res.task : t);
+        const completed = updatedTasks.filter(t => t.status === 'DONE').length;
+        const total = updatedTasks.length;
+        setActiveProject(prev => prev ? {
+          ...prev,
+          tasks: updatedTasks,
+          status: res.projectStatus as any,
+          progressPercentage: res.projectProgressPercentage,
+          totalTasks: total,
+          completedTasks: completed,
+        } : null);
+        setProjects(prev => prev.map(p => p.id === activeProject.id ? {
+          ...p,
+          status: res.projectStatus as any,
+          progressPercentage: res.projectProgressPercentage,
+          totalTasks: total,
+          completedTasks: completed,
+        } : p));
+      }
+      return true;
+    } catch (err) {
+      console.error('Error moving task status:', err);
+      if (activeProject) {
+        selectProject(activeProject.id);
+      }
+      return false;
+    }
+  };
+
+  const deleteTask = async (taskId: string): Promise<boolean> => {
+    try {
+      await api.deleteProjectTaskApi(taskId);
+      if (activeProject) {
+        const currentTasks = activeProject.tasks || [];
+        const updatedTasks = currentTasks.filter(t => t.id !== taskId);
+        const completed = updatedTasks.filter(t => t.status === 'DONE').length;
+        const total = updatedTasks.length;
+        const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
+        setActiveProject({
+          ...activeProject,
+          tasks: updatedTasks,
+          totalTasks: total,
+          completedTasks: completed,
+          progressPercentage: progress,
+        });
+        setProjects(prev => prev.map(p => p.id === activeProject.id ? {
+          ...p,
+          totalTasks: total,
+          completedTasks: completed,
+          progressPercentage: progress,
+        } : p));
+      }
+      fetchElementos();
+      return true;
+    } catch (err) {
+      console.error('Error deleting task:', err);
+      return false;
+    }
+  };
+
+  const toggleSubtask = async (subtaskId: string): Promise<boolean> => {
+    try {
+      const updated = await api.toggleSubtaskApi(subtaskId);
+      if (activeProject && activeProject.tasks) {
+        const updatedTasks = activeProject.tasks.map(t => {
+          if (!t.subtasks || !t.subtasks.some(s => s.id === subtaskId)) return t;
+          return {
+            ...t,
+            subtasks: t.subtasks.map(s => s.id === subtaskId ? updated : s),
+          };
+        });
+        setActiveProject({ ...activeProject, tasks: updatedTasks });
+      }
+      return true;
+    } catch (err) {
+      console.error('Error toggling subtask:', err);
+      return false;
+    }
+  };
+
   // Initial load effects
   useEffect(() => {
     refreshNotifications();
@@ -351,8 +632,10 @@ export const AuraProvider: React.FC<{ children: React.ReactNode }> = ({ children
       fetchElementos(range.startStr, range.endStr);
     } else if (tabActiva === 'OBJETIVOS') {
       fetchGoalsList();
+    } else if (tabActiva === 'PROYECTOS') {
+      fetchProjectsList();
     }
-  }, [tabActiva, anioActivo, mesActivo, fetchElementos, fetchGoalsList]);
+  }, [tabActiva, anioActivo, mesActivo, fetchElementos, fetchGoalsList, fetchProjectsList]);
 
   return (
     <AuraContext.Provider value={{
@@ -406,6 +689,35 @@ export const AuraProvider: React.FC<{ children: React.ReactNode }> = ({ children
       updateGoal,
       deleteGoal,
       toggleMilestone,
+
+      // Proyectos
+      projects,
+      projectsLoading,
+      projectsError,
+      activeProject,
+      setActiveProject,
+      projectViewMode,
+      setProjectViewMode,
+      projectFilter,
+      setProjectFilter,
+      projectDrawerOpen,
+      setProjectDrawerOpen,
+      editingProject,
+      setEditingProject,
+      taskDrawerOpen,
+      setTaskDrawerOpen,
+      editingTask,
+      setEditingTask,
+      fetchProjectsList,
+      selectProject,
+      createProject,
+      updateProject,
+      deleteProject,
+      createTask,
+      updateTask,
+      moveTaskStatus,
+      deleteTask,
+      toggleSubtask,
     }}>
       {children}
     </AuraContext.Provider>

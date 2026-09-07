@@ -102,26 +102,26 @@
 
 **Independent Test**: Navigate to the "Proyectos" tab. Verify the Hub renders with project cards and status filter pills. Create a new project via "+ Nuevo Proyecto" in the slide-over drawer; verify it appears in the hub. Open the project workspace; verify 3 Kanban columns. Create tasks, check subtasks, move tasks between columns, and verify real-time recalculation of the project progress bar. Verify task deadlines appear on the "Calendario" tab styled with the project's theme color.
 
-- [ ] T033 [P] [US4] Define TypeScript domain models and interfaces for Project, ProjectTask, TaskSubtask, ProjectStatus, TaskStatus, TaskPriority, and ProjectFilterCriteria in src/domain/types.ts
-- [ ] T034 [P] [US4] Implement database models Project, ProjectTask, and TaskSubtask in backend/models.py
-- [ ] T035 [P] [US4] Create DRF serializers ProjectSerializer, ProjectTaskSerializer, and TaskSubtaskSerializer in backend/serializers.py
-- [ ] T036 [US4] Implement project progress calculation and project task calendar synchronization services in backend/services.py
-- [ ] T037 [US4] Generate and apply database migrations for Project, ProjectTask, and TaskSubtask models in backend/
-- [ ] T038 [P] [US4] Implement REST API endpoints for Projects CRUD, Tasks CRUD, Kanban status transition, and Subtask toggle in backend/views.py and backend/urls.py
-- [ ] T039 [P] [US4] Create unit tests for project progress calculation, task status transitions, and calendar projection in backend/tests.py
-- [ ] T040 [P] [US4] Implement typed API client service methods for Projects, Tasks, and Subtasks in src/services/api.ts
-- [ ] T041 [US4] Extend application state context with projects list, active project, search/lifecycle filters, Kanban task movements, and project/task drawer state in src/context/AuraState.tsx
-- [ ] T042 [P] [US4] Build ProjectCard component showing title, color theme accent, progress bar (0-100%), task count, and optional linked goal pill in src/components/projects/ProjectCard.tsx
-- [ ] T043 [P] [US4] Build ProjectsHub component with lifecycle filter pills (Activos, Completados, Archivados), instant search bar, and new project action in src/components/projects/ProjectsHub.tsx
-- [ ] T044 [P] [US4] Build TaskCard component displaying priority badge, deadline tag, checklist counter, and column switcher in src/components/projects/TaskCard.tsx
-- [ ] T045 [P] [US4] Build KanbanColumn component with task count badge, task cards, and quick task inline creation in src/components/projects/KanbanColumn.tsx
-- [ ] T046 [US4] Build KanbanBoard component with 3 fixed columns (Por hacer, En progreso, Completado) supporting drag-and-drop transitions in src/components/projects/KanbanBoard.tsx
-- [ ] T047 [US4] Build ProjectWorkspace component with breadcrumb back navigation, progress header, and Kanban/List view switcher in src/components/projects/ProjectWorkspace.tsx
-- [ ] T048 [P] [US4] Build ProjectDrawer slide-over panel for creating and editing project details, theme color, and Goal linkage in src/components/projects/ProjectDrawer.tsx
-- [ ] T049 [P] [US4] Build TaskDrawer slide-over panel for task details, priority, deadline, and checklist subtasks management in src/components/projects/TaskDrawer.tsx
-- [ ] T050 [US4] Build ProjectsView container switching between ProjectsHub and ProjectWorkspace in src/components/projects/ProjectsView.tsx
-- [ ] T051 [US4] Integrate project task deadlines with project color styling into CalendarGrid in src/components/CalendarGrid.tsx
-- [ ] T052 [US4] Wire ProjectsView into the main application layout for the PROYECTOS tab in src/App.tsx
+- [X] T033 [P] [US4] Define TypeScript domain models and interfaces for Project, ProjectTask, TaskSubtask, ProjectStatus, TaskStatus, TaskPriority, and ProjectFilterCriteria in src/domain/types.ts
+- [X] T034 [P] [US4] Implement database models Project, ProjectTask, and TaskSubtask in backend/models.py
+- [X] T035 [P] [US4] Create DRF serializers ProjectSerializer, ProjectTaskSerializer, and TaskSubtaskSerializer in backend/serializers.py
+- [X] T036 [US4] Implement project progress calculation and project task calendar synchronization services in backend/services.py
+- [X] T037 [US4] Generate and apply database migrations for Project, ProjectTask, and TaskSubtask models in backend/
+- [X] T038 [P] [US4] Implement REST API endpoints for Projects CRUD, Tasks CRUD, Kanban status transition, and Subtask toggle in backend/views.py and backend/urls.py
+- [X] T039 [P] [US4] Create unit tests for project progress calculation, task status transitions, and calendar projection in backend/tests.py
+- [X] T040 [P] [US4] Implement typed API client service methods for Projects, Tasks, and Subtasks in src/services/api.ts
+- [X] T041 [US4] Extend application state context with projects list, active project, search/lifecycle filters, Kanban task movements, and project/task drawer state in src/context/AuraState.tsx
+- [X] T042 [P] [US4] Build ProjectCard component showing title, color theme accent, progress bar (0-100%), task count, and optional linked goal pill in src/components/projects/ProjectCard.tsx
+- [X] T043 [P] [US4] Build ProjectsHub component with lifecycle filter pills (Activos, Completados, Archivados), instant search bar, and new project action in src/components/projects/ProjectsHub.tsx
+- [X] T044 [P] [US4] Build TaskCard component displaying priority badge, deadline tag, checklist counter, and column switcher in src/components/projects/TaskCard.tsx
+- [X] T045 [P] [US4] Build KanbanColumn component with task count badge, task cards, and quick task inline creation in src/components/projects/KanbanColumn.tsx
+- [X] T046 [US4] Build KanbanBoard component with 3 fixed columns (Por hacer, En progreso, Completado) supporting drag-and-drop transitions in src/components/projects/KanbanBoard.tsx
+- [X] T047 [US4] Build ProjectWorkspace component with breadcrumb back navigation, progress header, and Kanban/List view switcher in src/components/projects/ProjectWorkspace.tsx
+- [X] T048 [P] [US4] Build ProjectDrawer slide-over panel for creating and editing project details, theme color, and Goal linkage in src/components/projects/ProjectDrawer.tsx
+- [X] T049 [P] [US4] Build TaskDrawer slide-over panel for task details, priority, deadline, and checklist subtasks management in src/components/projects/TaskDrawer.tsx
+- [X] T050 [US4] Build ProjectsView container switching between ProjectsHub and ProjectWorkspace in src/components/projects/ProjectsView.tsx
+- [X] T051 [US4] Integrate project task deadlines with project color styling into CalendarGrid in src/components/CalendarGrid.tsx
+- [X] T052 [US4] Wire ProjectsView into the main application layout for the PROYECTOS tab in src/App.tsx
 
 **Checkpoint**: User Story 4 is complete, testable, and fully integrated with the shell, goals, and calendar.
 
@@ -136,10 +136,10 @@
 - [X] T030 Execute backend test suite with pytest backend/tests.py to verify 100% pass rate
 - [X] T031 Run frontend production build check with npm run build to verify zero TypeScript or linting errors
 - [X] T032 Execute end-to-end verification scenarios per quickstart.md
-- [ ] T053 [P] Perform responsive audit for Kanban board horizontal scrolling on narrow/mobile viewports in src/index.css
-- [ ] T054 Execute complete backend test suite including project and task test cases with pytest backend/tests.py
-- [ ] T055 Run frontend production build check with npm run build to verify zero TypeScript errors
-- [ ] T056 Execute end-to-end verification scenarios 6 through 10 in quickstart.md
+- [X] T053 [P] Perform responsive audit for Kanban board horizontal scrolling on narrow/mobile viewports in src/index.css
+- [X] T054 Execute complete backend test suite including project and task test cases with pytest backend/tests.py
+- [X] T055 Run frontend production build check with npm run build to verify zero TypeScript errors
+- [X] T056 Execute end-to-end verification scenarios 6 through 10 in quickstart.md
 
 ---
 

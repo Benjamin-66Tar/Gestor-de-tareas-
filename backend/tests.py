@@ -209,3 +209,118 @@ class GoalAndMilestoneAPITests(APITestCase):
         self.assertTrue(any("🎯 Lanzar MVP" in t for t in titles))
 
 
+class ProjectAPITests(APITestCase):
+    def setUp(self):
+        from .models import Goal, Project, ProjectTask, TaskSubtask
+        self.goal = Goal.objects.create(
+            title="Objetivo Estratégico",
+            category="Empresa",
+            color_hex="#10B981"
+        )
+        self.project = Project.objects.create(
+            title="Rediseño de Plataforma",
+            description="Modernización de interfaz",
+            color_hex="#6366F1",
+            status="ACTIVE",
+            goal=self.goal
+        )
+        self.task1 = ProjectTask.objects.create(
+            project=self.project,
+            title="Diseñar wireframes",
+            status="TODO",
+            priority="HIGH",
+            deadline=timezone.make_aware(datetime(2026, 9, 20, 18, 0)),
+            order=1
+        )
+        self.task2 = ProjectTask.objects.create(
+            project=self.project,
+            title="Implementar frontend",
+            status="TODO",
+            priority="MEDIUM",
+            deadline=timezone.make_aware(datetime(2026, 9, 25, 18, 0)),
+            order=2
+        )
+        self.subtask1 = TaskSubtask.objects.create(
+            task=self.task1,
+            title="Esbozo en papel",
+            is_completed=False,
+            order=1
+        )
+
+    def test_list_projects(self):
+        url = reverse('projects-list-create')
+        res = self.client.get(url)
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(res.data), 1)
+        self.assertEqual(res.data[0]['title'], "Rediseño de Plataforma")
+        self.assertEqual(res.data[0]['total_tasks'], 2)
+        self.assertEqual(res.data[0]['completed_tasks'], 0)
+        self.assertEqual(res.data[0]['progress_percentage'], 0)
+
+    def test_filter_projects_by_status_and_search(self):
+        from .models import Project
+        Project.objects.create(
+            title="Proyecto Archivado Antiguo",
+            status="ARCHIVED"
+        )
+        url = reverse('projects-list-create')
+        
+        # Filter ACTIVE
+        res_active = self.client.get(url, {'status': 'ACTIVE'})
+        self.assertEqual(len(res_active.data), 1)
+        self.assertEqual(res_active.data[0]['status'], 'ACTIVE')
+
+        # Filter ARCHIVED
+        res_archived = self.client.get(url, {'status': 'ARCHIVED'})
+        self.assertEqual(len(res_archived.data), 1)
+        self.assertEqual(res_archived.data[0]['status'], 'ARCHIVED')
+
+        # Search query
+        res_search = self.client.get(url, {'search': 'Rediseño'})
+        self.assertEqual(len(res_search.data), 1)
+        self.assertEqual(res_search.data[0]['title'], "Rediseño de Plataforma")
+
+    def test_create_project(self):
+        url = reverse('projects-list-create')
+        data = {
+            "title": "Nuevo Proyecto Web",
+            "description": "Prueba de creación",
+            "color_hex": "#EC4899",
+            "status": "ACTIVE",
+            "goal": str(self.goal.id)
+        }
+        res = self.client.post(url, data, format='json')
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(res.data['title'], "Nuevo Proyecto Web")
+        self.assertEqual(res.data['color_hex'], "#EC4899")
+        self.assertEqual(res.data['progress_percentage'], 0)
+
+    def test_task_status_transition_and_progress_calculation(self):
+        url1 = reverse('task-status', args=[self.task1.id])
+        
+        # Move task1 to DONE (1 of 2 => 50%)
+        res1 = self.client.patch(url1, {"status": "DONE"}, format='json')
+        self.assertEqual(res1.status_code, status.HTTP_200_OK)
+        self.assertEqual(res1.data['project_progress_percentage'], 50)
+        self.assertEqual(res1.data['project_status'], 'ACTIVE')
+
+        # Move task2 to DONE (2 of 2 => 100% and status COMPLETED)
+        url2 = reverse('task-status', args=[self.task2.id])
+        res2 = self.client.patch(url2, {"status": "DONE"}, format='json')
+        self.assertEqual(res2.status_code, status.HTTP_200_OK)
+        self.assertEqual(res2.data['project_progress_percentage'], 100)
+        self.assertEqual(res2.data['project_status'], 'COMPLETED')
+
+    def test_toggle_subtask(self):
+        url = reverse('subtask-toggle', args=[self.subtask1.id])
+        res = self.client.patch(url)
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data['is_completed'], True)
+
+    def test_project_task_calendar_projection(self):
+        url = reverse('calendar-events-sync')
+        res = self.client.get(url)
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        titles = [e['titulo'] for e in res.data]
+        self.assertTrue(any("📋 Diseñar wireframes" in t for t in titles))
+        self.assertTrue(any("📋 Implementar frontend" in t for t in titles))

@@ -133,6 +133,84 @@ def sync_goals_to_calendar(user=None, start_date=None, end_date=None):
             'status': 'COMPLETED' if m.is_completed else 'ACTIVE',
             'is_milestone': True,
         })
-        
+
     return events
+
+
+def calculate_project_progress(project) -> int:
+    """
+    Calculates progress percentage (0-100) for a Project based on completed tasks:
+    - (completed tasks in DONE / total tasks) * 100
+    - If 0 tasks, returns 0.
+    """
+    tasks = project.tasks.all()
+    total_count = tasks.count()
+    if total_count == 0:
+        progress = 0
+    else:
+        completed_count = tasks.filter(status='DONE').count()
+        progress = round((completed_count / total_count) * 100)
+
+    progress = min(100, max(0, progress))
+    project.progress_percentage = progress
+    if progress == 100 and project.status == 'ACTIVE':
+        project.status = 'COMPLETED'
+    elif progress < 100 and project.status == 'COMPLETED':
+        project.status = 'ACTIVE'
+    project.save(update_fields=['progress_percentage', 'status', 'updated_at'])
+    return progress
+
+
+def update_project_task_status(task_id, new_status: str):
+    """
+    Updates the Kanban column status of a ProjectTask and recalculates parent project progress.
+    """
+    from .models import ProjectTask
+    task = ProjectTask.objects.select_related('project').get(id=task_id)
+    task.status = new_status
+    task.save(update_fields=['status', 'updated_at'])
+    calculate_project_progress(task.project)
+    return task
+
+
+def sync_projects_to_calendar(user=None, start_date=None, end_date=None):
+    """
+    Projects project tasks with deadlines onto the calendar event format.
+    """
+    from .models import ProjectTask
+    events = []
+
+    tasks_qs = ProjectTask.objects.select_related('project').exclude(deadline__isnull=True)
+    if user and user.is_authenticated:
+        tasks_qs = tasks_qs.filter(project__user=user)
+    if start_date:
+        tasks_qs = tasks_qs.filter(deadline__gte=start_date)
+    if end_date:
+        tasks_qs = tasks_qs.filter(deadline__lte=end_date)
+
+    for task in tasks_qs:
+        events.append({
+            'id': f"task-{task.id}",
+            'titulo': f"📋 {task.title}",
+            'tipo': 'PROYECTO',
+            'fecha_limite': task.deadline.isoformat(),
+            'color_hex': task.project.color_hex,
+            'source_id': str(task.id),
+            'project_id': str(task.project.id),
+            'project_title': task.project.title,
+            'status': task.status,
+            'priority': task.priority,
+            'is_project_task': True,
+        })
+
+    return events
+
+
+def sync_all_to_calendar(user=None, start_date=None, end_date=None):
+    """
+    Unified calendar event projection aggregating Goals, Milestones, and Project Tasks.
+    """
+    goal_events = sync_goals_to_calendar(user=user, start_date=start_date, end_date=end_date)
+    project_events = sync_projects_to_calendar(user=user, start_date=start_date, end_date=end_date)
+    return goal_events + project_events
 
