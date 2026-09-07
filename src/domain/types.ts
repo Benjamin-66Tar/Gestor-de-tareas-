@@ -38,3 +38,61 @@ export interface SemanaRango {
   days: CalendarDay[];      // Los 7 días que componen esta semana con sus elementos
 }
 
+// --- Navigation & Objetivos Domain Models ---
+
+export type ActiveTab = 'CALENDARIO' | 'OBJETIVOS' | 'PROYECTOS' | 'EVENTOS';
+
+export type GoalStatus = 'ACTIVE' | 'COMPLETED' | 'PAUSED';
+
+export type ProgressMode = 'MANUAL' | 'MILESTONES';
+
+export type GoalViewMode = 'CARDS' | 'LIST';
+
+export interface UserProfile {
+  id: string;
+  username: string;
+  email: string;
+  avatarUrl: string | null;
+  themePreference: 'light' | 'dark';
+}
+
+export interface NotificationItem {
+  id: string;
+  title: string;
+  message: string;
+  isRead: boolean;
+  createdAt: string;
+}
+
+export interface GoalMilestone {
+  id: string;
+  goalId?: string;
+  title: string;
+  isCompleted: boolean;
+  weight?: number; // Custom weight for weighted progress calculation
+  targetDate?: string | null;
+  order: number;
+}
+
+export interface Goal {
+  id: string;
+  title: string;
+  description?: string;
+  category: string;
+  colorHex: string;
+  deadline?: string | null;
+  progressMode: ProgressMode;
+  progressPercentage: number; // 0 to 100
+  status: GoalStatus;
+  milestones: GoalMilestone[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GoalFilterCriteria {
+  status: 'ALL' | GoalStatus;
+  category: string; // 'ALL' or specific category
+  searchQuery: string;
+}
+
+
