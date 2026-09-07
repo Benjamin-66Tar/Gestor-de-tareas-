@@ -96,3 +96,57 @@ Compute calendar events dynamically via a projection service in the backend (`sy
 ### Rationale
 - **Single Source of Truth**: When a goal deadline changes or an milestone is marked complete, the change is immediately reflected in the Calendar tab without sync delay or synchronization bugs.
 - **Color Association**: Projected deadline events inherit the goal's category theme color automatically.
+
+---
+
+## 7. Project & Task Data Hierarchy & Kanban State Machine
+
+### Decision
+Implement a deterministic 3-column workflow (`TODO` -> `IN_PROGRESS` -> `DONE`) for tasks within each project.
+- Project completion percentage is automatically computed as:
+  $$\text{Progress} = \begin{cases} 0\% & \text{if total tasks} = 0 \\ \left(\frac{\text{count}(\text{tasks with status } = \text{DONE})}{\text{total tasks}}\right) \times 100 & \text{otherwise} \end{cases}$$
+- Tasks support subtasks/checklists, priority levels (`LOW`, `MEDIUM`, `HIGH`), and optional deadlines.
+
+### Rationale
+- **Zero Configuration Friction**: A fixed 3-state workflow removes complex board setup overhead while matching the natural execution lifecycle.
+- **Predictable Progress Metric**: Users receive clear, unambiguous visual completion feedback without arbitrary manual estimation.
+
+### Alternatives Considered
+- **Configurable / Custom Kanban Columns**: Rejected because it adds excessive database complexity, custom column ordering schemas, and makes automatic progress calculation subjective.
+- **Weighted Tasks by Story Points/Hours**: Rejected to prevent administrative cognitive load and stay aligned with Aura's clean and agile user experience.
+
+---
+
+## 8. Kanban Interaction & Drag-and-Drop Paradigm
+
+### Decision
+Adopt a hybrid interaction model:
+1. Native HTML5 Drag and Drop / mouse event handlers with zero-dependency CSS transitions for dragging task cards between columns.
+2. Direct action button / dropdown on each task card (`Mover a...`) for keyboard and mobile accessibility.
+
+### Rationale
+- **Ultra-Fast Performance**: Zero external heavy dragging dependencies (e.g. avoiding massive bundle overhead of `react-beautiful-dnd`) ensures sub-100ms response times.
+- **Accessibility & Mobile Readiness**: Guarantees seamless operation on touchscreens and mobile viewports where drag-and-drop can conflict with screen scrolling.
+
+---
+
+## 9. Cross-Section Integration (Projects <-> Goals & Projects <-> Calendar)
+
+### Decision
+- **Optional Goal Linking**: Projects can specify a foreign key to a `Goal`. When present, the Goal details drawer displays the associated project and its progress.
+- **Unified Calendar Projection**: Extend the backend projection service (`sync_all_to_calendar`) to aggregate both Goal/Milestone deadlines and Project Task deadlines into the Calendar feed, styled using the parent Project's color theme.
+
+### Rationale
+- Connects high-level strategy (Goals) with daily execution (Project Tasks) without forcing strict hierarchy where none is needed.
+- Provides a centralized calendar view of all user commitments across the app.
+
+---
+
+## 10. Project Hub Lifecycle & In-Memory Filtering
+
+### Decision
+Implement in-memory filtering for project lifecycle status (`Active` default, `Completed`, `Archived`) and instant text search in `AuraState.tsx`.
+
+### Rationale
+- **Sub-10ms UI Feedback**: Filtering active projects or searching by title happens entirely on the client without waiting for server round-trips.
+- **Visual Tidiness**: Users can easily archive completed projects to maintain a focused workspace while retaining historical records.

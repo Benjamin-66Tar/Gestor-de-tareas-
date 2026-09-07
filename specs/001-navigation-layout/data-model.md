@@ -67,14 +67,67 @@ Represents an actionable milestone or sub-target associated with a Goal.
 
 ---
 
+### 5. `Project` (Proyecto)
+Represents a project container with tasks and progress tracking.
+
+| Field Name | Type | Constraints | Description |
+|---|---|---|---|
+| `id` | UUIDField | Primary Key, default=uuid4 | Unique project identifier. |
+| `user` | ForeignKey (User) | On Delete: Cascade | Owner of the project. |
+| `goal` | ForeignKey (Goal) | Nullable, Blank, On Delete: SET_NULL, Related Name: `'projects'` | Optional linked strategic goal. |
+| `title` | CharField | Max Length: 200 | Title of the project. |
+| `description` | TextField | Blank, Nullable | Detailed scope or notes. |
+| `color_hex` | CharField | Max Length: 7, Default: `'#6366F1'` | Vibrant hex color for cards, tags, and calendar markers. |
+| `status` | CharField | Choices: `['ACTIVE', 'COMPLETED', 'ARCHIVED']`, Default: `'ACTIVE'` | Project lifecycle state. |
+| `progress_percentage` | PositiveSmallIntegerField | Default: 0, Min: 0, Max: 100 | Real-time calculated progress percentage. |
+| `created_at` | DateTimeField | Auto Now Add | Creation timestamp. |
+| `updated_at` | DateTimeField | Auto Now | Last update timestamp. |
+
+---
+
+### 6. `ProjectTask` (Tarea de Proyecto)
+Represents an actionable task belonging to a project's Kanban board.
+
+| Field Name | Type | Constraints | Description |
+|---|---|---|---|
+| `id` | UUIDField | Primary Key, default=uuid4 | Unique task identifier. |
+| `project` | ForeignKey (Project) | Related Name: `'tasks'`, On Delete: Cascade | Parent project reference. |
+| `title` | CharField | Max Length: 250 | Task title. |
+| `description` | TextField | Blank, Nullable | Detailed description or context. |
+| `status` | CharField | Choices: `['TODO', 'IN_PROGRESS', 'DONE']`, Default: `'TODO'` | Workflow Kanban column. |
+| `priority` | CharField | Choices: `['LOW', 'MEDIUM', 'HIGH']`, Default: `'MEDIUM'` | Color-coded priority level. |
+| `deadline` | DateTimeField | Nullable, Blank, DB Index | Optional target deadline date. |
+| `order` | PositiveIntegerField | Default: 0 | Sorting position within the Kanban column. |
+| `created_at` | DateTimeField | Auto Now Add | Creation timestamp. |
+| `updated_at` | DateTimeField | Auto Now | Last update timestamp. |
+
+---
+
+### 7. `TaskSubtask` (Subtarea / Checklist Item)
+Represents a lightweight checklist item within a task.
+
+| Field Name | Type | Constraints | Description |
+|---|---|---|---|
+| `id` | UUIDField | Primary Key, default=uuid4 | Unique subtask identifier. |
+| `task` | ForeignKey (ProjectTask) | Related Name: `'subtasks'`, On Delete: Cascade | Parent task reference. |
+| `title` | CharField | Max Length: 200 | Actionable item text. |
+| `is_completed` | BooleanField | Default: False | Completion status. |
+| `order` | PositiveIntegerField | Default: 0 | Sequence order within checklist. |
+
+---
+
 ## Validation & Business Rules
 
 1. **Progress Range**: `progress_percentage` must always be between 0 and 100 inclusive.
 2. **Milestone Weight**: When specified, `weight` must be $>0$. If no weights are specified, milestones default to equal weight (1).
-3. **Status Transitions**:
+3. **Project Progress Calculation**:
+   - $\text{Progress} = (\text{count of tasks with status DONE} / \text{total tasks}) \times 100$.
+   - If a project has 0 tasks, its progress is `0%`.
+   - When all tasks are `DONE`, progress is `100%`.
+4. **Status Transitions**:
    - Marking a goal status as `COMPLETED` automatically sets `progress_percentage = 100`.
    - In `MILESTONES` mode, when all milestones are completed, `status` automatically transitions to `COMPLETED` unless manually overridden.
-4. **Calendar Sync**: Any `Goal` with a non-null `deadline` or `GoalMilestone` with a non-null `target_date` is projected as an event into the Calendar layer.
+5. **Calendar Sync**: Any `Goal` with a non-null `deadline`, `GoalMilestone` with a non-null `target_date`, or `ProjectTask` with a non-null `deadline` is automatically projected as an event into the Calendar layer styled with the respective entity's color.
 
 ---
 
@@ -135,6 +188,52 @@ export interface Goal {
 export interface GoalFilterCriteria {
   status: 'ALL' | GoalStatus;
   category: string; // 'ALL' or specific category
+  searchQuery: string;
+}
+
+export type ProjectStatus = 'ACTIVE' | 'COMPLETED' | 'ARCHIVED';
+
+export type TaskStatus = 'TODO' | 'IN_PROGRESS' | 'DONE';
+
+export type TaskPriority = 'LOW' | 'MEDIUM' | 'HIGH';
+
+export interface TaskSubtask {
+  id: string;
+  taskId?: string;
+  title: string;
+  isCompleted: boolean;
+  order: number;
+}
+
+export interface ProjectTask {
+  id: string;
+  projectId: string;
+  title: string;
+  description?: string;
+  status: TaskStatus;
+  priority: TaskPriority;
+  deadline?: string | null;
+  order: number;
+  subtasks: TaskSubtask[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Project {
+  id: string;
+  title: string;
+  description?: string;
+  colorHex: string;
+  status: ProjectStatus;
+  progressPercentage: number; // 0 to 100
+  goalId?: string | null; // Optional linked Goal
+  tasks?: ProjectTask[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProjectFilterCriteria {
+  status: 'ALL' | ProjectStatus;
   searchQuery: string;
 }
 ```

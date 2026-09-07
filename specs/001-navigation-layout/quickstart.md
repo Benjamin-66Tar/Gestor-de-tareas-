@@ -98,6 +98,43 @@ The application is available at `http://localhost:5173`.
 3. Verify that the 15th displays a deadline badge with the goal's category theme color.
 4. Click the deadline badge to view the goal quick summary.
 
+### Scenario 6: Projects Hub & Instant Search / Lifecycle Filtering
+1. Click on the **"PROYECTOS"** tab in the TabBar.
+2. Verify the **Projects Hub** renders with cards showing project title, color badge, progress bar (0-100%), and task count.
+3. Verify the status pill **"Activos"** is selected by default.
+4. Type into the instant search bar (e.g., "Aura"); verify project cards filter in real-time (<50ms).
+5. Switch to the **"Completados"** or **"Archivados"** pill; verify only matching projects are shown.
+
+### Scenario 7: Project Creation & Slide-over Drawer
+1. In the Projects Hub, click **"+ Nuevo Proyecto"**.
+2. Verify the slide-over drawer opens from the right edge.
+3. Fill in title ("Rediseño Web"), description, choose a vibrant color, and optionally link to an existing Goal.
+4. Click **"Guardar Proyecto"**; verify the new project card immediately appears in the hub with 0% progress.
+
+### Scenario 8: Project Workspace Kanban Board & Drag/Drop Transition
+1. Click on a project card to open its dedicated workspace.
+2. Verify the workspace displays breadcrumb navigation (`Proyectos / Rediseño Web`) and a 3-column Kanban board:
+   - **"Por hacer"** (To Do)
+   - **"En progreso"** (In Progress)
+   - **"Completado"** (Done)
+3. Use quick-add to create 2 tasks in the "Por hacer" column.
+4. Move task 1 to "En progreso" and then to "Completado".
+5. Verify the project's progress bar in the workspace header updates in real time to `50%` (1 of 2 tasks completed).
+6. Move task 2 to "Completado".
+7. Verify progress bar reaches `100%`.
+
+### Scenario 9: Task Checklist & Priority Color Coding
+1. Click on a task card to open the Task Slide-over Drawer.
+2. Set priority to `HIGH` (Alta); verify a bold, colorful priority badge is displayed.
+3. Add 2 subtask items ("Maquetar header", "Configurar CSS").
+4. Check off the first item; verify the checklist counter displays `1/2`.
+5. Set an upcoming deadline date.
+
+### Scenario 10: Task Deadline Projection on Calendar
+1. Switch to the **"CALENDARIO"** tab in the TabBar.
+2. Verify that the task deadline appears on the calendar grid, styled with the parent project's theme color.
+3. Click the calendar item to see the task name and direct link back to its project.
+
 ---
 
 ## 4. Automated Testing

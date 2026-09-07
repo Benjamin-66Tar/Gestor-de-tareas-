@@ -199,6 +199,144 @@ All endpoints are served under the `/api/v1` namespace and expect/return `applic
     "color_hex": "#10B981",
     "source_id": "m2-1111-2222-3333",
     "status": "COMPLETED"
+  },
+  {
+    "id": "task-t1-deadline",
+    "title": "📋 Tarea: Diseñar arquitectura de capas",
+    "type": "PROJECT_TASK_DEADLINE",
+    "date": "2026-09-18T18:00:00Z",
+    "color_hex": "#6366F1",
+    "source_id": "t1-1111-2222-3333",
+    "status": "IN_PROGRESS"
   }
 ]
 ```
+
+---
+
+## 6. Projects (Proyectos)
+
+### List Projects
+- **Method**: `GET`
+- **URL**: `/api/v1/projects/`
+- **Query Params**:
+  - `status`: `ACTIVE`, `COMPLETED`, `ARCHIVED` (optional, defaults to `ACTIVE`)
+  - `search`: Search query string matching title or description (optional)
+- **Response (200 OK)**:
+```json
+[
+  {
+    "id": "p1-1111-2222-3333-444455556666",
+    "title": "Plataforma Aura v1.0",
+    "description": "Desarrollo del gestor de tareas ultra rápido",
+    "color_hex": "#6366F1",
+    "status": "ACTIVE",
+    "progress_percentage": 50,
+    "goal": "b1c2d3e4-1111-2222-3333-444455556666",
+    "total_tasks": 4,
+    "completed_tasks": 2,
+    "created_at": "2026-09-07T10:00:00Z",
+    "updated_at": "2026-09-07T14:30:00Z"
+  }
+]
+```
+
+### Create Project
+- **Method**: `POST`
+- **URL**: `/api/v1/projects/`
+- **Request Body**:
+```json
+{
+  "title": "Nuevo Proyecto Web",
+  "description": "Landing page y panel de control",
+  "color_hex": "#8B5CF6",
+  "status": "ACTIVE",
+  "goal": "b1c2d3e4-1111-2222-3333-444455556666"
+}
+```
+- **Response (201 Created)**: Created Project object.
+
+### Get Project Details with Tasks
+- **Method**: `GET`
+- **URL**: `/api/v1/projects/{id}/`
+- **Response (200 OK)**: Project object with nested `tasks` array.
+
+### Update Project
+- **Method**: `PUT` / `PATCH`
+- **URL**: `/api/v1/projects/{id}/`
+- **Request Body**: Partial or full fields (`title`, `description`, `color_hex`, `status`, `goal`).
+- **Response (200 OK)**: Updated Project object.
+
+### Delete Project
+- **Method**: `DELETE`
+- **URL**: `/api/v1/projects/{id}/`
+- **Response (204 No Content)**
+
+---
+
+## 7. Project Tasks & Kanban Workflow
+
+### List Tasks of a Project
+- **Method**: `GET`
+- **URL**: `/api/v1/projects/{project_id}/tasks/`
+- **Response (200 OK)**: Array of `ProjectTask` items with nested `subtasks`.
+
+### Create Task
+- **Method**: `POST`
+- **URL**: `/api/v1/projects/{project_id}/tasks/`
+- **Request Body**:
+```json
+{
+  "title": "Configurar rutas de la aplicación",
+  "description": "Vincular TabBar a vistas React",
+  "status": "TODO",
+  "priority": "HIGH",
+  "deadline": "2026-09-12T23:59:59Z",
+  "subtasks": [
+    { "title": "Crear Router", "order": 1 },
+    { "title": "Añadir Guards", "order": 2 }
+  ]
+}
+```
+- **Response (201 Created)**: Created `ProjectTask` object with generated subtasks.
+
+### Update Task Status (Kanban Transition)
+- **Method**: `PATCH`
+- **URL**: `/api/v1/tasks/{id}/status/`
+- **Request Body**:
+```json
+{
+  "status": "DONE"
+}
+```
+- **Response (200 OK)**:
+```json
+{
+  "id": "t1-1111-2222-3333",
+  "status": "DONE",
+  "project_progress_percentage": 75
+}
+```
+
+### Update Task Details
+- **Method**: `PUT` / `PATCH`
+- **URL**: `/api/v1/tasks/{id}/`
+- **Request Body**: Partial fields (`title`, `description`, `priority`, `deadline`, `status`).
+- **Response (200 OK)**: Updated `ProjectTask` object.
+
+### Delete Task
+- **Method**: `DELETE`
+- **URL**: `/api/v1/tasks/{id}/`
+- **Response (204 No Content)**
+
+### Toggle Subtask Completion
+- **Method**: `PATCH`
+- **URL**: `/api/v1/subtasks/{id}/toggle/`
+- **Response (200 OK)**:
+```json
+{
+  "id": "st-1111",
+  "is_completed": true
+}
+```
+

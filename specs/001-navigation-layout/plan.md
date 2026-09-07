@@ -1,12 +1,22 @@
-# Implementation Plan: Navigation Layout & Core Layered Architecture
+# Implementation Plan: Navigation Layout, Objetivos & Proyectos Management
 
-**Branch**: `001-navigation-layout` | **Date**: 2026-09-03 | **Spec**: [spec.md](file:///d:/Sistemas/Proyectos/Gestor_tareas/specs/001-navigation-layout/spec.md)
+**Branch**: `001-navigation-layout` | **Date**: 2026-09-07 | **Spec**: [spec.md](file:///d:/Sistemas/Proyectos/Gestor_tareas/specs/001-navigation-layout/spec.md)
 
-**Input**: Feature specification from `/specs/001-navigation-layout/spec.md` and user architectural requirement: Layered Architecture (Arquitectura de Capas) & recommended technology stack.
+**Input**: Feature specification from `/specs/001-navigation-layout/spec.md` including Navbar, TabBar, Objetivos, and the newly clarified Proyectos section (Hub, Workspace Kanban 3-state, List view, Tasks, Subtasks, Project progress calculation, Goal linkage, Calendar deadline projection, Slide-over drawer, filter pills and instant search).
 
 ## Summary
 
-The Navigation Layout feature establishes the core visual shell and structural backbone of the "Aura" task manager application. It encompasses a top Navbar (branding, notifications with badge, user profile avatar), a TabBar (instant navigation across Calendario, Objetivos, Proyectos, Eventos), and the comprehensive functional foundation for the "Objetivos" section (quantifiable progress, weighted milestones, dual card/list views, slide-over drawer for CRUD, and calendar synchronization).
+The Navigation Layout & Workspaces feature establishes the core visual shell and structural backbone of the "Aura" task manager application:
+1. **Application Shell**: A persistent top Navbar (branding "Aura", notifications with badge counter, user profile avatar menu) and horizontal TabBar (instant navigation between Calendario, Objetivos, Proyectos, Eventos).
+2. **Objetivos Section**: Quantifiable goal progress (0-100%), hybrid calculation (manual slider vs milestone weighting), dual card/list views, slide-over drawer for CRUD, and automatic calendar synchronization.
+3. **Proyectos Section**:
+   - **Projects Hub**: Visual grid of project cards with theme color, lifecycle status, calculated progress bar (0-100%), and optional link to a strategic Goal.
+   - **Lifecycle Management**: Quick-filter pills (*"Activos"*, *"Completados"*, *"Archivados"*) with instant client-side text search.
+   - **Dedicated Project Workspace**: Breadcrumb navigation into an interactive workspace featuring a 3-column Kanban board (*"Por hacer"*, *"En progreso"*, *"Completado"*) and toggleable compact task list.
+   - **Tasks & Subtasks**: Tasks with color-coded priority levels (*Baja, Media, Alta*), deadline dates, and checkable subtasks.
+   - **Automatic Progress Calculation**: Project completion percentage dynamically computed as `(completed tasks / total tasks) * 100`.
+   - **Cross-Sectional Integration**: Project tasks with deadlines project directly onto the **Calendario** view styled with the project's color theme, and emit approaching deadline alerts.
+   - **Slide-over Drawers**: Consistent right-edge drawers for detailed editing of projects and tasks without losing workspace context.
 
 The implementation strictly enforces a **Layered Architecture (Arquitectura de Capas)** across both backend and frontend to ensure high maintainability, testability, separation of concerns, and ultra-fast UI responsiveness.
 
@@ -52,10 +62,10 @@ The implementation strictly enforces a **Layered Architecture (Arquitectura de C
 ```mermaid
 graph TD
     subgraph Frontend["Frontend Layered Architecture (React + Vite + TypeScript)"]
-        UI["Presentation Layer: Components & Pages<br/>(Navbar, TabBar, GoalsView, GoalCard, GoalDrawer)"]
-        STATE["State / Application Layer: Hooks & Context<br/>(AuraState, useGoals, useNotifications)"]
-        SERVICE_FE["Service / API Client Layer<br/>(goalsApi.ts, notificationApi.ts)"]
-        DOMAIN_FE["Domain Model Layer<br/>(types.ts: Goal, Milestone, ProgressMode)"]
+        UI["Presentation Layer: Components & Views<br/>(Navbar, TabBar, GoalsView, ProjectsView, KanbanBoard, ProjectDrawer, TaskDrawer)"]
+        STATE["State / Application Layer: Hooks & Context<br/>(AuraState, useGoals, useProjects, useNotifications)"]
+        SERVICE_FE["Service / API Client Layer<br/>(goalsApi.ts, projectsApi.ts, notificationApi.ts)"]
+        DOMAIN_FE["Domain Model Layer<br/>(types.ts: Goal, Milestone, Project, ProjectTask, TaskSubtask)"]
         UI --> STATE
         STATE --> SERVICE_FE
         SERVICE_FE --> DOMAIN_FE
@@ -81,24 +91,31 @@ graph TD
 #### 1. Backend Layers (`backend/`)
 - **Presentation / API Layer (`views.py`, `urls.py`)**:
   - Handles incoming HTTP requests, route dispatching, request authentication, and response status formatting.
-  - Implements caching headers and Redis-backed response caching for read-heavy operations.
+  - Implements ViewSets for Profiles, Notifications, Goals, Projects, and ProjectTasks.
 - **Service / Business Logic Layer (`services.py`)**:
-  - Implements core business logic: hybrid progress calculation (manual slider vs milestone weighting), milestone validation, goal completion triggers, proactive notification alerts, and projection of goal deadlines onto the calendar.
+  - Implements core business logic:
+    - Goal progress calculation (manual vs milestone weighting).
+    - Project progress calculation: `(completed tasks / total tasks) * 100`.
+    - Unified calendar projection: combines Goal deadlines, Milestones, and dated Project Tasks.
+    - Proactive deadline alert evaluation.
 - **Serialization / DTO Layer (`serializers.py`)**:
-  - Validates payload structures, deserializes client data, and serializes ORM models into clean JSON schemas.
+  - Validates payload structures, deserializes client data, and serializes ORM models into clean JSON schemas (`GoalSerializer`, `ProjectSerializer`, `ProjectTaskSerializer`, `TaskSubtaskSerializer`).
 - **Persistence Layer (`models.py`)**:
-  - Defines database schema for `UserProfile`, `Notification`, `ElementoAura`, `Goal`, and `GoalMilestone`, including foreign keys, indexes, and constraints.
+  - Defines database schema for `UserProfile`, `Notification`, `ElementoAura`, `Goal`, `GoalMilestone`, `Project`, `ProjectTask`, and `TaskSubtask`.
 
 #### 2. Frontend Layers (`src/`)
 - **Presentation Layer (`src/components/`, `src/App.tsx`)**:
-  - Presentational and container components: Navbar, TabBar, GoalsView, GoalCard, GoalTable, GoalDrawer, CalendarGrid.
-  - Implements responsive layouts (mobile swipe, desktop grid) with Tailwind CSS.
+  - Presentational and container components:
+    - Shell: `Navbar.tsx`, `TabBar.tsx`.
+    - Goals: `GoalsView.tsx`, `GoalCard.tsx`, `GoalTable.tsx`, `GoalDrawer.tsx`.
+    - Projects: `ProjectsView.tsx`, `ProjectsHub.tsx`, `ProjectCard.tsx`, `ProjectWorkspace.tsx`, `KanbanBoard.tsx`, `KanbanColumn.tsx`, `TaskCard.tsx`, `ProjectDrawer.tsx`, `TaskDrawer.tsx`.
+    - Calendar: `CalendarGrid.tsx`.
 - **State / Application Layer (`src/context/AuraState.tsx`)**:
-  - Centralized application state management for active tab, notifications, goal filters, drawer visibility, and selected goal editing.
+  - Centralized application state management for active tab, notifications, goals, projects, active project workspace, task dragging/status updates, filters, and drawer visibility.
 - **Service Layer (`src/services/`)**:
-  - Typed HTTP API client isolating network requests, error transformations, and base URL configurations.
+  - Typed HTTP API client isolating network requests, error transformations, and base URL configurations (`api.ts`).
 - **Domain Layer (`src/domain/types.ts`)**:
-  - Pure TypeScript interfaces, enums (`ProgressMode`, `GoalStatus`, `ActiveTab`), and validation rules.
+  - Pure TypeScript interfaces, enums (`ProgressMode`, `GoalStatus`, `ProjectStatus`, `TaskStatus`, `TaskPriority`, `ActiveTab`), and validation rules.
 
 ---
 
@@ -121,11 +138,11 @@ specs/001-navigation-layout/
 
 ```text
 backend/
-├── models.py            # Persistence: UserProfile, Notification, Goal, GoalMilestone
-├── serializers.py       # Serialization: DTOs & validation schemas
-├── services.py          # Business Logic: Progress calculator, calendar sync, alerts
+├── models.py            # Persistence: UserProfile, Notification, Goal, GoalMilestone, Project, ProjectTask, TaskSubtask
+├── serializers.py       # Serialization: DTOs & validation schemas for all entities
+├── services.py          # Business Logic: Progress calculators, calendar sync, alerts
 ├── views.py             # Presentation: REST API ViewSets & endpoints
-├── urls.py              # URL routing
+├── urls.py              # URL routing (/api/v1/...)
 ├── settings.py          # Django & Redis configuration
 └── tests.py             # Unit and integration test suites
 
@@ -144,7 +161,17 @@ src/
 │   │   ├── GoalCard.tsx     # Visual card with progress bar and category badge
 │   │   ├── GoalTable.tsx    # Compact list view
 │   │   └── GoalDrawer.tsx   # Slide-over panel for goal & milestone CRUD
-│   ├── CalendarGrid.tsx     # Calendar view displaying synchronized goal deadlines
+│   ├── projects/
+│   │   ├── ProjectsView.tsx      # Main container switching between Hub and Workspace
+│   │   ├── ProjectsHub.tsx       # Hub grid of project cards with status pills & search
+│   │   ├── ProjectCard.tsx       # Visual project card with progress bar & theme color
+│   │   ├── ProjectWorkspace.tsx  # Workspace shell with breadcrumb and view switcher
+│   │   ├── KanbanBoard.tsx       # 3-column Kanban board (Por hacer, En progreso, Completado)
+│   │   ├── KanbanColumn.tsx      # Individual column with task cards and quick-add
+│   │   ├── TaskCard.tsx          # Task card with priority pill, deadline, and checklist counter
+│   │   ├── ProjectDrawer.tsx     # Slide-over drawer for creating/editing projects
+│   │   └── TaskDrawer.tsx        # Slide-over drawer for editing task details & subtasks
+│   ├── CalendarGrid.tsx     # Calendar view displaying synchronized goal & task deadlines
 │   └── ElementoModal.tsx    # Creation/editing modal for calendar activities
 ├── App.tsx              # Application shell integration
 └── index.css            # Tailwind directives and theme variables
@@ -158,44 +185,70 @@ src/
 
 #### [MODIFY] [models.py](file:///d:/Sistemas/Proyectos/Gestor_tareas/backend/models.py)
 - Expand models:
-  - `UserProfile`: Avatar URL, user reference, theme preference.
-  - `Notification`: User foreign key, title, message, is_read, created_at.
-  - `Goal`: Title, description, deadline, category tag, color hex, progress mode (`MANUAL` or `MILESTONES`), progress percentage (0-100%), status (`ACTIVE`, `COMPLETED`, `PAUSED`).
-  - `GoalMilestone`: Goal foreign key, title, is_completed, custom weight value, target date.
+  - `UserProfile`, `Notification`, `Goal`, `GoalMilestone`.
+  - `Project`: Title, description, color_hex, status (`ACTIVE`, `COMPLETED`, `ARCHIVED`), progress_percentage, goal FK (nullable).
+  - `ProjectTask`: Project FK, title, description, status (`TODO`, `IN_PROGRESS`, `DONE`), priority (`LOW`, `MEDIUM`, `HIGH`), deadline, order.
+  - `TaskSubtask`: Task FK, title, is_completed, order.
 
 #### [MODIFY] [serializers.py](file:///d:/Sistemas/Proyectos/Gestor_tareas/backend/serializers.py)
-- Serializers for `UserProfileSerializer`, `NotificationSerializer`.
-- `GoalMilestoneSerializer` and nested `GoalSerializer` with validation for milestone weights and progress range (0-100).
+- Serializers:
+  - `TaskSubtaskSerializer` & `ProjectTaskSerializer`.
+  - `ProjectSerializer` with computed task metrics and progress validation.
+  - `GoalSerializer`, `NotificationSerializer`, `UserProfileSerializer`.
 
 #### [MODIFY] [services.py](file:///d:/Sistemas/Proyectos/Gestor_tareas/backend/services.py)
-- `calculate_goal_progress(goal)`: Logic for calculating progress either from equal weights or custom milestone weights.
-- `sync_goals_to_calendar(user)`: Derives calendar deadline markers from active goals and milestones.
-- `check_approaching_deadlines(user)`: Evaluates goals/milestones due within 24-48h and generates notifications.
+- `calculate_goal_progress(goal)`
+- `calculate_project_progress(project)`: Computes `(completed_tasks / total_tasks) * 100`.
+- `sync_all_to_calendar(user)`: Derives calendar deadline markers from active goals, milestones, and project tasks.
+- `check_approaching_deadlines(user)`: Evaluates approaching deadlines for goals and project tasks.
 
 #### [MODIFY] [views.py](file:///d:/Sistemas/Proyectos/Gestor_tareas/backend/views.py)
 - Endpoints for:
-  - `GET /api/v1/profile/`
-  - `GET /api/v1/notifications/`, `GET /api/v1/notifications/unread-count/`, `POST /api/v1/notifications/{id}/read/`
-  - `GET/POST /api/v1/goals/`, `GET/PUT/DELETE /api/v1/goals/{id}/`
-  - `POST /api/v1/goals/{id}/milestones/`
-  - `GET /api/v1/calendar/events/` (including projected goal deadlines)
+  - `GET/POST /api/v1/projects/`, `GET/PUT/DELETE /api/v1/projects/{id}/`
+  - `GET/POST /api/v1/projects/{id}/tasks/`, `PUT/PATCH/DELETE /api/v1/tasks/{id}/`, `PATCH /api/v1/tasks/{id}/status/`
+  - `PATCH /api/v1/subtasks/{id}/toggle/`
+  - `GET /api/v1/calendar/events/` (including projected task deadlines)
 
 ### Frontend (React + Vite + TypeScript)
 
 #### [MODIFY] [types.ts](file:///d:/Sistemas/Proyectos/Gestor_tareas/src/domain/types.ts)
-- Add domain types: `Goal`, `GoalMilestone`, `ProgressMode`, `GoalStatus`, `CategoryTag`, `UserProfile`, `Notification`.
+- Add domain types: `Project`, `ProjectTask`, `TaskSubtask`, `ProjectStatus`, `TaskStatus`, `TaskPriority`, `ProjectFilterCriteria`.
 
 #### [MODIFY] [AuraState.tsx](file:///d:/Sistemas/Proyectos/Gestor_tareas/src/context/AuraState.tsx)
-- Expose state and handlers for active tab, unread notifications, goals collection, active view mode (`cards` vs `list`), active filter criteria, and drawer state (open/closed, editing goal).
+- Expose state and handlers for projects collection, active project workspace, project filtering, task creation, task status movement (Kanban), subtask toggling, and project/task drawer toggles.
 
-#### [NEW] [GoalsView.tsx](file:///d:/Sistemas/Proyectos/Gestor_tareas/src/components/goals/GoalsView.tsx)
-- Dual-view container rendering either `GoalCard` grid or `GoalTable` list, with filter chips and "Nuevo Objetivo" trigger button.
+#### [MODIFY] [api.ts](file:///d:/Sistemas/Proyectos/Gestor_tareas/src/services/api.ts)
+- Add API client methods for Projects, Tasks, and Subtasks.
 
-#### [NEW] [GoalDrawer.tsx](file:///d:/Sistemas/Proyectos/Gestor_tareas/src/components/goals/GoalDrawer.tsx)
-- Slide-over panel from the right edge for creating and editing goals, toggling progress mode (manual slider vs milestones), managing milestone checklists, and assigning custom milestone weights.
+#### [NEW] [ProjectsView.tsx](file:///d:/Sistemas/Proyectos/Gestor_tareas/src/components/projects/ProjectsView.tsx)
+- Top-level container toggling between `ProjectsHub` and `ProjectWorkspace`.
+
+#### [NEW] [ProjectsHub.tsx](file:///d:/Sistemas/Proyectos/Gestor_tareas/src/components/projects/ProjectsHub.tsx)
+- Projects grid with search bar, status pills (*Activos, Completados, Archivados*), and "+ Nuevo Proyecto" button.
+
+#### [NEW] [ProjectCard.tsx](file:///d:/Sistemas/Proyectos/Gestor_tareas/src/components/projects/ProjectCard.tsx)
+- Visual project card displaying title, color theme, progress bar, task completion counter, and strategic goal pill.
+
+#### [NEW] [ProjectWorkspace.tsx](file:///d:/Sistemas/Proyectos/Gestor_tareas/src/components/projects/ProjectWorkspace.tsx)
+- Dedicated workspace with breadcrumb back-link, project progress header, and Kanban / List view switcher.
+
+#### [NEW] [KanbanBoard.tsx](file:///d:/Sistemas/Proyectos/Gestor_tareas/src/components/projects/KanbanBoard.tsx)
+- 3-column board (*Por hacer, En progreso, Completado*) supporting card dragging and quick-add.
+
+#### [NEW] [KanbanColumn.tsx](file:///d:/Sistemas/Proyectos/Gestor_tareas/src/components/projects/KanbanColumn.tsx)
+- Individual column with counter badge, task cards, and inline task creator.
+
+#### [NEW] [TaskCard.tsx](file:///d:/Sistemas/Proyectos/Gestor_tareas/src/components/projects/TaskCard.tsx)
+- Interactive task card with priority tag, deadline marker, checklist completion indicator, and quick-move menu.
+
+#### [NEW] [ProjectDrawer.tsx](file:///d:/Sistemas/Proyectos/Gestor_tareas/src/components/projects/ProjectDrawer.tsx)
+- Slide-over drawer for creating/editing project details, color selection, and Goal linkage.
+
+#### [NEW] [TaskDrawer.tsx](file:///d:/Sistemas/Proyectos/Gestor_tareas/src/components/projects/TaskDrawer.tsx)
+- Slide-over drawer for editing task title, description, priority, deadline, and checklist subtasks.
 
 #### [MODIFY] [App.tsx](file:///d:/Sistemas/Proyectos/Gestor_tareas/src/App.tsx)
-- Integrate refreshed Navbar (with real dropdown toggles for notifications and profile), TabBar, and dynamic rendering of `GoalsView` when `tabActiva === 'OBJETIVOS'`.
+- Render `ProjectsView` when `tabActiva === 'PROYECTOS'`.
 
 ---
 
