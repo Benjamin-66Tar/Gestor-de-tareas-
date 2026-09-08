@@ -36,6 +36,12 @@ export const GoalCard: React.FC<GoalCardProps> = ({ goal, onEdit }) => {
     ? new Date(goal.deadline).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })
     : null;
 
+  const colorHex = goal.colorHex || (goal as any).color_hex || '#10B981';
+  const progressPercentage = typeof goal.progressPercentage === 'number'
+    ? goal.progressPercentage
+    : (typeof (goal as any).progress_percentage === 'number' ? (goal as any).progress_percentage : 0);
+  const progressMode = goal.progressMode || (goal as any).progress_mode || 'MILESTONES';
+
   return (
     <div
       className={`bg-slate-900 border border-slate-800 hover:border-slate-700/80 rounded-2xl p-5 shadow-lg transition-all duration-200 flex flex-col justify-between group ${
@@ -49,9 +55,9 @@ export const GoalCard: React.FC<GoalCardProps> = ({ goal, onEdit }) => {
             <span
               className="px-2.5 py-0.5 text-xs font-bold rounded-full border shadow-sm"
               style={{
-                backgroundColor: `${goal.colorHex}20`,
-                borderColor: `${goal.colorHex}50`,
-                color: goal.colorHex,
+                backgroundColor: `${colorHex}20`,
+                borderColor: `${colorHex}50`,
+                color: colorHex,
               }}
             >
               {goal.category}
@@ -93,21 +99,21 @@ export const GoalCard: React.FC<GoalCardProps> = ({ goal, onEdit }) => {
         <div className="mt-4 mb-4">
           <div className="flex justify-between items-center text-xs font-bold mb-1.5">
             <span className="text-slate-400 flex items-center gap-1">
-              <span>{goal.progressMode === 'MILESTONES' ? 'Progreso por Hitos' : 'Progreso Manual'}</span>
+              <span>{progressMode === 'MILESTONES' ? 'Progreso por Hitos' : 'Progreso Manual'}</span>
             </span>
             <span
               className="font-black text-sm"
-              style={{ color: goal.colorHex }}
+              style={{ color: colorHex }}
             >
-              {goal.progressPercentage}%
+              {progressPercentage}%
             </span>
           </div>
           <div className="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden p-0.5 border border-slate-700/60">
             <div
               className="h-full rounded-full transition-all duration-300 shadow-sm"
               style={{
-                width: `${goal.progressPercentage}%`,
-                backgroundColor: goal.colorHex,
+                width: `${Math.min(100, Math.max(0, progressPercentage))}%`,
+                backgroundColor: colorHex,
               }}
             />
           </div>
@@ -121,7 +127,7 @@ export const GoalCard: React.FC<GoalCardProps> = ({ goal, onEdit }) => {
               className="flex justify-between items-center text-xs text-slate-400 hover:text-slate-200 cursor-pointer select-none py-1"
             >
               <span className="font-semibold">
-                📌 Hitos ({goal.milestones.filter(m => m.isCompleted).length}/{goal.milestones.length})
+                📌 Hitos ({goal.milestones.filter(m => Boolean(m.isCompleted ?? (m as any).is_completed)).length}/{goal.milestones.length})
               </span>
               <span className="text-[10px] text-indigo-400 font-bold">
                 {expanded ? 'Ocultar ▲' : 'Ver hitos ▼'}
@@ -130,27 +136,30 @@ export const GoalCard: React.FC<GoalCardProps> = ({ goal, onEdit }) => {
 
             {expanded && (
               <div className="mt-2 space-y-1.5 animate-fadeIn">
-                {goal.milestones.map((m) => (
-                  <label
-                    key={m.id}
-                    className="flex items-center gap-2 text-xs text-slate-300 p-1.5 rounded-lg hover:bg-slate-800/50 cursor-pointer transition select-none"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={m.isCompleted}
-                      onChange={() => toggleMilestone(goal.id, m.id)}
-                      className="w-4 h-4 rounded text-indigo-500 bg-slate-800 border-slate-700 focus:ring-0 cursor-pointer"
-                    />
-                    <span className={`flex-1 ${m.isCompleted ? 'line-through text-slate-500' : ''}`}>
-                      {m.title}
-                    </span>
-                    {m.weight !== undefined && m.weight > 1 && (
-                      <span className="text-[10px] font-bold text-slate-400 bg-slate-800 px-1.5 py-0.5 rounded">
-                        Peso: {m.weight}
+                {goal.milestones.map((m) => {
+                  const isDone = Boolean(m.isCompleted ?? (m as any).is_completed);
+                  return (
+                    <label
+                      key={m.id}
+                      className="flex items-center gap-2 text-xs text-slate-300 p-1.5 rounded-lg hover:bg-slate-800/50 cursor-pointer transition select-none"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isDone}
+                        onChange={() => toggleMilestone(goal.id, m.id)}
+                        className="w-4 h-4 rounded text-indigo-500 bg-slate-800 border-slate-700 focus:ring-0 cursor-pointer"
+                      />
+                      <span className={`flex-1 ${isDone ? 'line-through text-slate-500' : ''}`}>
+                        {m.title}
                       </span>
-                    )}
-                  </label>
-                ))}
+                      {m.weight !== undefined && m.weight > 1 && (
+                        <span className="text-[10px] font-bold text-slate-400 bg-slate-800 px-1.5 py-0.5 rounded">
+                          Peso: {m.weight}
+                        </span>
+                      )}
+                    </label>
+                  );
+                })}
               </div>
             )}
           </div>

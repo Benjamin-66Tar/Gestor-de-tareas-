@@ -1,4 +1,4 @@
-import { Goal, NotificationItem, UserProfile, PlanElemento, Project, ProjectTask, TaskSubtask, TaskStatus } from '../domain/types';
+import { Goal, GoalMilestone, NotificationItem, UserProfile, PlanElemento, Project, ProjectTask, TaskSubtask, TaskStatus } from '../domain/types';
 
 const API_BASE = '/api/v1';
 
@@ -31,7 +31,14 @@ async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promi
 
 export async function fetchUserProfile(): Promise<UserProfile> {
   try {
-    return await apiRequest<UserProfile>('/profile/');
+    const data = await apiRequest<any>('/profile/');
+    return {
+      id: data.id || 'local-user',
+      username: data.username || 'AuraUser',
+      email: data.email || 'user@aura.app',
+      avatarUrl: data.avatar_url ?? data.avatarUrl ?? null,
+      themePreference: data.theme_preference ?? data.themePreference ?? 'dark',
+    };
   } catch (err) {
     console.warn('Falling back to default profile:', err);
     return {
@@ -57,8 +64,15 @@ export async function fetchUnreadNotificationsCount(): Promise<number> {
 
 export async function fetchNotifications(): Promise<NotificationItem[]> {
   try {
-    const data = await apiRequest<{ results: NotificationItem[] } | NotificationItem[]>('/notifications/');
-    return Array.isArray(data) ? data : data.results;
+    const data = await apiRequest<{ results: any[] } | any[]>('/notifications/');
+    const rawList = Array.isArray(data) ? data : (data?.results || []);
+    return rawList.map((item: any) => ({
+      id: item.id,
+      title: item.title,
+      message: item.message,
+      isRead: item.is_read ?? item.isRead ?? false,
+      createdAt: item.created_at ?? item.createdAt ?? new Date().toISOString(),
+    }));
   } catch (err) {
     return [
       {
@@ -96,6 +110,39 @@ export async function markNotificationRead(id: string): Promise<void> {
 
 // --- Goals Services ---
 
+export function transformMilestoneFromApi(raw: any): GoalMilestone {
+  return {
+    id: raw.id,
+    goalId: raw.goal_id ?? raw.goalId,
+    title: raw.title || '',
+    isCompleted: Boolean(raw.is_completed ?? raw.isCompleted),
+    weight: typeof raw.weight === 'number' ? raw.weight : 1,
+    targetDate: raw.target_date ?? raw.targetDate ?? null,
+    order: typeof raw.order === 'number' ? raw.order : 0,
+  };
+}
+
+export function transformGoalFromApi(raw: any): Goal {
+  return {
+    id: raw.id,
+    title: raw.title || '',
+    description: raw.description || '',
+    category: raw.category || 'General',
+    colorHex: raw.color_hex ?? raw.colorHex ?? '#10B981',
+    deadline: raw.deadline || null,
+    progressMode: raw.progress_mode ?? raw.progressMode ?? 'MILESTONES',
+    progressPercentage: typeof raw.progress_percentage === 'number'
+      ? raw.progress_percentage
+      : (typeof raw.progressPercentage === 'number' ? raw.progressPercentage : 0),
+    status: raw.status || 'ACTIVE',
+    milestones: Array.isArray(raw.milestones)
+      ? raw.milestones.map(transformMilestoneFromApi)
+      : [],
+    createdAt: raw.created_at ?? raw.createdAt ?? new Date().toISOString(),
+    updatedAt: raw.updated_at ?? raw.updatedAt ?? new Date().toISOString(),
+  };
+}
+
 export async function fetchGoals(params?: { status?: string; category?: string }): Promise<Goal[]> {
   const queryParts: string[] = [];
   if (params?.status && params.status !== 'ALL') {
@@ -107,7 +154,8 @@ export async function fetchGoals(params?: { status?: string; category?: string }
   const queryString = queryParts.length ? `?${queryParts.join('&')}` : '';
 
   try {
-    return await apiRequest<Goal[]>(`/goals/${queryString}`);
+    const rawGoals = await apiRequest<any[]>(`/goals/${queryString}`);
+    return Array.isArray(rawGoals) ? rawGoals.map(transformGoalFromApi) : [];
   } catch (err) {
     console.warn('Goals API call failed, using local in-memory fallback:', err);
     return [];
@@ -133,10 +181,11 @@ export async function createGoalApi(goalData: Partial<Goal>): Promise<Goal> {
     })),
   };
 
-  return await apiRequest<Goal>('/goals/', {
+  const createdRaw = await apiRequest<any>('/goals/', {
     method: 'POST',
     body: JSON.stringify(payload),
   });
+  return transformGoalFromApi(createdRaw);
 }
 
 export async function updateGoalApi(id: string, goalData: Partial<Goal>): Promise<Goal> {
@@ -160,10 +209,11 @@ export async function updateGoalApi(id: string, goalData: Partial<Goal>): Promis
     }));
   }
 
-  return await apiRequest<Goal>(`/goals/${id}/`, {
+  const updatedRaw = await apiRequest<any>(`/goals/${id}/`, {
     method: 'PUT',
     body: JSON.stringify(payload),
   });
+  return transformGoalFromApi(updatedRaw);
 }
 
 export async function deleteGoalApi(id: string): Promise<void> {

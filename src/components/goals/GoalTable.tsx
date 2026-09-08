@@ -38,7 +38,11 @@ export const GoalTable: React.FC<GoalTableProps> = ({ goals, onEdit }) => {
         </thead>
         <tbody className="divide-y divide-slate-800/60 font-medium">
           {goals.map((goal) => {
-            const completedCount = goal.milestones?.filter(m => m.isCompleted).length || 0;
+            const colorHex = goal.colorHex || (goal as any).color_hex || '#10B981';
+            const progressPercentage = typeof goal.progressPercentage === 'number'
+              ? goal.progressPercentage
+              : (typeof (goal as any).progress_percentage === 'number' ? (goal as any).progress_percentage : 0);
+            const completedCount = goal.milestones?.filter(m => Boolean(m.isCompleted ?? (m as any).is_completed)).length || 0;
             const totalCount = goal.milestones?.length || 0;
             const formattedDate = goal.deadline
               ? new Date(goal.deadline).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })
@@ -55,7 +59,7 @@ export const GoalTable: React.FC<GoalTableProps> = ({ goals, onEdit }) => {
                   <div className="flex items-center gap-2">
                     <span
                       className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                      style={{ backgroundColor: goal.colorHex }}
+                      style={{ backgroundColor: colorHex }}
                     />
                     <span className="truncate">{goal.title}</span>
                   </div>
@@ -66,9 +70,9 @@ export const GoalTable: React.FC<GoalTableProps> = ({ goals, onEdit }) => {
                   <span
                     className="px-2 py-0.5 rounded-md text-[10px] font-bold border"
                     style={{
-                      backgroundColor: `${goal.colorHex}15`,
-                      borderColor: `${goal.colorHex}40`,
-                      color: goal.colorHex,
+                      backgroundColor: `${colorHex}15`,
+                      borderColor: `${colorHex}40`,
+                      color: colorHex,
                     }}
                   >
                     {goal.category}
@@ -82,13 +86,13 @@ export const GoalTable: React.FC<GoalTableProps> = ({ goals, onEdit }) => {
                       <div
                         className="h-full rounded-full transition-all duration-300"
                         style={{
-                          width: `${goal.progressPercentage}%`,
-                          backgroundColor: goal.colorHex,
+                          width: `${Math.min(100, Math.max(0, progressPercentage))}%`,
+                          backgroundColor: colorHex,
                         }}
                       />
                     </div>
                     <span className="text-[11px] font-bold text-slate-300 w-8 text-right">
-                      {goal.progressPercentage}%
+                      {progressPercentage}%
                     </span>
                   </div>
                 </td>

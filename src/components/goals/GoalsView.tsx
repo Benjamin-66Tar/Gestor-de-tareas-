@@ -69,7 +69,14 @@ export const GoalsView: React.FC = () => {
   const completedGoals = goals.filter(g => g.status === 'COMPLETED').length;
   const activeGoals = goals.filter(g => g.status === 'ACTIVE').length;
   const avgProgress = totalGoals > 0
-    ? Math.round(goals.reduce((acc, g) => acc + g.progressPercentage, 0) / totalGoals)
+    ? Math.round(
+        goals.reduce((acc, g) => {
+          const p = typeof g.progressPercentage === 'number'
+            ? g.progressPercentage
+            : (typeof (g as any).progress_percentage === 'number' ? (g as any).progress_percentage : 0);
+          return acc + p;
+        }, 0) / totalGoals
+      )
     : 0;
 
   return (

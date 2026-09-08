@@ -40,15 +40,30 @@ export const GoalDrawer: React.FC<GoalDrawerProps> = ({ isOpen, onClose, goalToE
   // Populate or reset form fields
   useEffect(() => {
     if (goalToEdit) {
-      setTitle(goalToEdit.title);
+      setTitle(goalToEdit.title || '');
       setDescription(goalToEdit.description || '');
       setCategory(goalToEdit.category || 'General');
-      setColorHex(goalToEdit.colorHex || '#10B981');
+      setColorHex(goalToEdit.colorHex || (goalToEdit as any).color_hex || '#10B981');
       setDeadline(goalToEdit.deadline ? goalToEdit.deadline.slice(0, 16) : '');
-      setProgressMode(goalToEdit.progressMode || 'MILESTONES');
-      setProgressPercentage(goalToEdit.progressPercentage || 0);
+      setProgressMode(goalToEdit.progressMode || (goalToEdit as any).progress_mode || 'MILESTONES');
+      setProgressPercentage(
+        typeof goalToEdit.progressPercentage === 'number'
+          ? goalToEdit.progressPercentage
+          : (typeof (goalToEdit as any).progress_percentage === 'number' ? (goalToEdit as any).progress_percentage : 0)
+      );
       setStatus(goalToEdit.status || 'ACTIVE');
-      setMilestones(goalToEdit.milestones ? [...goalToEdit.milestones] : []);
+      setMilestones(
+        goalToEdit.milestones
+          ? goalToEdit.milestones.map((m: any) => ({
+              id: m.id,
+              title: m.title || '',
+              isCompleted: Boolean(m.isCompleted ?? m.is_completed),
+              weight: typeof m.weight === 'number' ? m.weight : 1,
+              targetDate: m.targetDate ?? m.target_date ?? null,
+              order: typeof m.order === 'number' ? m.order : 0,
+            }))
+          : []
+      );
     } else {
       setTitle('');
       setDescription('');
