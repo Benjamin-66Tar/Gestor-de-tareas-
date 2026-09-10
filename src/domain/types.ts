@@ -5,6 +5,7 @@ export interface PlanElemento {
   titulo: string;
   descripcion?: string;
   tipo: 'OBJETIVO' | 'PROYECTO' | 'EVENTO' | 'ACTIVIDAD';
+  fecha_inicio?: string;
   fecha_limite?: string;
   color_hex: string;
 }
@@ -80,6 +81,7 @@ export interface Goal {
   description?: string;
   category: string;
   colorHex: string;
+  startDate?: string | null;
   deadline?: string | null;
   progressMode: ProgressMode;
   progressPercentage: number; // 0 to 100

@@ -239,14 +239,14 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
 
               {/* Deadline */}
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                  Fecha Límite (se proyectará en el Calendario)
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-1.5">
+                  <span>🗓️</span> Fecha Límite (se proyectará en el Calendario)
                 </label>
                 <input
                   type="date"
                   value={deadline}
                   onChange={(e) => setDeadline(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-800/90 border border-slate-700/80 focus:border-indigo-500 rounded-xl text-xs text-white outline-none cursor-pointer"
+                  className="w-full px-3 py-2 bg-slate-800/90 border border-slate-700/80 hover:border-slate-600 focus:border-indigo-500 rounded-xl text-xs text-white outline-none cursor-pointer font-mono transition"
                 />
               </div>
             </form>

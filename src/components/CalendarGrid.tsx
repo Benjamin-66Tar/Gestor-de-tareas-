@@ -24,7 +24,7 @@ const DIAS_SEMANA = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 type FiltroTipo = 'ALL' | 'ACTIVIDAD' | 'EVENTO' | 'OBJETIVO' | 'PROYECTO';
 
 interface CalendarGridProps {
-  onDayClick?: (dateStr: string) => void;
+  onDayClick?: (dateStr: string, endDateStr?: string) => void;
   onItemClick?: (item: PlanElemento) => void;
 }
 
@@ -56,6 +56,11 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({ onDayClick, onItemCl
   const [filtroTipo, setFiltroTipo] = useState<FiltroTipo>('ALL');
   // Detección responsiva de dispositivo móvil
   const [isMobile, setIsMobile] = useState(false);
+
+  // Estados para selección interactiva de rango de días (ej. día 2 al 7)
+  const [isRangeSelectMode, setIsRangeSelectMode] = useState(false);
+  const [rangeStartDate, setRangeStartDate] = useState<string | null>(null);
+  const [hoverDate, setHoverDate] = useState<string | null>(null);
 
   // Efecto para escuchar cambios de tamaño de ventana
   useEffect(() => {
@@ -178,6 +183,27 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({ onDayClick, onItemCl
             </div>
           )}
 
+          {/* Botón selector de modo Rango de días (ej. día 2 al 7) */}
+          {!isMobile && vistaCalendario === 'MES' && (
+            <button
+              type="button"
+              onClick={() => {
+                setIsRangeSelectMode(!isRangeSelectMode);
+                setRangeStartDate(null);
+                setHoverDate(null);
+              }}
+              className={`px-3 py-1.5 text-xs font-bold rounded-xl border transition-all flex items-center gap-1.5 active:scale-95 ${
+                isRangeSelectMode
+                  ? 'bg-indigo-600 border-indigo-400 text-white shadow-lg shadow-indigo-500/25'
+                  : 'bg-slate-900 border-slate-800 text-slate-300 hover:text-white hover:border-slate-700'
+              }`}
+              title="Abarcar un rango de fechas haciendo clic en el día de inicio y de fin (ej. día 2 al 7)"
+            >
+              <span className="text-sm">↔</span>
+              <span>{isRangeSelectMode ? 'Modo Rango Activo' : 'Abarcar Rango'}</span>
+            </button>
+          )}
+
           {/* Flechas de navegación mensual (solo activas si no estamos en vista semanal dedicada) */}
           {vistaCalendario === 'MES' && (
             <div className="flex items-center gap-1.5">
@@ -278,6 +304,29 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({ onDayClick, onItemCl
       ) : (
         /* Vista Mensual con Botón de Zoom en el lateral izquierdo de cada fila */
         <>
+          {/* Banner de Selección Interactiva de Rango (ej. día 2 al 7) */}
+          {rangeStartDate && (
+            <div className="flex items-center justify-between px-4 py-2 bg-indigo-950/90 border-b border-indigo-500/40 text-xs text-indigo-200 animate-fadeIn">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-indigo-400 animate-ping" />
+                <span>
+                  Inicio del rango: <strong>{rangeStartDate}</strong>. Haz clic en el <strong>día final</strong> (ej. día 7) para abarcar el período.
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setRangeStartDate(null);
+                  setHoverDate(null);
+                  setIsRangeSelectMode(false);
+                }}
+                className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-[11px] font-semibold transition active:scale-95"
+              >
+                Cancelar
+              </button>
+            </div>
+          )}
+
           {/* Fila de Encabezados de Columna (ZOOM + LUN a DOM) */}
           <div className="grid grid-cols-[56px_repeat(7,1fr)] bg-slate-900/30 border-b border-slate-800/60 text-center py-2.5">
             <span
@@ -318,55 +367,129 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({ onDayClick, onItemCl
                 </button>
 
                 {/* Los 7 días de la semana actual */}
-                {week.days.map((day, idx) => (
-                  <div
-                    key={`${day.formattedDate}-${idx}`}
-                    onClick={() => onDayClick && onDayClick(day.formattedDate)}
-                    className={`p-2 flex flex-col justify-between min-h-[80px] hover:bg-slate-900/20 transition cursor-pointer group/cell ${
-                      day.isCurrentMonth ? 'bg-slate-950/10' : 'bg-slate-900/5 opacity-30'
-                    }`}
-                  >
-                    <div className="flex justify-between items-center mb-1">
-                      <span
-                        className={`text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center transition-all ${
-                          day.isToday
-                            ? 'bg-gradient-to-tr from-indigo-500 to-purple-500 text-white font-extrabold shadow-lg scale-110'
-                            : 'text-slate-400 group-hover/cell:text-white'
-                        }`}
-                      >
-                        {day.dayNumber}
-                      </span>
-                      {day.isToday && (
-                        <span className="relative flex h-2 w-2">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
-                          <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
-                        </span>
-                      )}
-                    </div>
+                {week.days.map((day, idx) => {
+                  const isSelectedStart = rangeStartDate === day.formattedDate;
+                  const targetHover = hoverDate || rangeStartDate;
+                  const isHoverRange = Boolean(
+                    rangeStartDate &&
+                    targetHover &&
+                    day.formattedDate >= (rangeStartDate <= targetHover ? rangeStartDate : targetHover) &&
+                    day.formattedDate <= (rangeStartDate <= targetHover ? targetHover : rangeStartDate)
+                  );
 
-                    {/* Elementos comprimidos en la celda mensual */}
-                    <div className="flex flex-col gap-1 overflow-y-auto max-h-[80px] scrollbar-none">
-                      {day.items.map((item) => (
-                        <div
-                          key={item.id}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (onItemClick) onItemClick(item);
-                          }}
-                          style={{ borderLeftColor: item.color_hex }}
-                          className="group/item flex flex-col p-1 text-[9px] leading-tight rounded bg-slate-900 border-l-2 hover:bg-slate-800 transition transform hover:-translate-y-0.5 hover:shadow-md cursor-pointer"
+                  return (
+                    <div
+                      key={`${day.formattedDate}-${idx}`}
+                      onClick={(e) => {
+                        if (isRangeSelectMode || e.shiftKey) {
+                          if (!rangeStartDate) {
+                            setRangeStartDate(day.formattedDate);
+                            setIsRangeSelectMode(true);
+                          } else {
+                            const [start, end] = rangeStartDate <= day.formattedDate
+                              ? [rangeStartDate, day.formattedDate]
+                              : [day.formattedDate, rangeStartDate];
+                            setRangeStartDate(null);
+                            setHoverDate(null);
+                            setIsRangeSelectMode(false);
+                            if (onDayClick) onDayClick(start, end);
+                          }
+                        } else {
+                          if (onDayClick) onDayClick(day.formattedDate);
+                        }
+                      }}
+                      onMouseEnter={() => {
+                        if (rangeStartDate) {
+                          setHoverDate(day.formattedDate);
+                        }
+                      }}
+                      className={`p-2 flex flex-col justify-between min-h-[85px] transition cursor-pointer group/cell relative ${
+                        isHoverRange
+                          ? 'bg-indigo-950/60 ring-2 ring-inset ring-indigo-500/60'
+                          : day.isCurrentMonth
+                          ? 'bg-slate-950/10 hover:bg-slate-900/40'
+                          : 'bg-slate-900/5 opacity-30 hover:opacity-60'
+                      } ${isSelectedStart ? 'ring-2 ring-amber-400 bg-amber-950/30' : ''}`}
+                    >
+                      <div className="flex justify-between items-center mb-1">
+                        <span
+                          className={`text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center transition-all ${
+                            isSelectedStart
+                              ? 'bg-amber-400 text-slate-950 font-black shadow-lg scale-110'
+                              : day.isToday
+                              ? 'bg-gradient-to-tr from-indigo-500 to-purple-500 text-white font-extrabold shadow-lg scale-110'
+                              : 'text-slate-400 group-hover/cell:text-white'
+                          }`}
                         >
-                          <span className="font-semibold text-slate-200 group-hover/item:text-white truncate">
-                            {item.titulo}
+                          {day.dayNumber}
+                        </span>
+                        {isSelectedStart && (
+                          <span className="text-[8px] font-bold text-amber-400 bg-amber-400/10 px-1 rounded border border-amber-400/30">
+                            Inicio
                           </span>
-                          <span className="text-[7px] text-slate-500 uppercase tracking-tight">
-                            {item.tipo}
+                        )}
+                        {day.isToday && !isSelectedStart && (
+                          <span className="relative flex h-2 w-2">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
                           </span>
-                        </div>
-                      ))}
+                        )}
+                      </div>
+
+                      {/* Elementos en la celda mensual (con soporte visual de rango) */}
+                      <div className="flex flex-col gap-1 overflow-y-auto max-h-[80px] scrollbar-none">
+                        {day.items.map((item) => {
+                          const isRange = Boolean(
+                            item.fecha_inicio &&
+                            item.fecha_limite &&
+                            item.fecha_inicio.split('T')[0] !== item.fecha_limite.split('T')[0]
+                          );
+                          const startStr = item.fecha_inicio ? item.fecha_inicio.split('T')[0] : '';
+                          const endStr = item.fecha_limite ? item.fecha_limite.split('T')[0] : '';
+                          const isStart = isRange && day.formattedDate === startStr;
+                          const isEnd = isRange && day.formattedDate === endStr;
+
+                          return (
+                            <div
+                              key={`${item.id}-${day.formattedDate}`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (onItemClick) onItemClick(item);
+                              }}
+                              style={{ borderLeftColor: item.color_hex }}
+                              className={`group/item flex flex-col p-1 text-[9px] leading-tight transition transform hover:-translate-y-0.5 hover:shadow-md cursor-pointer ${
+                                isRange
+                                  ? isStart
+                                    ? 'rounded-l-md bg-indigo-950/80 border-l-2 border-indigo-400 font-medium'
+                                    : isEnd
+                                    ? 'rounded-r-md bg-indigo-950/60 border-l border-slate-700'
+                                    : 'bg-indigo-950/40 border-l border-slate-800'
+                                  : 'rounded bg-slate-900 border-l-2 hover:bg-slate-800'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between gap-1">
+                                <span className="font-semibold text-slate-200 group-hover/item:text-white truncate">
+                                  {item.titulo}
+                                </span>
+                                {isRange && isStart && (
+                                  <span className="text-[7px] font-mono px-1 rounded bg-indigo-500/30 text-indigo-300 font-bold shrink-0">
+                                    Rango
+                                  </span>
+                                )}
+                              </div>
+                              <span className="text-[7px] text-slate-500 uppercase tracking-tight flex items-center gap-1">
+                                <span>{item.tipo}</span>
+                                {isRange && isEnd && (
+                                  <span className="text-emerald-400 font-bold">(Fin)</span>
+                                )}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ))}
           </div>

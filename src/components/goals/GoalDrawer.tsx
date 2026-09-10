@@ -28,6 +28,8 @@ export const GoalDrawer: React.FC<GoalDrawerProps> = ({ isOpen, onClose, goalToE
   const [category, setCategory] = useState('General');
   const [colorHex, setColorHex] = useState('#10B981');
   const [deadline, setDeadline] = useState('');
+  const [isRangeMode, setIsRangeMode] = useState(false);
+  const [startDate, setStartDate] = useState('');
   const [progressMode, setProgressMode] = useState<ProgressMode>('MILESTONES');
   const [progressPercentage, setProgressPercentage] = useState<number>(0);
   const [status, setStatus] = useState<GoalStatus>('ACTIVE');
@@ -44,6 +46,14 @@ export const GoalDrawer: React.FC<GoalDrawerProps> = ({ isOpen, onClose, goalToE
       setDescription(goalToEdit.description || '');
       setCategory(goalToEdit.category || 'General');
       setColorHex(goalToEdit.colorHex || (goalToEdit as any).color_hex || '#10B981');
+      const rawStart = goalToEdit.startDate || (goalToEdit as any).start_date;
+      if (rawStart) {
+        setIsRangeMode(true);
+        setStartDate(rawStart.slice(0, 16));
+      } else {
+        setIsRangeMode(false);
+        setStartDate('');
+      }
       setDeadline(goalToEdit.deadline ? goalToEdit.deadline.slice(0, 16) : '');
       setProgressMode(goalToEdit.progressMode || (goalToEdit as any).progress_mode || 'MILESTONES');
       setProgressPercentage(
@@ -69,6 +79,8 @@ export const GoalDrawer: React.FC<GoalDrawerProps> = ({ isOpen, onClose, goalToE
       setDescription('');
       setCategory('General');
       setColorHex('#10B981');
+      setIsRangeMode(false);
+      setStartDate('');
       setDeadline('');
       setProgressMode('MILESTONES');
       setProgressPercentage(0);
@@ -91,6 +103,17 @@ export const GoalDrawer: React.FC<GoalDrawerProps> = ({ isOpen, onClose, goalToE
       .reduce((sum, m) => sum + (m.weight && m.weight > 0 ? m.weight : 1), 0);
     return Math.min(100, Math.max(0, Math.round((completedWeight / totalWeight) * 100)));
   }, [progressMode, progressPercentage, milestones]);
+
+  // Resumen visual dinámico del rango abarcado por el objetivo
+  const goalRangeText = React.useMemo(() => {
+    if (!isRangeMode || !startDate || !deadline) return null;
+    const d1 = new Date(startDate);
+    const d2 = new Date(deadline);
+    const diffTime = d2.getTime() - d1.getTime();
+    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24)) + 1;
+    if (diffDays <= 0) return 'La fecha límite debe ser igual o posterior a la fecha de inicio';
+    return `Abarca del día ${d1.getDate()} al ${d2.getDate()} (${diffDays} días)`;
+  }, [isRangeMode, startDate, deadline]);
 
   if (!isOpen) return null;
 
@@ -135,6 +158,7 @@ export const GoalDrawer: React.FC<GoalDrawerProps> = ({ isOpen, onClose, goalToE
       description: description.trim(),
       category,
       colorHex,
+      startDate: isRangeMode && startDate ? new Date(startDate).toISOString() : null,
       deadline: deadline ? new Date(deadline).toISOString() : null,
       progressMode,
       progressPercentage: progressMode === 'MANUAL' ? progressPercentage : calculatedProgress,
@@ -252,34 +276,97 @@ export const GoalDrawer: React.FC<GoalDrawerProps> = ({ isOpen, onClose, goalToE
             </div>
           </div>
 
-          {/* Deadline & Status */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">
-                Fecha Límite
-              </label>
-              <input
-                type="datetime-local"
-                value={deadline}
-                onChange={(e) => setDeadline(e.target.value)}
-                className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-emerald-500 transition"
-              />
+          {/* Deadline, Rango & Status */}
+          <div className="p-4 bg-slate-900/80 border border-slate-800 rounded-2xl space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                <span>🗓️</span> Fechas y Plazos
+              </span>
+              <div className="flex bg-slate-950 p-0.5 rounded-lg border border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setIsRangeMode(false)}
+                  className={`px-2.5 py-1 text-[11px] font-bold rounded-md transition-all ${
+                    !isRangeMode
+                      ? 'bg-emerald-600 text-white shadow-sm'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Fecha Límite
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsRangeMode(true);
+                    if (!startDate) {
+                      const now = new Date();
+                      setStartDate(now.toISOString().slice(0, 16));
+                    }
+                    if (!deadline) {
+                      const end = new Date();
+                      end.setDate(end.getDate() + 5);
+                      setDeadline(end.toISOString().slice(0, 16));
+                    }
+                  }}
+                  className={`px-2.5 py-1 text-[11px] font-bold rounded-md transition-all ${
+                    isRangeMode
+                      ? 'bg-emerald-600 text-white shadow-sm'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  ↔ Abarcar Rango
+                </button>
+              </div>
             </div>
 
-            <div>
-              <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">
-                Estado
-              </label>
-              <select
-                value={status}
-                onChange={(e) => setStatus(e.target.value as GoalStatus)}
-                className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-xs text-slate-100 focus:outline-none focus:border-emerald-500 transition"
-              >
-                <option value="ACTIVE">Activo</option>
-                <option value="COMPLETED">Completado</option>
-                <option value="PAUSED">En Pausa</option>
-              </select>
+            <div className={`grid ${isRangeMode ? 'grid-cols-2' : 'grid-cols-1'} gap-3`}>
+              {isRangeMode && (
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-400 mb-1">
+                    Fecha de Inicio
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 hover:border-slate-600 focus:border-emerald-500 rounded-xl text-xs text-slate-100 focus:outline-none transition cursor-pointer font-mono"
+                  />
+                </div>
+              )}
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-400 mb-1">
+                  {isRangeMode ? 'Fecha de Fin (Límite)' : 'Fecha Límite'}
+                </label>
+                <input
+                  type="datetime-local"
+                  value={deadline}
+                  onChange={(e) => setDeadline(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 hover:border-slate-600 focus:border-emerald-500 rounded-xl text-xs text-slate-100 focus:outline-none transition cursor-pointer font-mono"
+                />
+              </div>
             </div>
+
+            {goalRangeText && (
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs font-medium animate-fadeIn">
+                <span className="text-sm">✨</span>
+                <span>{goalRangeText}</span>
+              </div>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">
+              Estado
+            </label>
+            <select
+              value={status}
+              onChange={(e) => setStatus(e.target.value as GoalStatus)}
+              className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-xs text-slate-100 focus:outline-none focus:border-emerald-500 transition"
+            >
+              <option value="ACTIVE">Activo</option>
+              <option value="COMPLETED">Completado</option>
+              <option value="PAUSED">En Pausa</option>
+            </select>
           </div>
 
           {/* Progress Mode Selector */}

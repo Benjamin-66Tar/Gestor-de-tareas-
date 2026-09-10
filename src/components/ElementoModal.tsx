@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAuraState } from '../context/AuraState';
 import { PlanElemento } from '../domain/types';
 
@@ -6,6 +6,7 @@ interface ElementoModalProps {
   isOpen: boolean;
   onClose: () => void;
   selectedDateStr?: string; // Format YYYY-MM-DD
+  selectedEndDateStr?: string; // Optional end date if opened from range selection
   editingItem?: PlanElemento | null;
 }
 
@@ -29,6 +30,7 @@ export const ElementoModal: React.FC<ElementoModalProps> = ({
   isOpen,
   onClose,
   selectedDateStr,
+  selectedEndDateStr,
   editingItem
 }) => {
   const { crearElemento, actualizarElemento, eliminarElemento } = useAuraState();
@@ -39,6 +41,11 @@ export const ElementoModal: React.FC<ElementoModalProps> = ({
   const [colorHex, setColorHex] = useState(PRESET_COLORS[0]);
   const [guardando, setGuardando] = useState(false);
 
+  // Estados para selección de rango de fechas
+  const [isRangeMode, setIsRangeMode] = useState(false);
+  const [fechaInicio, setFechaInicio] = useState('');
+  const [fechaFin, setFechaFin] = useState('');
+
   // Synchronize modal state with editing item or creation defaults
   useEffect(() => {
     if (editingItem) {
@@ -46,13 +53,36 @@ export const ElementoModal: React.FC<ElementoModalProps> = ({
       setDescripcion(editingItem.descripcion || '');
       setTipo(editingItem.tipo);
       setColorHex(editingItem.color_hex);
+
+      if (editingItem.fecha_inicio) {
+        setIsRangeMode(true);
+        setFechaInicio(editingItem.fecha_inicio.split('T')[0]);
+        setFechaFin(editingItem.fecha_limite ? editingItem.fecha_limite.split('T')[0] : editingItem.fecha_inicio.split('T')[0]);
+      } else if (editingItem.fecha_limite) {
+        setIsRangeMode(false);
+        const f = editingItem.fecha_limite.split('T')[0];
+        setFechaInicio(f);
+        setFechaFin(f);
+      } else {
+        setIsRangeMode(false);
+        const hoy = new Date().toISOString().split('T')[0];
+        setFechaInicio(hoy);
+        setFechaFin(hoy);
+      }
     } else {
       setTitulo('');
       setDescripcion('');
       setTipo('ACTIVIDAD');
       setColorHex(PRESET_COLORS[0]);
+
+      const baseStart = selectedDateStr || new Date().toISOString().split('T')[0];
+      const baseEnd = selectedEndDateStr || baseStart;
+
+      setFechaInicio(baseStart);
+      setFechaFin(baseEnd);
+      setIsRangeMode(Boolean(selectedEndDateStr && selectedEndDateStr !== selectedDateStr));
     }
-  }, [editingItem, isOpen]);
+  }, [editingItem, isOpen, selectedDateStr, selectedEndDateStr]);
 
   // Adjust color based on type default choice for better UX
   useEffect(() => {
@@ -64,6 +94,17 @@ export const ElementoModal: React.FC<ElementoModalProps> = ({
     }
   }, [tipo, editingItem]);
 
+  // Resumen visual dinámico del rango abarcado
+  const rangoTexto = useMemo(() => {
+    if (!isRangeMode || !fechaInicio || !fechaFin) return null;
+    const d1 = new Date(`${fechaInicio}T00:00:00`);
+    const d2 = new Date(`${fechaFin}T00:00:00`);
+    const diffTime = d2.getTime() - d1.getTime();
+    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24)) + 1;
+    if (diffDays <= 0) return 'La fecha final debe ser igual o posterior a la inicial';
+    return `Abarca del día ${d1.getDate()} al ${d2.getDate()} (${diffDays} días)`;
+  }, [isRangeMode, fechaInicio, fechaFin]);
+
   if (!isOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -72,13 +113,14 @@ export const ElementoModal: React.FC<ElementoModalProps> = ({
 
     setGuardando(true);
 
-    // Format deadline date to full ISO (e.g. YYYY-MM-DD + time of day)
+    let fechaInicioISO: string | undefined = undefined;
     let fechaLimiteISO: string | undefined = undefined;
-    if (editingItem) {
-      fechaLimiteISO = editingItem.fecha_limite;
-    } else if (selectedDateStr) {
-      // Set to midday to avoid timezone shifts
-      fechaLimiteISO = `${selectedDateStr}T12:00:00Z`;
+
+    if (isRangeMode) {
+      if (fechaInicio) fechaInicioISO = `${fechaInicio}T00:00:00Z`;
+      if (fechaFin) fechaLimiteISO = `${fechaFin}T23:59:59Z`;
+    } else {
+      if (fechaFin) fechaLimiteISO = `${fechaFin}T12:00:00Z`;
     }
 
     const itemPayload = {
@@ -86,6 +128,7 @@ export const ElementoModal: React.FC<ElementoModalProps> = ({
       descripcion: descripcion.trim() || undefined,
       tipo,
       color_hex: colorHex,
+      fecha_inicio: fechaInicioISO,
       fecha_limite: fechaLimiteISO
     };
 
@@ -184,35 +227,116 @@ export const ElementoModal: React.FC<ElementoModalProps> = ({
 
             <div>
               <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-                Fecha Límite
+                Color
               </label>
-              <input
-                type="text"
-                disabled
-                value={selectedDateStr || (editingItem?.fecha_limite ? editingItem.fecha_limite.split('T')[0] : '')}
-                className="w-full bg-slate-950/50 border border-slate-800 rounded-lg px-4 py-2.5 text-slate-500 cursor-not-allowed focus:outline-none"
-              />
+              <div className="flex gap-2 pt-1">
+                {PRESET_COLORS.map(color => (
+                  <button
+                    key={color}
+                    type="button"
+                    onClick={() => setColorHex(color)}
+                    style={{ backgroundColor: color }}
+                    className={`w-7 h-7 rounded-full transition-transform active:scale-95 ${
+                      colorHex === color ? 'ring-4 ring-indigo-500/50 scale-110 shadow-lg' : 'hover:scale-105'
+                    }`}
+                  />
+                ))}
+              </div>
             </div>
           </div>
 
-          {/* Color Selector */}
-          <div>
-            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-              Identificador Visual (Color)
-            </label>
-            <div className="flex gap-2.5">
-              {PRESET_COLORS.map(color => (
+          {/* Selector de Fechas y Rango (Abarcar varios días) */}
+          <div className="p-3.5 bg-slate-950/60 border border-slate-800 rounded-xl space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                <span>🗓️</span> Fechas
+              </span>
+              <div className="flex bg-slate-900 p-0.5 rounded-lg border border-slate-800">
                 <button
-                  key={color}
                   type="button"
-                  onClick={() => setColorHex(color)}
-                  style={{ backgroundColor: color }}
-                  className={`w-8 h-8 rounded-full transition-transform active:scale-95 ${
-                    colorHex === color ? 'ring-4 ring-indigo-500/50 scale-110 shadow-lg' : 'hover:scale-105'
+                  onClick={() => setIsRangeMode(false)}
+                  className={`px-2.5 py-1 text-[11px] font-bold rounded-md transition-all ${
+                    !isRangeMode
+                      ? 'bg-indigo-600 text-white shadow-sm'
+                      : 'text-slate-400 hover:text-white'
                   }`}
-                />
-              ))}
+                >
+                  Día único
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsRangeMode(true);
+                    if (!fechaFin || fechaFin === fechaInicio) {
+                      const d = new Date(fechaInicio || Date.now());
+                      d.setDate(d.getDate() + 5); // Por defecto abarca 5 días
+                      setFechaFin(d.toISOString().split('T')[0]);
+                    }
+                  }}
+                  className={`px-2.5 py-1 text-[11px] font-bold rounded-md transition-all ${
+                    isRangeMode
+                      ? 'bg-indigo-600 text-white shadow-sm'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  ↔ Abarcar rango
+                </button>
+              </div>
             </div>
+
+            {!isRangeMode ? (
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-400 mb-1.5">
+                  Fecha Límite
+                </label>
+                <input
+                  type="date"
+                  required
+                  value={fechaFin}
+                  onChange={(e) => {
+                    setFechaFin(e.target.value);
+                    setFechaInicio(e.target.value);
+                  }}
+                  className="w-full bg-slate-900 border border-slate-700 hover:border-slate-600 focus:border-indigo-500 rounded-lg px-3.5 py-2 text-slate-100 focus:outline-none transition-all cursor-pointer font-mono text-xs"
+                />
+              </div>
+            ) : (
+              <div className="space-y-2.5">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-400 mb-1">
+                      Día de Inicio
+                    </label>
+                    <input
+                      type="date"
+                      required
+                      value={fechaInicio}
+                      onChange={(e) => setFechaInicio(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-700 hover:border-slate-600 focus:border-indigo-500 rounded-lg px-3 py-2 text-slate-100 focus:outline-none transition-all cursor-pointer font-mono text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-400 mb-1">
+                      Día de Fin (Límite)
+                    </label>
+                    <input
+                      type="date"
+                      required
+                      value={fechaFin}
+                      onChange={(e) => setFechaFin(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-700 hover:border-slate-600 focus:border-indigo-500 rounded-lg px-3 py-2 text-slate-100 focus:outline-none transition-all cursor-pointer font-mono text-xs"
+                    />
+                  </div>
+                </div>
+
+                {rangoTexto && (
+                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-xs font-medium animate-fadeIn">
+                    <span className="text-sm">✨</span>
+                    <span>{rangoTexto}</span>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Form Actions */}

@@ -129,6 +129,7 @@ export function transformGoalFromApi(raw: any): Goal {
     description: raw.description || '',
     category: raw.category || 'General',
     colorHex: raw.color_hex ?? raw.colorHex ?? '#10B981',
+    startDate: raw.start_date ?? raw.startDate ?? null,
     deadline: raw.deadline || null,
     progressMode: raw.progress_mode ?? raw.progressMode ?? 'MILESTONES',
     progressPercentage: typeof raw.progress_percentage === 'number'
@@ -168,6 +169,7 @@ export async function createGoalApi(goalData: Partial<Goal>): Promise<Goal> {
     description: goalData.description || '',
     category: goalData.category || 'General',
     color_hex: goalData.colorHex || '#10B981',
+    start_date: goalData.startDate || (goalData as any).start_date || null,
     deadline: goalData.deadline || null,
     progress_mode: goalData.progressMode || 'MILESTONES',
     progress_percentage: goalData.progressPercentage || 0,
@@ -194,6 +196,8 @@ export async function updateGoalApi(id: string, goalData: Partial<Goal>): Promis
   if (goalData.description !== undefined) payload.description = goalData.description;
   if (goalData.category !== undefined) payload.category = goalData.category;
   if (goalData.colorHex !== undefined) payload.color_hex = goalData.colorHex;
+  if (goalData.startDate !== undefined) payload.start_date = goalData.startDate;
+  if ((goalData as any).start_date !== undefined) payload.start_date = (goalData as any).start_date;
   if (goalData.deadline !== undefined) payload.deadline = goalData.deadline;
   if (goalData.progressMode !== undefined) payload.progress_mode = goalData.progressMode;
   if (goalData.progressPercentage !== undefined) payload.progress_percentage = goalData.progressPercentage;

@@ -13,16 +13,19 @@ const ContenidoPrincipal: React.FC = () => {
   const { tabActiva } = useAuraState();
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string | undefined>(undefined);
+  const [selectedEndDate, setSelectedEndDate] = useState<string | undefined>(undefined);
   const [editingItem, setEditingItem] = useState<PlanElemento | null>(null);
 
-  const handleDayClick = (dateStr: string) => {
+  const handleDayClick = (dateStr: string, endDateStr?: string) => {
     setSelectedDate(dateStr);
+    setSelectedEndDate(endDateStr);
     setEditingItem(null);
     setModalOpen(true);
   };
 
   const handleItemClick = (item: PlanElemento) => {
     setSelectedDate(undefined);
+    setSelectedEndDate(undefined);
     setEditingItem(item);
     setModalOpen(true);
   };
@@ -37,6 +40,7 @@ const ContenidoPrincipal: React.FC = () => {
             isOpen={modalOpen}
             onClose={() => setModalOpen(false)}
             selectedDateStr={selectedDate}
+            selectedEndDateStr={selectedEndDate}
             editingItem={editingItem}
           />
         </section>

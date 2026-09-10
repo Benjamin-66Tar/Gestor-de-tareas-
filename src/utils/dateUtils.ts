@@ -11,6 +11,48 @@ export const formatLocalDate = (date: Date): string => {
 };
 
 /**
+ * Maps items to date strings (YYYY-MM-DD), expanding items that have a date range
+ * (fecha_inicio to fecha_limite) so they appear on all days within the range.
+ */
+export const mapItemsToDates = (items: PlanElemento[]): Record<string, PlanElemento[]> => {
+  const itemsMap: Record<string, PlanElemento[]> = {};
+
+  items.forEach(item => {
+    const startPart = item.fecha_inicio ? item.fecha_inicio.split('T')[0] : null;
+    const endPart = item.fecha_limite ? item.fecha_limite.split('T')[0] : null;
+
+    if (startPart && endPart) {
+      let dStart = new Date(`${startPart}T00:00:00`);
+      let dEnd = new Date(`${endPart}T00:00:00`);
+      if (dStart > dEnd) {
+        const tmp = dStart;
+        dStart = dEnd;
+        dEnd = tmp;
+      }
+
+      // Iterate through each day in the range (up to 90 days max to prevent infinite loops)
+      const current = new Date(dStart);
+      let count = 0;
+      while (current <= dEnd && count < 90) {
+        const dateStr = formatLocalDate(current);
+        if (!itemsMap[dateStr]) itemsMap[dateStr] = [];
+        itemsMap[dateStr].push(item);
+        current.setDate(current.getDate() + 1);
+        count++;
+      }
+    } else if (endPart) {
+      if (!itemsMap[endPart]) itemsMap[endPart] = [];
+      itemsMap[endPart].push(item);
+    } else if (startPart) {
+      if (!itemsMap[startPart]) itemsMap[startPart] = [];
+      itemsMap[startPart].push(item);
+    }
+  });
+
+  return itemsMap;
+};
+
+/**
  * Generates an array of 42 CalendarDay objects representing the calendar grid
  * for a specific year and month (0-indexed, where 0 is January).
  * The grid starts on Monday.
@@ -28,18 +70,8 @@ export const generateCalendarGrid = (year: number, month: number, items: PlanEle
   const grid: CalendarDay[] = [];
   const todayStr = formatLocalDate(new Date());
 
-  // Map items by their due date for O(N) lookup
-  const itemsMap: Record<string, PlanElemento[]> = {};
-  items.forEach(item => {
-    if (item.fecha_limite) {
-      // Parse ISO string from backend (e.g. 2026-07-15T12:00:00Z) to get YYYY-MM-DD
-      const datePart = item.fecha_limite.split('T')[0];
-      if (!itemsMap[datePart]) {
-        itemsMap[datePart] = [];
-      }
-      itemsMap[datePart].push(item);
-    }
-  });
+  // Map items by their due date or date range for O(N) lookup
+  const itemsMap = mapItemsToDates(items);
 
   for (let i = 0; i < 42; i++) {
     const currentDate = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate() + i);
@@ -150,15 +182,8 @@ export const getWeekDaysForDate = (targetDate: Date, items: PlanElemento[] = [])
   const monday = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate() + diffToMonday);
   const todayStr = formatLocalDate(new Date());
 
-  // Mapear elementos por fecha
-  const itemsMap: Record<string, PlanElemento[]> = {};
-  items.forEach(item => {
-    if (item.fecha_limite) {
-      const datePart = item.fecha_limite.split('T')[0];
-      if (!itemsMap[datePart]) itemsMap[datePart] = [];
-      itemsMap[datePart].push(item);
-    }
-  });
+  // Mapear elementos por fecha (con soporte para rangos de días)
+  const itemsMap = mapItemsToDates(items);
 
   const days: CalendarDay[] = [];
   for (let i = 0; i < 7; i++) {
