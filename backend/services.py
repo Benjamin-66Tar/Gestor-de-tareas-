@@ -105,6 +105,7 @@ def sync_goals_to_calendar(user=None, start_date=None, end_date=None):
             'id': f"goal-{goal.id}",
             'titulo': f"🎯 {goal.title}",
             'tipo': 'OBJETIVO',
+            'fecha_inicio': goal.start_date.isoformat() if goal.start_date else None,
             'fecha_limite': goal.deadline.isoformat(),
             'color_hex': goal.color_hex,
             'source_id': str(goal.id),

@@ -24,14 +24,21 @@ class ElementoAuraListAPI(APIView):
         elementos = ElementoAura.objects.all()
         
         from django.utils.dateparse import parse_datetime
+        from django.db.models import Q
         if start_date_str:
             start_date = parse_datetime(start_date_str)
             if start_date:
-                elementos = elementos.filter(fecha_limite__gte=start_date)
+                elementos = elementos.filter(
+                    Q(fecha_limite__gte=start_date) |
+                    (Q(fecha_limite__isnull=True) & Q(fecha_inicio__gte=start_date))
+                )
         if end_date_str:
             end_date = parse_datetime(end_date_str)
             if end_date:
-                elementos = elementos.filter(fecha_limite__lte=end_date)
+                elementos = elementos.filter(
+                    Q(fecha_inicio__lte=end_date) |
+                    (Q(fecha_inicio__isnull=True) & Q(fecha_limite__lte=end_date))
+                )
                 
         serializer = ElementoAuraSerializer(elementos, many=True)
         

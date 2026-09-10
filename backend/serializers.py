@@ -37,7 +37,7 @@ class GoalSerializer(serializers.ModelSerializer):
         model = Goal
         fields = [
             'id', 'title', 'description', 'category', 'color_hex',
-            'deadline', 'progress_mode', 'progress_percentage', 'status',
+            'start_date', 'deadline', 'progress_mode', 'progress_percentage', 'status',
             'milestones', 'created_at', 'updated_at'
         ]
 

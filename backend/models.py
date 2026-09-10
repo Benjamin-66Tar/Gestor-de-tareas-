@@ -12,6 +12,7 @@ class ElementoAura(models.Model):
     titulo = models.CharField(max_length=200)
     descripcion = models.TextField(blank=True, null=True)
     tipo = models.CharField(max_length=20, choices=TIPO_CHOICES)
+    fecha_inicio = models.DateTimeField(blank=True, null=True)
     fecha_limite = models.DateTimeField(blank=True, null=True)
     color_hex = models.CharField(max_length=7, default="#6366F1") # Estética colorida
 
@@ -62,6 +63,7 @@ class Goal(models.Model):
     description = models.TextField(blank=True, null=True)
     category = models.CharField(max_length=50, default='General')
     color_hex = models.CharField(max_length=7, default='#10B981')
+    start_date = models.DateTimeField(blank=True, null=True)
     deadline = models.DateTimeField(blank=True, null=True, db_index=True)
     progress_mode = models.CharField(max_length=20, choices=PROGRESS_MODES, default='MILESTONES')
     progress_percentage = models.PositiveSmallIntegerField(default=0)
