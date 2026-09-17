@@ -24,6 +24,13 @@
 - Q: ¿Qué patrón de interfaz debe utilizarse para crear y editar los Proyectos y las Tareas dentro de la sección? → A: Creación rápida directa (botón de alta ágil en el hub y al pie de cada columna Kanban) complementada con un panel lateral deslizable (Slide-over drawer) desde el borde derecho para ver y editar los detalles completos (fechas, prioridad, checklist de subtareas, vínculos).
 - Q: ¿Cómo debe gestionarse la búsqueda, el filtrado y el ciclo de vida (estados) de los Proyectos en el Hub principal? → A: Píldoras de filtro rápido por ciclo de vida ("Activos", "Completados", "Archivados", con "Activos" por defecto) y barra de búsqueda instantánea para filtrar proyectos en tiempo real por título o etiqueta.
 
+### Session 2026-09-14
+- Q: ¿Cuál debe ser el propósito, alcance y estructura de datos principal de los eventos gestionados en la sección de Eventos? → A: Eventos de agenda flexibles (reuniones, citas, entregas, fechas especiales) con título, fecha/hora de inicio y fin, ubicación física o enlace virtual, categoría temática de color y descripción/notas.
+- Q: ¿Cómo debe estructurarse la visualización y organización de los eventos dentro de la pantalla de la sección de Eventos? → A: Agenda cronológica segmentada por bloques temporales ("Hoy", "Esta semana", "Próximos", "Pasados") con tarjetas visuales destacadas por el color de su categoría y filtros rápidos por categoría.
+- Q: ¿Cómo deben integrarse los eventos con la sección de Calendario y el sistema de notificaciones/alertas de Aura? → A: Sincronización automática completa: todo evento se proyecta en la vista de Calendario según su fecha/hora y color de categoría, emitiendo notificaciones/alertas al aproximarse su inicio.
+- Q: ¿Qué patrón de interfaz e interacción debe utilizarse para dar de alta y editar los eventos en la sección de Eventos? → A: Botón de creación rápida complementado con un panel lateral deslizable (Slide-over drawer) desde el borde derecho para ver y editar los detalles completos (fechas, horas, enlaces, categorías y recordatorios) preservando el contexto.
+- Q: ¿Cómo debe gestionarse el ciclo de vida y los estados de los eventos dentro de la agenda y el calendario? → A: Estados explícitos conmutables ("Programado", "Completado", "Cancelado") con acciones rápidas para marcar como completado o cancelar desde la tarjeta o drawer, diferenciando visualmente los eventos concluidos.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Header Navigation Bar (Navbar) (Priority: P1)
@@ -94,6 +101,22 @@ As a user, I want to view a hub of my projects and open a dedicated project work
 
 ---
 
+### User Story 5 - Events Management Hub & Schedule (Priority: P1)
+As a user, I want to manage and view my scheduled events (meetings, appointments, deadlines, special dates) with start/end date and time, location/link, and color category, so that I can keep track of all my commitments.
+
+**Why this priority**: Core functionality for the "Eventos" navigation section.
+
+**Independent Test**: Can navigate to the Events tab, view events with details, and see title, date/time, location/link, and category badge.
+
+**Acceptance Scenarios**:
+1. **Given** the user is on the "Eventos" tab, **When** viewing an event, **Then** it MUST show the event title, start and end date/time, location or virtual meeting URL, category color badge, and description/notes.
+2. **Given** the user is on the "Eventos" tab, **When** the section renders, **Then** events MUST be organized into chronological time blocks ("Hoy", "Esta semana", "Próximos", "Pasados") and allow quick filtering by category tags.
+3. **Given** an event has a scheduled date and time, **When** the user switches to the "Calendario" tab, **Then** the event MUST appear on the calendar styled with its category theme color, and the system MUST issue notification alerts prior to event start.
+4. **Given** the user clicks to create or edit an event, **When** the action triggers, **Then** a slide-over drawer panel MUST open from the right edge, allowing configuration of full details (dates, times, location/link, category, alerts) without leaving the dashboard.
+5. **Given** an event is displayed in the events agenda or slide-over drawer, **When** the user marks it as completed or canceled, **Then** its lifecycle status MUST update immediately to "Completado" or "Cancelado" with appropriate visual styling (e.g. muted contrast or completed indicator) across both the Events section and Calendar view.
+
+---
+
 ## Edge Cases
 
 - **Mobile Viewports**: On narrow screens, the TabBar horizontal text might overflow. The system MUST render it cleanly (e.g. using horizontal swipe or compact icons with text).
@@ -137,6 +160,12 @@ As a user, I want to view a hub of my projects and open a dedicated project work
 - **FR-032**: Detailed inspection and editing of projects and project tasks MUST utilize a slide-over drawer panel emerging from the right viewport edge, preserving view context.
 - **FR-033**: The projects hub MUST provide quick-filter status pills for "Activos" (default), "Completados", and "Archivados" to control which project lifecycle state is currently displayed.
 - **FR-034**: The projects hub MUST include an instant, real-time search input that filters project cards by title or category tags as the user types.
+- **FR-035**: The "Eventos" section MUST allow users to manage flexible schedule events (meetings, appointments, deadlines, special dates) including title, start date/time, end date/time, physical location or virtual URL link, color-coded category tag, and notes/description.
+- **FR-036**: The "Eventos" section MUST organize events into chronological time blocks ("Hoy", "Esta semana", "Próximos", "Pasados") displayed as visual cards with category theme colors, and provide quick filters by category tags.
+- **FR-037**: Events with scheduled dates and times MUST automatically project onto the "Calendario" section, styled with their category theme color.
+- **FR-038**: The system MUST issue notification alerts when an event start time is approaching.
+- **FR-039**: The "Eventos" section MUST provide quick-creation triggers and a slide-over drawer panel emerging from the right edge for inspecting, creating, and editing full event details.
+- **FR-040**: Events MUST support three lifecycle states: "Programado" (default), "Completado", and "Cancelado", providing quick-action controls in the event card and slide-over drawer to transition states with instant visual feedback.
 
 ### Key Entities
 - **UserSession**: Represents the currently logged-in user, exposing their avatar image URL and auth state.
@@ -147,6 +176,7 @@ As a user, I want to view a hub of my projects and open a dedicated project work
 - **Project**: Represents a project with title, description, color theme/tag, lifecycle status (`Active`, `Completed`, `Archived`), calculated overall task progress (0-100%), and an optional foreign link to a `Goal`.
 - **ProjectTask**: Represents a task within a project, belonging to one of three workflow columns (`ToDo`, `InProgress`, `Done`), with title, description, priority (`Low`, `Medium`, `High`), due date, and an ordered list of subtasks.
 - **TaskSubtask**: Represents a checkable subtask item within a `ProjectTask`, with title and completion state.
+- **EventItem**: Represents an event with title, description/notes, start datetime, end datetime, location or virtual meeting URL, color category tag, and lifecycle status (`Programado`, `Completado`, `Cancelado`).
 
 ## Success Criteria *(mandatory)*
 
