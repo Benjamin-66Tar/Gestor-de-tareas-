@@ -162,3 +162,33 @@ class TaskSubtask(models.Model):
     def __str__(self):
         return f"[{'X' if self.is_completed else ' '}] {self.title}"
 
+
+class EventItem(models.Model):
+    STATUS_CHOICES = [
+        ('PROGRAMMED', 'Programado'),
+        ('COMPLETED', 'Completado'),
+        ('CANCELED', 'Cancelado'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='aura_events', null=True, blank=True)
+    title = models.CharField(max_length=200)
+    description = models.TextField(blank=True, null=True)
+    start_time = models.DateTimeField(db_index=True)
+    end_time = models.DateTimeField(db_index=True)
+    location = models.CharField(max_length=250, blank=True, null=True)
+    meeting_url = models.URLField(max_length=500, blank=True, null=True)
+    category = models.CharField(max_length=50, default='General')
+    color_hex = models.CharField(max_length=7, default='#3B82F6')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PROGRAMMED')
+    reminder_minutes = models.PositiveIntegerField(default=15, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['start_time']
+
+    def __str__(self):
+        return f"[{self.status}] {self.title} ({self.start_time})"
+
+

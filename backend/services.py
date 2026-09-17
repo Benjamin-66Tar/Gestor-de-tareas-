@@ -207,11 +207,90 @@ def sync_projects_to_calendar(user=None, start_date=None, end_date=None):
     return events
 
 
+def sync_events_to_calendar(user=None, start_date=None, end_date=None):
+    """
+    Projects scheduled events onto the calendar event format with full start/end duration.
+    """
+    from .models import EventItem
+    events = []
+
+    events_qs = EventItem.objects.all()
+    if user and user.is_authenticated:
+        events_qs = events_qs.filter(user=user)
+    if start_date:
+        events_qs = events_qs.filter(end_time__gte=start_date)
+    if end_date:
+        events_qs = events_qs.filter(start_time__lte=end_date)
+
+    for event in events_qs:
+        events.append({
+            'id': f"event-{event.id}",
+            'titulo': f"📅 {event.title}",
+            'tipo': 'EVENTO',
+            'fecha_inicio': event.start_time.isoformat(),
+            'fecha_limite': event.end_time.isoformat(),
+            'color_hex': event.color_hex,
+            'source_id': str(event.id),
+            'location': event.location,
+            'meeting_url': event.meeting_url,
+            'category': event.category,
+            'status': event.status,
+            'is_event_item': True,
+        })
+
+    return events
+
+
 def sync_all_to_calendar(user=None, start_date=None, end_date=None):
     """
-    Unified calendar event projection aggregating Goals, Milestones, and Project Tasks.
+    Unified calendar event projection aggregating Goals, Milestones, Project Tasks, and Events.
     """
     goal_events = sync_goals_to_calendar(user=user, start_date=start_date, end_date=end_date)
     project_events = sync_projects_to_calendar(user=user, start_date=start_date, end_date=end_date)
-    return goal_events + project_events
+    event_items = sync_events_to_calendar(user=user, start_date=start_date, end_date=end_date)
+    return goal_events + project_events + event_items
+
+
+def check_approaching_event_reminders(user=None):
+    """
+    Evaluates programmed events starting within their reminder_minutes window
+    and creates proactive notifications if not already issued.
+    """
+    from django.utils import timezone
+    from datetime import timedelta
+    from .models import EventItem, Notification
+
+    now = timezone.now()
+    notifications_created = []
+
+    events_qs = EventItem.objects.filter(status='PROGRAMMED', start_time__gt=now)
+    if user and user.is_authenticated:
+        events_qs = events_qs.filter(user=user)
+
+    for event in events_qs:
+        reminder_mins = event.reminder_minutes if event.reminder_minutes is not None else 15
+        reminder_threshold = now + timedelta(minutes=reminder_mins)
+        if event.start_time <= reminder_threshold:
+            notification_title = f"Recordatorio: {event.title}"
+            time_str = event.start_time.strftime("%H:%M")
+            notification_message = f"Tu evento '{event.title}' inicia hoy a las {time_str}."
+            
+            # Prevent duplicate notifications for the same event and title
+            existing = Notification.objects.filter(
+                title=notification_title,
+                message=notification_message,
+                user=event.user
+            ).exists()
+            
+            if not existing:
+                notif = Notification.objects.create(
+                    user=event.user,
+                    title=notification_title,
+                    message=notification_message,
+                    is_read=False
+                )
+                notifications_created.append(notif)
+
+    return notifications_created
+
 

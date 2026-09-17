@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import ElementoAura, UserProfile, Notification, Goal, GoalMilestone, Project, ProjectTask, TaskSubtask
+from .models import ElementoAura, UserProfile, Notification, Goal, GoalMilestone, Project, ProjectTask, TaskSubtask, EventItem
 
 class ElementoAuraSerializer(serializers.ModelSerializer):
     class Meta:
@@ -162,4 +162,50 @@ class ProjectSerializer(serializers.ModelSerializer):
 
     def get_completed_tasks(self, obj):
         return obj.tasks.filter(status='DONE').count()
+
+
+class EventItemSerializer(serializers.ModelSerializer):
+    time_block = serializers.SerializerMethodField()
+
+    class Meta:
+        model = EventItem
+        fields = [
+            'id', 'user', 'title', 'description', 'start_time', 'end_time',
+            'location', 'meeting_url', 'category', 'color_hex', 'status',
+            'reminder_minutes', 'time_block', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'time_block', 'created_at', 'updated_at']
+
+    def validate(self, data):
+        start_time = data.get('start_time') or (self.instance.start_time if self.instance else None)
+        end_time = data.get('end_time') or (self.instance.end_time if self.instance else None)
+
+        if start_time and end_time and end_time < start_time:
+            raise serializers.ValidationError({
+                "end_time": "La fecha y hora de finalización no puede ser anterior a la de inicio."
+            })
+        return data
+
+    def get_time_block(self, obj):
+        from django.utils import timezone
+        from datetime import timedelta
+        now = timezone.now()
+
+        if obj.end_time < now:
+            return 'PAST'
+
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        today_end = now.replace(hour=23, minute=59, second=59, microsecond=999999)
+
+        if obj.start_time <= today_end and obj.end_time >= today_start:
+            return 'TODAY'
+
+        days_to_sunday = 6 - now.weekday()
+        end_of_week = (today_start + timedelta(days=days_to_sunday)).replace(hour=23, minute=59, second=59, microsecond=999999)
+
+        if obj.start_time <= end_of_week:
+            return 'THIS_WEEK'
+
+        return 'UPCOMING'
+
 

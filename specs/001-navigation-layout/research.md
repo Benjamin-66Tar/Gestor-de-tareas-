@@ -150,3 +150,48 @@ Implement in-memory filtering for project lifecycle status (`Active` default, `C
 ### Rationale
 - **Sub-10ms UI Feedback**: Filtering active projects or searching by title happens entirely on the client without waiting for server round-trips.
 - **Visual Tidiness**: Users can easily archive completed projects to maintain a focused workspace while retaining historical records.
+
+---
+
+## 11. Event Scheduling, Chronological Grouping & Lifecycle States
+
+### Decision
+Model events via an `EventItem` entity with start/end datetime, location or virtual link, color-coded category, and explicit lifecycle status (`PROGRAMMED`, `COMPLETED`, `CANCELED`).
+Organize the events view chronologically into 4 dynamic time blocks:
+1. **"Hoy" (Today)**: Events occurring on the current calendar date ($T_{\text{start}} \le \text{today } 23:59:59 \land T_{\text{end}} \ge \text{today } 00:00:00$).
+2. **"Esta semana" (This Week)**: Events scheduled after today but within the current calendar week (ending Sunday 23:59:59).
+3. **"Próximos" (Upcoming)**: Events beyond the current calendar week.
+4. **"Pasados" (Past)**: Events whose end time has already elapsed ($T_{\text{end}} < \text{now}$).
+
+### Rationale
+- **Cognitive Clarity**: Time blocks allow users to immediately identify what demands immediate attention today vs. upcoming commitments without needing to mentally parse calendar grids.
+- **Actionable Status**: Supporting `COMPLETED` and `CANCELED` provides direct user satisfaction (checking off attended meetings or finished appointments) without destroying event history.
+
+### Alternatives Considered
+- **Strict Single-List Calendar View**: Rejected because duplicating the grid of the "Calendario" tab adds cognitive friction and fails to deliver an agile agenda view.
+- **Passive No-Status Timestamps Only**: Rejected because users frequently need to record whether a meeting took place, was canceled, or rescheduled.
+
+---
+
+## 12. Calendar Projection & Proactive Reminder Notifications for Events
+
+### Decision
+- **Bidirectional/Unified Calendar Feed**: Extend `sync_all_to_calendar(user)` so that `EventItem` entries are projected into the Calendar grid with their full start and end time span and category color.
+- **Proactive Alerts**: Implement `check_approaching_event_reminders(user)` in `services.py` to evaluate scheduled events whose $T_{\text{start}} - \text{now} \le \text{reminder\_minutes}$ and generate a real-time `Notification` item for the Navbar badge.
+
+### Rationale
+- **Unified Overview**: The user has one single source of truth in the "Calendario" tab showing Goal deadlines, Project task deadlines, and scheduled Events.
+- **Timely Awareness**: Unread notification counter in the Navbar alerts the user before meetings start without requiring third-party push notification complexity at this stage.
+
+---
+
+## 13. Event Slide-over Drawer UX & Quick Inline Actions
+
+### Decision
+Provide:
+1. A right-edge slide-over drawer (`EventDrawer.tsx`) for full event creation/editing (time pickers, category dropdown with color badges, location/URL input, reminder selector).
+2. Quick inline action buttons on each event card (`Completar`, `Cancelar`, `Editar`) for instant one-click lifecycle changes without opening the drawer.
+
+### Rationale
+- **Preserved Context**: Matches the drawer pattern established in `GoalDrawer` and `ProjectDrawer`/`TaskDrawer`, maintaining architectural consistency across the application.
+- **High Efficiency**: Users can mark an event as completed in $<100$ms directly from their chronological agenda.

@@ -143,6 +143,33 @@
 
 ---
 
+## Phase 8: User Story 5 - Events Management Hub & Schedule (Priority: P1)
+
+**Goal**: Deliver the complete Events management section: chronological agenda grouped into 4 dynamic time blocks (*"Hoy"*, *"Esta semana"*, *"Próximos"*, *"Pasados"*) with visual cards; category theme filtering; explicit lifecycle statuses (*"Programado"*, *"Completado"*, *"Cancelado"*) with quick inline actions; slide-over drawer for full event configuration; and automatic projection onto the "Calendario" tab and Navbar reminder alerts.
+
+**Independent Test**: Navigate to the "Eventos" tab. Verify the chronological blocks render with cards and category filter pills. Click "+ Nuevo Evento" to open the slide-over drawer; create an event with time, location/link, and category theme; verify it appears in the corresponding time block. Click "Completar" on the card to verify status changes to `COMPLETED`. Switch to the "Calendario" tab and verify the event is projected with its category color.
+
+- [X] T057 [P] [US5] Define TypeScript domain models and interfaces for EventItem, EventStatus, TimeBlock, and EventFilterCriteria in src/domain/types.ts
+- [X] T058 [P] [US5] Implement database model EventItem in backend/models.py
+- [X] T059 [P] [US5] Create DRF serializer EventItemSerializer with start/end time validation and time_block calculation in backend/serializers.py
+- [X] T060 [US5] Implement event calendar synchronization and proactive reminder alerts in backend/services.py
+- [X] T061 [US5] Generate and apply database migrations for EventItem model in backend/
+- [X] T062 [P] [US5] Implement REST API endpoints for Events CRUD and status transition in backend/views.py and backend/urls.py
+- [X] T063 [P] [US5] Create unit tests for event creation, validation, status transitions, and calendar projection in backend/tests.py
+- [X] T064 [P] [US5] Implement typed API client service methods for Events in src/services/api.ts
+- [X] T065 [US5] Extend application state context with events state, time-block classification, category filters, quick status toggling, and event drawer in src/context/AuraState.tsx
+- [X] T066 [P] [US5] Build EventCard component displaying category color badge, time span, location/link, description, and quick actions in src/components/events/EventCard.tsx
+- [X] T067 [P] [US5] Build EventTimelineBlock component for grouping events into temporal blocks in src/components/events/EventTimelineBlock.tsx
+- [X] T068 [P] [US5] Build EventDrawer slide-over panel for creating and editing event details, time pickers, category theme, and reminder lead times in src/components/events/EventDrawer.tsx
+- [X] T069 [US5] Build EventsView container component with header, "+ Nuevo Evento" trigger, category filter pills, and time-block timeline blocks in src/components/events/EventsView.tsx
+- [X] T070 [US5] Integrate scheduled events with category color styling into CalendarGrid in src/components/CalendarGrid.tsx
+- [X] T071 [US5] Wire EventsView into the main application layout for the EVENTOS tab in src/App.tsx
+- [X] T072 [US5] Execute backend test suite for events with pytest backend/tests.py
+- [X] T073 [US5] Run frontend production build check with npm run build to verify zero TypeScript errors
+- [X] T074 [US5] Execute end-to-end verification scenarios 11 through 14 in quickstart.md
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase Dependencies

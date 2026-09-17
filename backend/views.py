@@ -418,3 +418,109 @@ class TaskSubtaskToggleAPI(APIView):
             raise Http404
 
 
+# --- Events API ---
+
+class EventListCreateAPI(APIView):
+    def get(self, request):
+        from .models import EventItem
+        from .serializers import EventItemSerializer
+        from .services import check_approaching_event_reminders
+        from django.db.models import Q
+
+        # Check for upcoming reminders whenever events are fetched
+        check_approaching_event_reminders(user=request.user if request.user.is_authenticated else None)
+
+        events = EventItem.objects.all()
+        if request.user.is_authenticated:
+            events = events.filter(user=request.user)
+
+        status_param = request.query_params.get('status')
+        if status_param and status_param != 'ALL':
+            events = events.filter(status=status_param)
+
+        category_param = request.query_params.get('category')
+        if category_param and category_param != 'ALL':
+            events = events.filter(category__iexact=category_param)
+
+        search_query = request.query_params.get('search')
+        if search_query:
+            events = events.filter(
+                Q(title__icontains=search_query) |
+                Q(description__icontains=search_query) |
+                Q(location__icontains=search_query)
+            )
+
+        serializer = EventItemSerializer(events, many=True)
+        data = serializer.data
+
+        time_block_param = request.query_params.get('time_block')
+        if time_block_param and time_block_param != 'ALL':
+            data = [item for item in data if item.get('time_block') == time_block_param]
+
+        return Response(data, status=status.HTTP_200_OK)
+
+    def post(self, request):
+        from .serializers import EventItemSerializer
+        serializer = EventItemSerializer(data=request.data)
+        if serializer.is_valid():
+            user = request.user if request.user.is_authenticated else None
+            event = serializer.save(user=user)
+            return Response(EventItemSerializer(event).data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class EventDetailAPI(APIView):
+    def get_object(self, pk):
+        from .models import EventItem
+        try:
+            return EventItem.objects.get(pk=pk)
+        except EventItem.DoesNotExist:
+            raise Http404
+
+    def get(self, request, pk):
+        from .serializers import EventItemSerializer
+        event = self.get_object(pk)
+        return Response(EventItemSerializer(event).data, status=status.HTTP_200_OK)
+
+    def put(self, request, pk):
+        from .serializers import EventItemSerializer
+        event = self.get_object(pk)
+        serializer = EventItemSerializer(event, data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def patch(self, request, pk):
+        from .serializers import EventItemSerializer
+        event = self.get_object(pk)
+        serializer = EventItemSerializer(event, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, pk):
+        event = self.get_object(pk)
+        event.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class EventStatusAPI(APIView):
+    def patch(self, request, pk):
+        from .models import EventItem
+        from .serializers import EventItemSerializer
+        new_status = request.data.get('status')
+        if not new_status or new_status not in ['PROGRAMMED', 'COMPLETED', 'CANCELED']:
+            return Response({'error': 'Invalid status. Must be PROGRAMMED, COMPLETED, or CANCELED.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            event = EventItem.objects.get(pk=pk)
+            event.status = new_status
+            event.save(update_fields=['status', 'updated_at'])
+            return Response(EventItemSerializer(event).data, status=status.HTTP_200_OK)
+        except EventItem.DoesNotExist:
+            raise Http404
+
+
+

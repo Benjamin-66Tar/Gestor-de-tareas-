@@ -324,3 +324,115 @@ class ProjectAPITests(APITestCase):
         titles = [e['titulo'] for e in res.data]
         self.assertTrue(any("📋 Diseñar wireframes" in t for t in titles))
         self.assertTrue(any("📋 Implementar frontend" in t for t in titles))
+
+
+class EventAPITests(APITestCase):
+    def setUp(self):
+        from .models import EventItem
+        from datetime import timedelta
+        self.now = timezone.now()
+
+        self.event_today = EventItem.objects.create(
+            title="Reunión de Sincronización",
+            description="Revisión de avances",
+            start_time=self.now + timedelta(hours=1),
+            end_time=self.now + timedelta(hours=2),
+            location="Oficina Principal",
+            meeting_url="https://meet.google.com/test",
+            category="Trabajo",
+            color_hex="#3B82F6",
+            status="PROGRAMMED",
+            reminder_minutes=15
+        )
+
+        self.event_past = EventItem.objects.create(
+            title="Cita Pasada",
+            description="Ya ocurrió ayer",
+            start_time=self.now - timedelta(days=1, hours=2),
+            end_time=self.now - timedelta(days=1, hours=1),
+            category="Personal",
+            color_hex="#10B981",
+            status="COMPLETED"
+        )
+
+    def test_list_events(self):
+        url = reverse('events-list-create')
+        res = self.client.get(url)
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(res.data), 2)
+        titles = [e['title'] for e in res.data]
+        self.assertIn("Reunión de Sincronización", titles)
+
+    def test_create_event_success(self):
+        from datetime import timedelta
+        url = reverse('events-list-create')
+        data = {
+            "title": "Presentación Demo",
+            "description": "Demostración de la app Aura",
+            "start_time": (self.now + timedelta(days=2)).isoformat(),
+            "end_time": (self.now + timedelta(days=2, hours=1)).isoformat(),
+            "location": "Auditorio B",
+            "category": "Trabajo",
+            "color_hex": "#8B5CF6",
+            "status": "PROGRAMMED",
+            "reminder_minutes": 30
+        }
+        res = self.client.post(url, data, format='json')
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(res.data['title'], "Presentación Demo")
+        self.assertEqual(res.data['status'], "PROGRAMMED")
+        self.assertEqual(res.data['time_block'], "THIS_WEEK" if (self.now + timedelta(days=2)).weekday() >= self.now.weekday() else res.data['time_block'])
+
+    def test_event_date_validation_error(self):
+        from datetime import timedelta
+        url = reverse('events-list-create')
+        # End time before start time
+        data = {
+            "title": "Evento Inválido",
+            "start_time": (self.now + timedelta(hours=2)).isoformat(),
+            "end_time": (self.now + timedelta(hours=1)).isoformat(),
+        }
+        res = self.client.post(url, data, format='json')
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("end_time", res.data)
+
+    def test_event_status_transition(self):
+        url = reverse('event-status', args=[self.event_today.id])
+
+        # Complete event
+        res_comp = self.client.patch(url, {"status": "COMPLETED"}, format='json')
+        self.assertEqual(res_comp.status_code, status.HTTP_200_OK)
+        self.assertEqual(res_comp.data['status'], "COMPLETED")
+
+        # Cancel event
+        res_canc = self.client.patch(url, {"status": "CANCELED"}, format='json')
+        self.assertEqual(res_canc.status_code, status.HTTP_200_OK)
+        self.assertEqual(res_canc.data['status'], "CANCELED")
+
+    def test_event_calendar_projection(self):
+        url = reverse('calendar-events-sync')
+        res = self.client.get(url)
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        event_items = [e for e in res.data if e.get('tipo') == 'EVENTO']
+        self.assertTrue(len(event_items) >= 2)
+        event_titles = [e['titulo'] for e in event_items]
+        self.assertTrue(any("Reunión de Sincronización" in t for t in event_titles))
+
+    def test_approaching_event_reminder(self):
+        from datetime import timedelta
+        from .models import EventItem, Notification
+        from .services import check_approaching_event_reminders
+
+        # Create an event starting in 10 minutes with reminder_minutes=15
+        urgent_event = EventItem.objects.create(
+            title="Reunión Inminente",
+            start_time=self.now + timedelta(minutes=10),
+            end_time=self.now + timedelta(minutes=40),
+            reminder_minutes=15,
+            status="PROGRAMMED"
+        )
+
+        notifs = check_approaching_event_reminders()
+        self.assertTrue(any("Reunión Inminente" in n.title for n in notifs))
+        self.assertTrue(Notification.objects.filter(title__contains="Reunión Inminente").exists())
+

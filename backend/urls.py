@@ -17,6 +17,9 @@ from .views import (
     ProjectTaskDetailAPI,
     ProjectTaskStatusAPI,
     TaskSubtaskToggleAPI,
+    EventListCreateAPI,
+    EventDetailAPI,
+    EventStatusAPI,
 )
 
 urlpatterns = [
@@ -44,6 +47,11 @@ urlpatterns = [
     path('api/v1/tasks/<uuid:pk>/', ProjectTaskDetailAPI.as_view(), name='task-detail'),
     path('api/v1/tasks/<uuid:pk>/status/', ProjectTaskStatusAPI.as_view(), name='task-status'),
     path('api/v1/subtasks/<uuid:pk>/toggle/', TaskSubtaskToggleAPI.as_view(), name='subtask-toggle'),
+    
+    # Events
+    path('api/v1/events/', EventListCreateAPI.as_view(), name='events-list-create'),
+    path('api/v1/events/<uuid:pk>/', EventDetailAPI.as_view(), name='event-detail'),
+    path('api/v1/events/<uuid:pk>/status/', EventStatusAPI.as_view(), name='event-status'),
 
     # Calendar Sync
     path('api/v1/calendar/events/', CalendarEventsAPI.as_view(), name='calendar-events-sync'),
