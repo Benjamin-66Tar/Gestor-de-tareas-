@@ -13,6 +13,10 @@ import {
   TaskStatus,
   ProjectFilterCriteria,
   ProjectViewMode,
+  EventItem,
+  EventStatus,
+  TimeBlock,
+  EventFilterCriteria,
 } from '../domain/types';
 import { getGridDateRange } from '../utils/dateUtils';
 import * as api from '../services/api';
@@ -101,6 +105,25 @@ interface AuraContextProps {
   moveTaskStatus: (taskId: string, newStatus: TaskStatus) => Promise<boolean>;
   deleteTask: (taskId: string) => Promise<boolean>;
   toggleSubtask: (subtaskId: string) => Promise<boolean>;
+
+  // --- Eventos Section ---
+  events: EventItem[];
+  eventsLoading: boolean;
+  eventsError: string | null;
+  eventFilter: EventFilterCriteria;
+  setEventFilter: React.Dispatch<React.SetStateAction<EventFilterCriteria>>;
+  eventDrawerOpen: boolean;
+  setEventDrawerOpen: (open: boolean) => void;
+  editingEvent: EventItem | null;
+  setEditingEvent: (event: EventItem | null) => void;
+  fetchEventsList: () => Promise<void>;
+  createEvent: (eventData: Partial<EventItem>) => Promise<boolean>;
+  updateEvent: (id: string, eventData: Partial<EventItem>) => Promise<boolean>;
+  updateEventStatus: (id: string, status: EventStatus) => Promise<boolean>;
+  deleteEvent: (id: string) => Promise<boolean>;
+  openNewEventDrawer: () => void;
+  openEditEventDrawer: (event: EventItem) => void;
+  eventsByTimeBlock: Record<TimeBlock, EventItem[]>;
 }
 
 const AuraContext = createContext<AuraContextProps | undefined>(undefined);
@@ -621,6 +644,146 @@ export const AuraProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  // --- 6. Eventos State & Operations ---
+  const [events, setEvents] = useState<EventItem[]>([]);
+  const [eventsLoading, setEventsLoading] = useState<boolean>(false);
+  const [eventsError, setEventsError] = useState<string | null>(null);
+  const [eventFilter, setEventFilter] = useState<EventFilterCriteria>({
+    status: 'ALL',
+    category: 'ALL',
+    searchQuery: '',
+  });
+  const [eventDrawerOpen, setEventDrawerOpen] = useState<boolean>(false);
+  const [editingEvent, setEditingEvent] = useState<EventItem | null>(null);
+
+  const fetchEventsList = useCallback(async () => {
+    setEventsLoading(true);
+    setEventsError(null);
+    try {
+      const serverEvents = await api.fetchEvents({
+        status: eventFilter.status,
+        category: eventFilter.category,
+        search: eventFilter.searchQuery,
+      });
+      setEvents(serverEvents);
+    } catch (err) {
+      console.warn('Error fetching events from API:', err);
+      setEventsError('No se pudieron cargar los eventos.');
+    } finally {
+      setEventsLoading(false);
+    }
+  }, [eventFilter]);
+
+  const openNewEventDrawer = () => {
+    setEditingEvent(null);
+    setEventDrawerOpen(true);
+  };
+
+  const openEditEventDrawer = (event: EventItem) => {
+    setEditingEvent(event);
+    setEventDrawerOpen(true);
+  };
+
+  const createEvent = async (eventData: Partial<EventItem>): Promise<boolean> => {
+    try {
+      const created = await api.createEventApi(eventData);
+      setEvents(prev => [created, ...prev]);
+      setEventDrawerOpen(false);
+      fetchElementos();
+      refreshNotifications();
+      return true;
+    } catch (err) {
+      console.error('Error creating event:', err);
+      return false;
+    }
+  };
+
+  const updateEvent = async (id: string, eventData: Partial<EventItem>): Promise<boolean> => {
+    try {
+      const updated = await api.updateEventApi(id, eventData);
+      setEvents(prev => prev.map(e => e.id === id ? updated : e));
+      setEventDrawerOpen(false);
+      fetchElementos();
+      return true;
+    } catch (err) {
+      console.error('Error updating event:', err);
+      return false;
+    }
+  };
+
+  const updateEventStatus = async (id: string, status: EventStatus): Promise<boolean> => {
+    try {
+      const updated = await api.updateEventStatusApi(id, status);
+      setEvents(prev => prev.map(e => e.id === id ? updated : e));
+      fetchElementos();
+      return true;
+    } catch (err) {
+      console.error('Error updating event status:', err);
+      return false;
+    }
+  };
+
+  const deleteEvent = async (id: string): Promise<boolean> => {
+    try {
+      await api.deleteEventApi(id);
+      setEvents(prev => prev.filter(e => e.id !== id));
+      fetchElementos();
+      return true;
+    } catch (err) {
+      console.error('Error deleting event:', err);
+      return false;
+    }
+  };
+
+  const eventsByTimeBlock = React.useMemo(() => {
+    const blocks: Record<TimeBlock, EventItem[]> = {
+      TODAY: [],
+      THIS_WEEK: [],
+      UPCOMING: [],
+      PAST: [],
+    };
+
+    const query = eventFilter.searchQuery.trim().toLowerCase();
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+    const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+    const currentDay = now.getDay();
+    const daysUntilSunday = currentDay === 0 ? 0 : 7 - currentDay;
+    const endOfWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() + daysUntilSunday, 23, 59, 59, 999);
+
+    const filtered = events.filter(e => {
+      if (eventFilter.status !== 'ALL' && e.status !== eventFilter.status) return false;
+      if (eventFilter.category !== 'ALL' && e.category.toLowerCase() !== eventFilter.category.toLowerCase()) return false;
+      if (query) {
+        const matchesTitle = e.title.toLowerCase().includes(query);
+        const matchesDesc = (e.description || '').toLowerCase().includes(query);
+        const matchesLoc = (e.location || '').toLowerCase().includes(query);
+        if (!matchesTitle && !matchesDesc && !matchesLoc) return false;
+      }
+      return true;
+    });
+
+    for (const item of filtered) {
+      const end = new Date(item.endTime);
+      const start = new Date(item.startTime);
+      let block: TimeBlock = 'UPCOMING';
+
+      if (end < now) {
+        block = 'PAST';
+      } else if (start <= todayEnd && end >= todayStart) {
+        block = 'TODAY';
+      } else if (start <= endOfWeek) {
+        block = 'THIS_WEEK';
+      } else {
+        block = 'UPCOMING';
+      }
+
+      blocks[block].push({ ...item, timeBlock: block });
+    }
+
+    return blocks;
+  }, [events, eventFilter]);
+
   // Initial load effects
   useEffect(() => {
     refreshNotifications();
@@ -634,8 +797,10 @@ export const AuraProvider: React.FC<{ children: React.ReactNode }> = ({ children
       fetchGoalsList();
     } else if (tabActiva === 'PROYECTOS') {
       fetchProjectsList();
+    } else if (tabActiva === 'EVENTOS') {
+      fetchEventsList();
     }
-  }, [tabActiva, anioActivo, mesActivo, fetchElementos, fetchGoalsList, fetchProjectsList]);
+  }, [tabActiva, anioActivo, mesActivo, fetchElementos, fetchGoalsList, fetchProjectsList, fetchEventsList]);
 
   return (
     <AuraContext.Provider value={{
@@ -718,6 +883,25 @@ export const AuraProvider: React.FC<{ children: React.ReactNode }> = ({ children
       moveTaskStatus,
       deleteTask,
       toggleSubtask,
+
+      // Eventos
+      events,
+      eventsLoading,
+      eventsError,
+      eventFilter,
+      setEventFilter,
+      eventDrawerOpen,
+      setEventDrawerOpen,
+      editingEvent,
+      setEditingEvent,
+      fetchEventsList,
+      createEvent,
+      updateEvent,
+      updateEventStatus,
+      deleteEvent,
+      openNewEventDrawer,
+      openEditEventDrawer,
+      eventsByTimeBlock,
     }}>
       {children}
     </AuraContext.Provider>

@@ -1,4 +1,4 @@
-import { Goal, GoalMilestone, NotificationItem, UserProfile, PlanElemento, Project, ProjectTask, TaskSubtask, TaskStatus } from '../domain/types';
+import { Goal, GoalMilestone, NotificationItem, UserProfile, PlanElemento, Project, ProjectTask, TaskSubtask, TaskStatus, EventItem, EventStatus } from '../domain/types';
 
 const API_BASE = '/api/v1';
 
@@ -436,4 +436,104 @@ export async function toggleSubtaskApi(subtaskId: string): Promise<TaskSubtask> 
     order: raw.order,
   };
 }
+
+// --- Events Services ---
+
+export function transformEventFromApi(raw: any): EventItem {
+  return {
+    id: raw.id,
+    title: raw.title,
+    description: raw.description,
+    startTime: raw.start_time ?? raw.startTime,
+    endTime: raw.end_time ?? raw.endTime,
+    location: raw.location,
+    meetingUrl: raw.meeting_url ?? raw.meetingUrl,
+    category: raw.category || 'General',
+    colorHex: raw.color_hex ?? raw.colorHex ?? '#3B82F6',
+    status: raw.status || 'PROGRAMMED',
+    reminderMinutes: raw.reminder_minutes ?? raw.reminderMinutes ?? 15,
+    timeBlock: raw.time_block ?? raw.timeBlock,
+    createdAt: raw.created_at ?? raw.createdAt,
+    updatedAt: raw.updated_at ?? raw.updatedAt,
+  };
+}
+
+export async function fetchEvents(params?: { status?: string; category?: string; time_block?: string; search?: string }): Promise<EventItem[]> {
+  const queryParts: string[] = [];
+  if (params?.status && params.status !== 'ALL') {
+    queryParts.push(`status=${encodeURIComponent(params.status)}`);
+  }
+  if (params?.category && params.category !== 'ALL') {
+    queryParts.push(`category=${encodeURIComponent(params.category)}`);
+  }
+  if (params?.time_block && params.time_block !== 'ALL') {
+    queryParts.push(`time_block=${encodeURIComponent(params.time_block)}`);
+  }
+  if (params?.search) {
+    queryParts.push(`search=${encodeURIComponent(params.search)}`);
+  }
+
+  const queryString = queryParts.length > 0 ? `?${queryParts.join('&')}` : '';
+  try {
+    const data = await apiRequest<any[]>(`/events/${queryString}`);
+    return data.map(transformEventFromApi);
+  } catch (err) {
+    console.warn('Failed to fetch events from backend:', err);
+    return [];
+  }
+}
+
+export async function createEventApi(eventData: Partial<EventItem>): Promise<EventItem> {
+  const payload: Record<string, any> = {
+    title: eventData.title,
+    description: eventData.description,
+    start_time: eventData.startTime,
+    end_time: eventData.endTime,
+    location: eventData.location,
+    meeting_url: eventData.meetingUrl,
+    category: eventData.category || 'General',
+    color_hex: eventData.colorHex || '#3B82F6',
+    status: eventData.status || 'PROGRAMMED',
+    reminder_minutes: eventData.reminderMinutes ?? 15,
+  };
+
+  const raw = await apiRequest<any>('/events/', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  return transformEventFromApi(raw);
+}
+
+export async function updateEventApi(eventId: string, eventData: Partial<EventItem>): Promise<EventItem> {
+  const payload: Record<string, any> = {};
+  if (eventData.title !== undefined) payload.title = eventData.title;
+  if (eventData.description !== undefined) payload.description = eventData.description;
+  if (eventData.startTime !== undefined) payload.start_time = eventData.startTime;
+  if (eventData.endTime !== undefined) payload.end_time = eventData.endTime;
+  if (eventData.location !== undefined) payload.location = eventData.location;
+  if (eventData.meetingUrl !== undefined) payload.meeting_url = eventData.meetingUrl;
+  if (eventData.category !== undefined) payload.category = eventData.category;
+  if (eventData.colorHex !== undefined) payload.color_hex = eventData.colorHex;
+  if (eventData.status !== undefined) payload.status = eventData.status;
+  if (eventData.reminderMinutes !== undefined) payload.reminder_minutes = eventData.reminderMinutes;
+
+  const raw = await apiRequest<any>(`/events/${eventId}/`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+  return transformEventFromApi(raw);
+}
+
+export async function updateEventStatusApi(eventId: string, status: EventStatus): Promise<EventItem> {
+  const raw = await apiRequest<any>(`/events/${eventId}/status/`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status }),
+  });
+  return transformEventFromApi(raw);
+}
+
+export async function deleteEventApi(eventId: string): Promise<void> {
+  await apiRequest(`/events/${eventId}/`, { method: 'DELETE' });
+}
+
 

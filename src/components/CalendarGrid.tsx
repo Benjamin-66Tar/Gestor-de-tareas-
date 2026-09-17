@@ -449,6 +449,10 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({ onDayClick, onItemCl
                           const isStart = isRange && day.formattedDate === startStr;
                           const isEnd = isRange && day.formattedDate === endStr;
 
+                          const timeStr = item.fecha_inicio && item.fecha_inicio.includes('T')
+                            ? item.fecha_inicio.split('T')[1].slice(0, 5)
+                            : null;
+
                           return (
                             <div
                               key={`${item.id}-${day.formattedDate}`}
@@ -456,11 +460,11 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({ onDayClick, onItemCl
                                 e.stopPropagation();
                                 if (onItemClick) onItemClick(item);
                               }}
-                              style={{ borderLeftColor: item.color_hex }}
+                              style={{ borderLeftColor: item.color_hex || '#3B82F6' }}
                               className={`group/item flex flex-col p-1 text-[9px] leading-tight transition transform hover:-translate-y-0.5 hover:shadow-md cursor-pointer ${
                                 isRange
                                   ? isStart
-                                    ? 'rounded-l-md bg-indigo-950/80 border-l-2 border-indigo-400 font-medium'
+                                    ? 'rounded-l-md bg-indigo-950/80 border-l-2 font-medium'
                                     : isEnd
                                     ? 'rounded-r-md bg-indigo-950/60 border-l border-slate-700'
                                     : 'bg-indigo-950/40 border-l border-slate-800'
@@ -477,10 +481,17 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({ onDayClick, onItemCl
                                   </span>
                                 )}
                               </div>
-                              <span className="text-[7px] text-slate-500 uppercase tracking-tight flex items-center gap-1">
-                                <span>{item.tipo}</span>
-                                {isRange && isEnd && (
-                                  <span className="text-emerald-400 font-bold">(Fin)</span>
+                              <span className="text-[7px] text-slate-500 uppercase tracking-tight flex items-center justify-between gap-1 mt-0.5">
+                                <span className="flex items-center gap-1">
+                                  <span>{item.tipo}</span>
+                                  {isRange && isEnd && (
+                                    <span className="text-emerald-400 font-bold">(Fin)</span>
+                                  )}
+                                </span>
+                                {timeStr && timeStr !== '00:00' && (
+                                  <span className="font-mono text-slate-400 font-semibold lowercase">
+                                    {timeStr}
+                                  </span>
                                 )}
                               </span>
                             </div>

@@ -6,6 +6,7 @@ import { TabBar } from './components/TabBar';
 import { CalendarGrid } from './components/CalendarGrid';
 import { GoalsView } from './components/goals/GoalsView';
 import { ProjectsView } from './components/projects/ProjectsView';
+import { EventsView } from './components/events/EventsView';
 import { ElementoModal } from './components/ElementoModal';
 
 // Dynamic viewport content router based on active tab
@@ -60,14 +61,10 @@ const ContenidoPrincipal: React.FC = () => {
         </section>
       )}
 
-      {/* 4. Eventos (Placeholder de Sección) */}
+      {/* 4. Eventos (Agenda & Convocatorias) */}
       {tabActiva === 'EVENTOS' && (
-        <section className="animate-fadeIn p-12 text-center bg-slate-900/40 rounded-3xl border border-slate-800 space-y-3">
-          <span className="text-4xl block">🎉</span>
-          <h2 className="text-xl font-bold text-rose-400">Próximos Eventos & Reuniones</h2>
-          <p className="text-xs text-slate-400 max-w-md mx-auto">
-            Visualiza convocatorias, reuniones sincronizadas y fechas clave de tu equipo.
-          </p>
+        <section className="animate-fadeIn max-w-7xl mx-auto">
+          <EventsView />
         </section>
       )}
     </main>

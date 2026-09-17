@@ -148,3 +148,33 @@ export interface ProjectFilterCriteria {
   status: 'ALL' | ProjectStatus;
   searchQuery: string;
 }
+
+// --- Eventos Domain Models ---
+
+export type EventStatus = 'PROGRAMMED' | 'COMPLETED' | 'CANCELED';
+
+export type TimeBlock = 'TODAY' | 'THIS_WEEK' | 'UPCOMING' | 'PAST';
+
+export interface EventItem {
+  id: string;
+  title: string;
+  description?: string;
+  startTime: string; // ISO 8601 string
+  endTime: string;   // ISO 8601 string
+  location?: string | null;
+  meetingUrl?: string | null;
+  category: string;
+  colorHex: string;
+  status: EventStatus;
+  reminderMinutes?: number | null;
+  timeBlock?: TimeBlock;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface EventFilterCriteria {
+  status: 'ALL' | EventStatus;
+  category: string; // 'ALL' or specific category
+  searchQuery: string;
+}
+
