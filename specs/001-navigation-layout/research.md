@@ -195,3 +195,30 @@ Provide:
 ### Rationale
 - **Preserved Context**: Matches the drawer pattern established in `GoalDrawer` and `ProjectDrawer`/`TaskDrawer`, maintaining architectural consistency across the application.
 - **High Efficiency**: Users can mark an event as completed in $<100$ms directly from their chronological agenda.
+
+---
+
+## 14. Web Push Notifications Architecture & PWA Strategy (VAPID + Native Web Push)
+
+### Decision
+Implement native **Web Push Notifications** utilizing the standard W3C Push API and IETF VAPID protocol (RFC 8291 / RFC 8292), paired with a Progressive Web App (PWA) manifest and Service Worker (`sw.js`).
+1. **Backend Delivery**: Use `pywebpush` in Django to deliver encrypted push payloads directly to browser push services (Google FCM, Apple WebPush, Mozilla Autopush) using server-side VAPID public/private keypairs.
+2. **Multi-device Subscription Store**: Model `PushSubscription` with a 1:N relationship to `User`, storing `endpoint`, cryptographic keys (`p256dh`, `auth`), and user-agent metadata.
+3. **Automatic Endpoint Pruning**: In `services.py`, catch push errors: when a push service returns HTTP 410 (*Gone*) or HTTP 404 (*Not Found*), automatically delete the stale subscription from the database.
+4. **Lightweight In-Process Scheduler**: Run an in-process background worker (evaluating approaching event reminders and task deadlines every 1–5 minutes) in Django without requiring external Redis/Celery queue dependencies.
+5. **PWA & Mobile Compatibility**:
+   - Provide a Web App Manifest (`manifest.json` / `manifest.webmanifest`) enabling standalone installation.
+   - On **Laptops (Windows, macOS, Linux)** and **Android**, push notifications work natively via desktop/mobile browsers.
+   - On **iOS (iPhone/iPad, iOS 16.4+)**, Web Push is strictly enabled once the user adds Aura to their home screen as a PWA ("Añadir a pantalla de inicio").
+6. **Interaction & Deep Linking**: Service Worker intercepts `push` and displays system notifications; on `notificationclick`, it searches for existing open tabs via `clients.matchAll({ type: 'window' })`, focusing an existing tab (`client.focus()`) and navigating to the contextual item or opening a new window if closed.
+7. **User-Gesture Onboarding**: Permission is requested strictly via user interaction (toggle/button in UI dropdown or settings), preventing browser spam suppression and fulfilling Apple WebKit's strict *user gesture* requirement.
+
+### Rationale
+- **Zero Third-Party SaaS Dependencies**: 100% standards-compliant without monthly costs, subscription limits, or third-party trackers (OneSignal, Pusher).
+- **Lightweight & High Speed**: Maintains Aura's sub-100ms responsiveness and eliminates heavyweight Redis/Celery infrastructure while providing autonomous background delivery.
+- **Data Timeliness (Network-First)**: Service Worker avoids caching dynamic task/event API responses, preventing desynchronization bugs.
+
+### Alternatives Considered
+- **Firebase Cloud Messaging (FCM Web SDK)**: Rejected due to unnecessary bundle bloat, Google Cloud configuration complexity, and identical iOS 16.4+ PWA restrictions.
+- **Celery + Redis + Celery Beat**: Rejected because it introduces external container/broker overhead that conflicts with Aura's rapid lightweight SQLite development constitution.
+- **WebSocket-Only**: Rejected because WebSockets cannot deliver alerts when the browser tab is closed or the mobile screen is locked.

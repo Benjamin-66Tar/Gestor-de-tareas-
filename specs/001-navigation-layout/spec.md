@@ -31,6 +31,13 @@
 - Q: ¿Qué patrón de interfaz e interacción debe utilizarse para dar de alta y editar los eventos en la sección de Eventos? → A: Botón de creación rápida complementado con un panel lateral deslizable (Slide-over drawer) desde el borde derecho para ver y editar los detalles completos (fechas, horas, enlaces, categorías y recordatorios) preservando el contexto.
 - Q: ¿Cómo debe gestionarse el ciclo de vida y los estados de los eventos dentro de la agenda y el calendario? → A: Estados explícitos conmutables ("Programado", "Completado", "Cancelado") con acciones rápidas para marcar como completado o cancelar desde la tarjeta o drawer, diferenciando visualmente los eventos concluidos.
 
+### Session 2026-09-17
+- Q: ¿Cómo debe gestionar el backend la evaluación y despacho de notificaciones Web Push para eventos y fechas límite sin requerir servicios externos pesados? → A: Programador liviano en proceso (Background Task Runner / scheduler integrado en Django) que evalúa periódicamente (intervalos de 1 a 5 min) eventos y tareas próximas y despacha cargas Web Push cifradas con pywebpush, sin intermediarios externos como Redis o Celery.
+- Q: ¿Cómo debe estructurar el backend el almacenamiento y la depuración de las suscripciones push para evitar conflictos entre dispositivos (laptop y celulares)? → A: Multi-dispositivo (1:N) con auto-depuración: modelo PushSubscription con relación 1 a muchos con User, entregando alertas a todos los dispositivos registrados del usuario y eliminando automáticamente registros cuando el servicio push devuelva HTTP 410 (Gone) o 404.
+- Q: ¿Cuál debe ser el alcance y la estrategia de caché del Service Worker y la PWA en el frontend? → A: Service Worker enfocado en Push + PWA (Network-First / Sin caché de API): manifest.json y Service Worker optimizados para habilitar la instalación PWA (iOS 16.4+ y Android) y procesar eventos push/notificationclick, resolviendo siempre las llamadas a la API contra la red en vivo para evitar inconsistencias de datos.
+- Q: ¿Cómo debe reaccionar el Service Worker al pulsar una notificación push en laptop o celular? → A: Navegación contextual (Deep Link) con reutilización de ventana: el payload contiene la ruta destino; el Service Worker enfoca la pestaña existente si ya está abierta y navega al ítem concreto (evento/tarea/meta), o abre una nueva ventana si la app estaba cerrada.
+- Q: ¿Cómo debe estructurarse la interfaz y el momento de solicitud del permiso para activar las notificaciones en laptop y celular? → A: Activación contextual y explícita por botón: no solicitar permiso al cargar la página; disponer de un control visual accesible (dropdown de notificaciones o ajustes) que active el prompt tras un clic/toque explícito (respetando la restricción de User Gesture de Safari y Chrome) con una guía auxiliar de "Añadir a pantalla de inicio" si se detecta iOS fuera de PWA.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Header Navigation Bar (Navbar) (Priority: P1)
@@ -75,6 +82,8 @@ As a user, I want to interact with the notification icon and profile avatar to v
 1. **Given** the user is on any screen, **When** they click the notification icon, **Then** a dropdown panel MUST open displaying a list of recent notification items.
 2. **Given** the user has the notification dropdown open, **When** they click outside the panel, **Then** the dropdown MUST close.
 3. **Given** the user is on any screen, **When** they click the avatar, **Then** a profile options menu MUST open containing links for Profile, Settings, and Log Out.
+4. **Given** the user opens the notification dropdown, **When** they inspect the header or action controls, **Then** they MUST see an explicit button or toggle to activate Web Push notifications on the current device (laptop or mobile) that only triggers the browser permission dialog upon direct user click.
+5. **Given** a user opens the application on iOS Safari outside of standalone PWA mode, **When** inspecting notification options, **Then** the UI MUST show clear guidance explaining how to add the app to the home screen ("Añadir a pantalla de inicio") to enable push alerts.
 
 ---
 
@@ -166,10 +175,16 @@ As a user, I want to manage and view my scheduled events (meetings, appointments
 - **FR-038**: The system MUST issue notification alerts when an event start time is approaching.
 - **FR-039**: The "Eventos" section MUST provide quick-creation triggers and a slide-over drawer panel emerging from the right edge for inspecting, creating, and editing full event details.
 - **FR-040**: Events MUST support three lifecycle states: "Programado" (default), "Completado", and "Cancelado", providing quick-action controls in the event card and slide-over drawer to transition states with instant visual feedback.
+- **FR-041**: The backend MUST execute a lightweight in-process background task scheduler (evaluating at intervals of 1 to 5 minutes) to detect upcoming event reminders and approaching/overdue task deadlines, generating notification records and dispatching encrypted Web Push payloads via `pywebpush` without requiring external queue brokers.
+- **FR-042**: The system MUST support multi-device push notifications per user (1:N relationship between User and PushSubscription), allowing concurrent registrations from laptops and mobile devices, and MUST automatically prune/delete expired or invalid subscription records upon receiving HTTP 410 (Gone) or 404 (Not Found) responses from push services.
+- **FR-043**: The frontend application MUST provide a Progressive Web App (PWA) manifest and a dedicated Service Worker configured primarily for PWA installation and Web Push event handling (`push`, `notificationclick`), utilizing a Network-First strategy for API communications to avoid stale data conflicts with real-time tasks and events.
+- **FR-044**: Upon user interaction with a Web Push notification (`notificationclick`), the Service Worker MUST detect whether an active application window or tab is already open, focusing the existing window if present or opening a new window if closed, and route directly to the relevant contextual item (event, task, or goal) indicated in the push notification payload.
+- **FR-045**: The application MUST NOT prompt for notification permissions automatically upon initial page load; instead, it MUST provide an explicit user-facing activation control (e.g. within the notification dropdown or user settings) triggered by direct user gesture, and display contextual onboarding guidance (instructing to "Añadir a pantalla de inicio") if an iOS device is detected running outside of standalone PWA mode.
 
 ### Key Entities
 - **UserSession**: Represents the currently logged-in user, exposing their avatar image URL and auth state.
 - **Notification**: Represents a single notification item, with properties for read/unread state and creation timestamp.
+- **PushSubscription**: Represents an active Web Push subscription device associated with a User (1:N), storing the endpoint URL, cryptographic keys (`p256dh`, `auth`), user agent metadata, and registration timestamp.
 - **NavigationSection**: Represents a valid section tab (Calendar, Goals, Projects, Events).
 - **Goal**: Represents an objective with title, target deadline, category tag, progress mode (`Manual` or `MilestoneBased`), progress percentage (0-100%), and status (Active, Completed, Paused).
 - **GoalMilestone**: Represents a key checkable milestone or sub-target associated with a Goal, including title, completion state, and an optional weight value.

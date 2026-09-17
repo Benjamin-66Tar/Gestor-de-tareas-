@@ -169,6 +169,24 @@ The application is available at `http://localhost:5173`.
 3. Click the event in the calendar to view its quick details (location, link, category).
 4. When the event start time approaches (within configured reminder minutes), verify the Navbar bell icon updates its unread badge count with a reminder alert notification.
 
+### Scenario 15: Web Push Notifications & PWA Installation (Laptop & Mobile)
+1. **PWA Standalone & Manifest Check**:
+   - In browser DevTools > Application > Manifest, verify that `manifest.json` loads with `display: "standalone"`, Aura branding icons, and theme color `#6366F1`.
+   - On mobile / Chrome, verify the "Install App" / "Instalar aplicación" prompt or icon is available.
+   - On iOS Safari, verify the Share menu provides "Añadir a pantalla de inicio" (Add to Home Screen).
+2. **Explicit User-Gesture Subscription**:
+   - Open the Notification dropdown in the Navbar.
+   - Verify that no unsolicited permission popup appeared upon page load.
+   - Click the explicit button **"Activar notificaciones en este dispositivo"**.
+   - Grant permission in the browser dialog.
+   - Verify the button state switches to **"Notificaciones activadas"** and a subscription is persisted in `PushSubscription` on the backend.
+3. **Receipt of Push Notification on Desktop/Mobile**:
+   - Trigger a test push notification via `POST /api/v1/notifications/push/test/` or wait for the in-process background scheduler to fire an event reminder.
+   - Verify that an OS-level notification banner appears (Windows Action Center, macOS notification banner, Android lock screen, iOS Home Screen PWA alert).
+4. **Deep Linking & Window Reuse**:
+   - Click the system notification banner.
+   - Verify that the Service Worker focuses the existing Aura tab (without opening a redundant duplicate window) and navigates to the notified event or task.
+
 ---
 
 ## 4. Automated Testing
@@ -182,9 +200,12 @@ Validates:
 - Serializer validation constraints (weight > 0, progress 0-100).
 - Calendar deadline projection service.
 - REST API endpoint response codes and schemas.
+- `PushSubscription` CRUD endpoints and VAPID public key delivery.
+- Automatic subscription pruning when push service returns HTTP 410 (Gone) or 404.
 
 ### Frontend Compilation & Linting
 ```powershell
 npm run build
 ```
-Validates that all TypeScript types, interfaces, and JSX components compile with zero type errors.
+Validates that all TypeScript types, interfaces, Service Worker script, and JSX components compile with zero type errors.
+

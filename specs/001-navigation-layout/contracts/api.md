@@ -437,4 +437,78 @@ All endpoints are served under the `/api/v1` namespace and expect/return `applic
 - **URL**: `/api/v1/events/{id}/`
 - **Response (204 No Content)**
 
+---
+
+## 5. Web Push Notifications & Device Subscriptions
+
+### Get VAPID Public Key
+- **Method**: `GET`
+- **URL**: `/api/v1/notifications/push/public-key/`
+- **Response (200 OK)**:
+```json
+{
+  "public_key": "BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDhkWPbjWIgFY..."
+}
+```
+
+### Register Push Subscription (Laptop or Mobile)
+- **Method**: `POST`
+- **URL**: `/api/v1/notifications/push/subscribe/`
+- **Request Body**:
+```json
+{
+  "endpoint": "https://fcm.googleapis.com/fcm/send/dK8z91-sample-endpoint",
+  "keys": {
+    "p256dh": "BNcRdreALRFXTkOOUHK1EtK2wtaz5Ry4YfYCA_0QT9t0A3c85yNiYnvFPzCXTXGoLqSWWNiXY2Z6AAEBDeltaqU=",
+    "auth": "tBHItJI5svbpez7KI4CCXg=="
+  },
+  "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/128.0.0.0"
+}
+```
+- **Response (201 Created)**:
+```json
+{
+  "id": "p1-9999-8888-7777-666655554444",
+  "endpoint": "https://fcm.googleapis.com/fcm/send/dK8z91-sample-endpoint",
+  "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/128.0.0.0",
+  "created_at": "2026-09-17T17:00:00Z"
+}
+```
+
+### Unregister Push Subscription
+- **Method**: `POST`
+- **URL**: `/api/v1/notifications/push/unsubscribe/`
+- **Request Body**:
+```json
+{
+  "endpoint": "https://fcm.googleapis.com/fcm/send/dK8z91-sample-endpoint"
+}
+```
+- **Response (200 OK)**:
+```json
+{
+  "detail": "Subscription removed successfully."
+}
+```
+
+### Dispatch Test Push Notification
+- **Method**: `POST`
+- **URL**: `/api/v1/notifications/push/test/`
+- **Request Body**:
+```json
+{
+  "title": "Aura: Prueba de Notificación",
+  "message": "Las notificaciones Web Push están configuradas y funcionando correctamente.",
+  "url": "/#eventos"
+}
+```
+- **Response (200 OK)**:
+```json
+{
+  "dispatched_count": 2,
+  "failed_pruned_count": 0
+}
+```
+
+
 

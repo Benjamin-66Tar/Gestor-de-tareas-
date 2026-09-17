@@ -134,7 +134,19 @@ Represents a scheduled agenda event (meeting, appointment, deadline, special dat
 | `status` | CharField | Choices: `['PROGRAMMED', 'COMPLETED', 'CANCELED']`, Default: `'PROGRAMMED'` | Current event lifecycle state. |
 | `reminder_minutes` | PositiveIntegerField | Default: 15, Nullable, Blank | Minutes prior to start for notification alert. |
 | `created_at` | DateTimeField | Auto Now Add | Timestamp of creation. |
-| `updated_at` | DateTimeField | Auto Now | Timestamp of last update. |
+### 8. `PushSubscription`
+Represents an active client device (laptop or mobile) registered for native Web Push alerts.
+
+| Field Name | Type | Constraints | Description |
+|---|---|---|---|
+| `id` | UUIDField | Primary Key, default=uuid4 | Unique subscription identifier. |
+| `user` | ForeignKey (User) | On Delete: Cascade, related_name='push_subscriptions' | User owner of the subscribed device. |
+| `endpoint` | TextField | DB Index | Push service endpoint URL (Google FCM, Apple WebPush, Mozilla Autopush). |
+| `p256dh` | CharField | Max Length: 255 | Client public ECDH key for payload encryption. |
+| `auth` | CharField | Max Length: 255 | Client authentication secret. |
+| `user_agent` | CharField | Max Length: 255, Blank, Nullable | Browser and OS metadata (e.g., 'Chrome Desktop', 'Safari iOS PWA'). |
+| `created_at` | DateTimeField | Auto Now Add | Registration timestamp. |
+| `updated_at` | DateTimeField | Auto Now | Last updated timestamp. |
 
 ---
 
@@ -157,6 +169,10 @@ Represents a scheduled agenda event (meeting, appointment, deadline, special dat
    - **Esta semana**: $T_{\text{start}} > \text{today } 23:59:59$ and $T_{\text{start}} \le \text{end of current week}$.
    - **Próximos**: $T_{\text{start}} > \text{end of current week}$.
    - **Pasados**: $T_{\text{end}} < \text{now}$.
+9. **Multi-device Push Constraints**:
+   - Unique together constraint on `('user', 'endpoint')` prevents duplicate registrations per browser/device.
+   - A single user can hold multiple concurrent subscriptions (e.g. Chrome on Windows Laptop and Safari on iOS PWA).
+10. **Push Endpoint Pruning**: When attempting delivery via `pywebpush`, if the remote push service responds with HTTP status 410 (Gone) or 404 (Not Found), the corresponding `PushSubscription` row MUST be automatically deleted from the database.
 
 ---
 
@@ -290,5 +306,25 @@ export interface EventFilterCriteria {
   status: 'ALL' | EventStatus;
   category: string; // 'ALL' or specific category
   searchQuery: string;
+}
+
+export interface PushSubscriptionKeys {
+  p256dh: string;
+  auth: string;
+}
+
+export interface PushSubscriptionDTO {
+  id: string;
+  endpoint: string;
+  keys: PushSubscriptionKeys;
+  userAgent?: string;
+  createdAt: string;
+}
+
+export interface WebPushStatus {
+  isSupported: boolean;
+  isSubscribed: boolean;
+  permission: NotificationPermission;
+  isStandalone: boolean; // True if running as installed PWA (essential for iOS)
 }
 ```

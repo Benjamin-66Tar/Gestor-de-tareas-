@@ -1,8 +1,8 @@
-# Implementation Plan: Navigation Layout, Objetivos, Proyectos & Eventos Management
+# Implementation Plan: Navigation Layout, Objetivos, Proyectos, Eventos & Web Push Notifications (PWA)
 
-**Branch**: `001-navigation-layout` | **Date**: 2026-09-16 | **Spec**: [spec.md](file:///d:/Sistemas/Proyectos/Gestor_tareas/specs/001-navigation-layout/spec.md)
+**Branch**: `001-navigation-layout` | **Date**: 2026-09-17 | **Spec**: [spec.md](file:///d:/Sistemas/Proyectos/Gestor_tareas/specs/001-navigation-layout/spec.md)
 
-**Input**: Feature specification from `/specs/001-navigation-layout/spec.md` including Navbar, TabBar, Objetivos, Proyectos (Hub, Workspace Kanban, Tasks, Subtasks), and the newly clarified Eventos section (Agenda chronologique por bloques temporales: "Hoy", "Esta semana", "Próximos", "Pasados"; tarjetas visuales con categorías temáticas; slide-over drawer para creación/edición; estados de ciclo de vida "Programado", "Completado", "Cancelado"; sincronización con Calendario y alertas preventivas).
+**Input**: Feature specification from `/specs/001-navigation-layout/spec.md` including Navbar, TabBar, Objetivos, Proyectos (Hub, Workspace Kanban, Tasks, Subtasks), Eventos (Chronological Agenda), and the newly clarified **Native Web Push Notifications with VAPID + PWA** (Laptops & Mobiles: Android & iOS 16.4+).
 
 ## Summary
 
@@ -22,6 +22,13 @@ The Navigation Layout & Workspaces feature establishes the core visual shell and
    - **Lifecycle State Management**: Explicit statuses (*"Programado"*, *"Completado"*, *"Cancelado"*) with one-click quick completion/cancellation actions.
    - **Slide-over Event Drawer**: Non-blocking right-edge drawer for configuring dates, times, locations or virtual meeting links, category themes, and reminder lead times.
    - **Unified Calendar Projection**: Full time-range projection into the **Calendario** tab and proactive approaching-event alerts on the Navbar notification bell.
+5. **Native Web Push Notifications & PWA Architecture (Laptops & Mobiles)**:
+   - **Standards-based VAPID Protocol**: Server-side payload encryption and delivery via `pywebpush` in Django directly to browser push servers (Google FCM, Apple WebPush, Mozilla Autopush) without third-party recurring fees.
+   - **Multi-Device Support (1:N)**: A user can register concurrent subscriptions across laptops and smartphones (`PushSubscription`), with automatic pruning of dead endpoints (HTTP 410 Gone / 404 Not Found).
+   - **Lightweight In-Process Background Scheduler**: Periodic evaluation of approaching event reminders and task deadlines in Django without requiring Redis/Celery queue dependencies.
+   - **PWA & Mobile Installability**: Standalone web app manifest (`manifest.json`) fulfilling iOS 16.4+ Home Screen requirement and Android installability.
+   - **Contextual Deep Linking & Window Reuse**: Service Worker (`sw.js`) intercepts notifications, detects and focuses existing app tabs, and routes straight to the notified event/task.
+   - **User-Gesture UX**: Explicit activation toggle in the notification dropdown respecting Apple/Google strict user gesture constraints, with assistive onboarding guidance for iOS.
 
 The implementation strictly enforces a **Layered Architecture (Arquitectura de Capas)** across both backend and frontend to ensure high maintainability, testability, separation of concerns, and ultra-fast UI responsiveness.
 
@@ -34,6 +41,8 @@ The implementation strictly enforces a **Layered Architecture (Arquitectura de C
 - **Core Web Framework**: Django 6.0+ (Robust ORM, battle-tested security, migrations)
 - **API Framework**: Django REST Framework (DRF 3.17+) (Strict serialization, validation DTOs, REST conventions)
 - **Database / Persistence**: SQLite (Development / instant mocking via `db.sqlite3`), configured to seamlessly migrate to PostgreSQL for production
+- **Web Push Protocol**: `pywebpush` (2.0+) & `cryptography` (IETF RFC 8291 / RFC 8292 VAPID encryption)
+- **Background Scheduler**: Lightweight in-process background worker (APScheduler / threading) evaluating approaching reminders every 1–5 minutes
 - **Caching Layer**: Redis with `django-redis` (Sub-millisecond query caching for notification badges and calendar summaries)
 - **AI / NLP Engine**: OpenAI Python SDK with Pydantic Structured Outputs (For intelligent goal breakdown and natural language task assistance)
 - **Testing**: pytest & pytest-django (Automated testing of service logic, models, and API views)
@@ -43,7 +52,8 @@ The implementation strictly enforces a **Layered Architecture (Arquitectura de C
 - **Language**: TypeScript 5.0+ (Strict type contracts matching DRF serializers)
 - **Styling**: Tailwind CSS 3.4+ (Zero-runtime utility CSS, custom vibrant palette matching Aura's visual identity)
 - **Iconography**: Lucide React / SVG Icons (Consistent, accessible icons for notifications, tabs, filters, and drawer)
-- **State Management**: React Context + custom domain hooks (`AuraState.tsx`) with optimistic local updates
+- **PWA & Service Worker**: Web App Manifest (`manifest.json` standalone mode) + Native Service Worker (`sw.js` handling `push` and `notificationclick`)
+- **State Management**: React Context + custom domain hooks (`AuraState.tsx`, `usePushNotifications.ts`) with optimistic local updates
 - **Client Networking**: Native `fetch` with typed API client wrapper (`src/services/`)
 
 ### Performance & Constraints
@@ -67,28 +77,37 @@ The implementation strictly enforces a **Layered Architecture (Arquitectura de C
 ```mermaid
 graph TD
     subgraph Frontend["Frontend Layered Architecture (React + Vite + TypeScript)"]
-        UI["Presentation Layer: Components & Views<br/>(Navbar, TabBar, GoalsView, ProjectsView, EventsView, Drawers)"]
-        STATE["State / Application Layer: Hooks & Context<br/>(AuraState, useGoals, useProjects, useEvents, useNotifications)"]
-        SERVICE_FE["Service / API Client Layer<br/>(goalsApi, projectsApi, eventsApi, notificationApi)"]
-        DOMAIN_FE["Domain Model Layer<br/>(types.ts: Goal, Project, EventItem, ProjectTask)"]
+        UI["Presentation Layer: Components & Views<br/>(Navbar, TabBar, GoalsView, ProjectsView, EventsView, Drawers, NotificationDropdown)"]
+        STATE["State / Application Layer: Hooks & Context<br/>(AuraState, useGoals, useProjects, useEvents, useNotifications, usePushNotifications)"]
+        SERVICE_FE["Service / API Client Layer<br/>(goalsApi, projectsApi, eventsApi, notificationApi, pushApi)"]
+        DOMAIN_FE["Domain Model Layer<br/>(types.ts: Goal, Project, EventItem, ProjectTask, PushSubscription)"]
+        SW["PWA Infrastructure<br/>(public/sw.js, public/manifest.json)"]
         UI --> STATE
         STATE --> SERVICE_FE
         SERVICE_FE --> DOMAIN_FE
         UI --> DOMAIN_FE
+        STATE -.-> SW
     end
 
     subgraph Backend["Backend Layered Architecture (Django + DRF)"]
-        API["Presentation / Controller Layer<br/>(views.py, urls.py - REST Endpoints)"]
-        SERVICE_BE["Service / Business Logic Layer<br/>(services.py - Progress, Calendar Sync, Alerts)"]
+        API["Presentation / Controller Layer<br/>(views.py, urls.py - REST Endpoints, Push APIs)"]
+        SERVICE_BE["Service / Business Logic Layer<br/>(services.py - Progress, Calendar Sync, WebPushService, PushScheduler)"]
         SERIALIZER["Serialization / DTO Layer<br/>(serializers.py - Schema Validation & Mapping)"]
-        PERSISTENCE["Persistence / Data Layer<br/>(models.py, Django ORM, SQLite/PostgreSQL)"]
+        PERSISTENCE["Persistence / Data Layer<br/>(models.py, Django ORM: Goal, Project, Event, PushSubscription)"]
         API --> SERVICE_BE
         SERVICE_BE --> SERIALIZER
         SERVICE_BE --> PERSISTENCE
         SERIALIZER --> PERSISTENCE
     end
 
+    subgraph PushCloud["Browser Push Cloud Infrastructure"]
+        PUSH_SRV["Native Push Services<br/>(Google FCM, Apple WebPush, Mozilla Autopush)"]
+    end
+
     SERVICE_FE -.->|HTTP JSON /api/v1/| API
+    SERVICE_BE -.->|VAPID Encrypted Push RFC 8291/8292| PUSH_SRV
+    PUSH_SRV -.->|W3C Push Event| SW
+    SW -.->|Focus / Deep Link / Open Window| UI
 ```
 
 ### Detailed Layer Responsibilities
@@ -96,32 +115,38 @@ graph TD
 #### 1. Backend Layers (`backend/`)
 - **Presentation / API Layer (`views.py`, `urls.py`)**:
   - Handles incoming HTTP requests, route dispatching, request authentication, and response status formatting.
-  - Implements ViewSets for Profiles, Notifications, Goals, Projects, ProjectTasks, and EventItems.
+  - Implements ViewSets and endpoints for Profiles, Notifications, Goals, Projects, ProjectTasks, EventItems, and Web Push Subscriptions (`VapidPublicKeyAPI`, `PushSubscribeAPI`, `PushUnsubscribeAPI`, `PushTestDispatchAPI`).
 - **Service / Business Logic Layer (`services.py`)**:
   - Implements core business logic:
     - Goal progress calculation (manual vs milestone weighting).
     - Project progress calculation: `(completed tasks / total tasks) * 100`.
     - Unified calendar projection: combines Goal deadlines, Milestones, Project Tasks, and scheduled EventItems.
     - Proactive deadline and event alert evaluation.
+    - **WebPushService**: Payload generation, VAPID signing, delivery via `pywebpush`, and automatic pruning/deletion of dead subscriptions upon HTTP 410 (Gone) or 404 (Not Found).
+    - **PushScheduler**: In-process background worker evaluating approaching event reminders and task deadlines on periodic intervals (every 1–5 minutes).
 - **Serialization / DTO Layer (`serializers.py`)**:
-  - Validates payload structures, deserializes client data, and serializes ORM models into clean JSON schemas (`GoalSerializer`, `ProjectSerializer`, `ProjectTaskSerializer`, `TaskSubtaskSerializer`, `EventItemSerializer`).
+  - Validates payload structures, deserializes client data, and serializes ORM models into clean JSON schemas (`GoalSerializer`, `ProjectSerializer`, `ProjectTaskSerializer`, `TaskSubtaskSerializer`, `EventItemSerializer`, `PushSubscriptionSerializer`).
 - **Persistence Layer (`models.py`)**:
-  - Defines database schema for `UserProfile`, `Notification`, `ElementoAura`, `Goal`, `GoalMilestone`, `Project`, `ProjectTask`, `TaskSubtask`, and `EventItem`.
+  - Defines database schema for `UserProfile`, `Notification`, `ElementoAura`, `Goal`, `GoalMilestone`, `Project`, `ProjectTask`, `TaskSubtask`, `EventItem`, and `PushSubscription` (1:N relationship with User).
 
-#### 2. Frontend Layers (`src/`)
+#### 2. Frontend Layers (`src/` & `public/`)
 - **Presentation Layer (`src/components/`, `src/App.tsx`)**:
   - Presentational and container components:
-    - Shell: `Navbar.tsx`, `TabBar.tsx`.
+    - Shell: `Navbar.tsx`, `TabBar.tsx`, `NotificationDropdown.tsx` (with explicit push toggle and iOS PWA guidance).
     - Goals: `GoalsView.tsx`, `GoalCard.tsx`, `GoalTable.tsx`, `GoalDrawer.tsx`.
     - Projects: `ProjectsView.tsx`, `ProjectsHub.tsx`, `ProjectCard.tsx`, `ProjectWorkspace.tsx`, `KanbanBoard.tsx`, `KanbanColumn.tsx`, `TaskCard.tsx`, `ProjectDrawer.tsx`, `TaskDrawer.tsx`.
     - Events: `EventsView.tsx`, `EventTimelineBlock.tsx`, `EventCard.tsx`, `EventDrawer.tsx`.
     - Calendar: `CalendarGrid.tsx`.
-- **State / Application Layer (`src/context/AuraState.tsx`)**:
+- **State / Application Layer (`src/context/AuraState.tsx`, `src/hooks/`)**:
   - Centralized application state management for active tab, notifications, goals, projects, events, filters, time-block classification, quick status transitions, and drawer visibility.
+  - `usePushNotifications.ts`: Custom React hook encapsulating permission state, VAPID key exchange, Service Worker registration, and backend device subscription syncing.
 - **Service Layer (`src/services/`)**:
   - Typed HTTP API client isolating network requests, error transformations, and base URL configurations (`api.ts`).
+- **PWA & Service Worker Infrastructure (`public/`)**:
+  - `public/manifest.json`: Web App Manifest with `display: "standalone"`, icons, and theme color for home screen installation on iOS and Android.
+  - `public/sw.js`: Service Worker handling `push` events (displaying native alerts) and `notificationclick` (detecting and focusing existing tabs via `clients.matchAll` or opening target URLs).
 - **Domain Layer (`src/domain/types.ts`)**:
-  - Pure TypeScript interfaces, enums (`ProgressMode`, `GoalStatus`, `ProjectStatus`, `TaskStatus`, `TaskPriority`, `EventStatus`, `TimeBlock`, `ActiveTab`), and validation rules.
+  - Pure TypeScript interfaces, enums (`ProgressMode`, `GoalStatus`, `ProjectStatus`, `TaskStatus`, `TaskPriority`, `EventStatus`, `TimeBlock`, `ActiveTab`, `PushSubscriptionDTO`, `WebPushStatus`), and validation rules.
 
 ---
 
@@ -201,6 +226,7 @@ src/
   - `ProjectTask`: Project FK, title, description, status (`TODO`, `IN_PROGRESS`, `DONE`), priority (`LOW`, `MEDIUM`, `HIGH`), deadline, order.
   - `TaskSubtask`: Task FK, title, is_completed, order.
   - `EventItem`: User FK, title, description, start_time, end_time, location, meeting_url, category, color_hex, status (`PROGRAMMED`, `COMPLETED`, `CANCELED`), reminder_minutes.
+  - `PushSubscription`: User FK (1:N), endpoint, p256dh, auth, user_agent, timestamps, unique constraint `('user', 'endpoint')`.
 
 #### [MODIFY] [serializers.py](file:///d:/Sistemas/Proyectos/Gestor_tareas/backend/serializers.py)
 - Serializers:
@@ -208,6 +234,7 @@ src/
   - `ProjectSerializer` with computed task metrics and progress validation.
   - `EventItemSerializer` with start/end time validation and computed time-block tags.
   - `GoalSerializer`, `NotificationSerializer`, `UserProfileSerializer`.
+  - `PushSubscriptionSerializer` for validating endpoint and client cryptographic keys.
 
 #### [MODIFY] [services.py](file:///d:/Sistemas/Proyectos/Gestor_tareas/backend/services.py)
 - `calculate_goal_progress(goal)`
@@ -215,6 +242,8 @@ src/
 - `sync_all_to_calendar(user)`: Derives calendar deadline markers and scheduled time spans from goals, milestones, project tasks, and event items.
 - `check_approaching_deadlines(user)`: Evaluates approaching deadlines for goals and project tasks.
 - `check_approaching_event_reminders(user)`: Generates real-time notifications for events approaching their scheduled start time within `reminder_minutes`.
+- `send_web_push(user, title, message, url)`: Delivers encrypted push payload to all registered user devices via `pywebpush`, with automatic pruning of dead endpoints (HTTP 410/404).
+- `start_notification_scheduler()`: Lightweight in-process background worker checking approaching deadlines and event reminders on periodic intervals.
 
 #### [MODIFY] [views.py](file:///d:/Sistemas/Proyectos/Gestor_tareas/backend/views.py)
 - Endpoints for:
@@ -223,12 +252,20 @@ src/
   - `PATCH /api/v1/subtasks/{id}/toggle/`
   - `GET/POST /api/v1/events/`, `GET/PUT/PATCH/DELETE /api/v1/events/{id}/`, `PATCH /api/v1/events/{id}/status/`
   - `GET /api/v1/calendar/events/` (including projected task deadlines and scheduled event slots)
+  - `GET /api/v1/notifications/push/public-key/` (`VapidPublicKeyAPI`)
+  - `POST /api/v1/notifications/push/subscribe/` (`PushSubscribeAPI`)
+  - `POST /api/v1/notifications/push/unsubscribe/` (`PushUnsubscribeAPI`)
+  - `POST /api/v1/notifications/push/test/` (`PushTestDispatchAPI`)
+
+#### [MODIFY] [urls.py](file:///d:/Sistemas/Proyectos/Gestor_tareas/backend/urls.py)
+- Register Web Push endpoints under `/api/v1/notifications/push/`.
 
 ### Frontend (React + Vite + TypeScript)
 
 #### [MODIFY] [types.ts](file:///d:/Sistemas/Proyectos/Gestor_tareas/src/domain/types.ts)
 - Add domain types: `Project`, `ProjectTask`, `TaskSubtask`, `ProjectStatus`, `TaskStatus`, `TaskPriority`, `ProjectFilterCriteria`.
 - Add event domain types: `EventItem`, `EventStatus`, `TimeBlock`, `EventFilterCriteria`.
+- Add Web Push domain types: `PushSubscriptionKeys`, `PushSubscriptionDTO`, `WebPushStatus`.
 
 #### [MODIFY] [AuraState.tsx](file:///d:/Sistemas/Proyectos/Gestor_tareas/src/context/AuraState.tsx)
 - Expose state and handlers for projects collection, active project workspace, project filtering, task creation, task status movement (Kanban), subtask toggling, and project/task drawer toggles.
@@ -236,6 +273,24 @@ src/
 
 #### [MODIFY] [api.ts](file:///d:/Sistemas/Proyectos/Gestor_tareas/src/services/api.ts)
 - Add API client methods for Projects, Tasks, Subtasks, and Events (`getEvents`, `createEvent`, `updateEvent`, `updateEventStatus`, `deleteEvent`).
+- Add Web Push client methods: `getVapidPublicKey()`, `subscribePush(sub)`, `unsubscribePush(endpoint)`, `testPushNotification(payload)`.
+
+#### [NEW] [usePushNotifications.ts](file:///d:/Sistemas/Proyectos/Gestor_tareas/src/hooks/usePushNotifications.ts)
+- React hook encapsulating permission checking, VAPID key conversion (`urlBase64ToUint8Array`), Service Worker registration, and backend device subscription synchronization.
+
+#### [NEW] [manifest.json](file:///d:/Sistemas/Proyectos/Gestor_tareas/public/manifest.json)
+- Web App Manifest specifying `display: "standalone"`, branding icons, `name: "Aura - Gestor de Tareas"`, and `theme_color: "#6366F1"` to satisfy iOS 16.4+ Home Screen requirement and Android installation.
+
+#### [NEW] [sw.js](file:///d:/Sistemas/Proyectos/Gestor_tareas/public/sw.js)
+- Native Service Worker listening to:
+  - `push`: Parses payload (`title`, `message`, `url`, `icon`) and executes `self.registration.showNotification(...)`.
+  - `notificationclick`: Deep links to the contextual item by querying open windows (`clients.matchAll`), focusing existing tabs (`client.focus()`), or opening a new browser window.
+
+#### [MODIFY] [NotificationDropdown.tsx](file:///d:/Sistemas/Proyectos/Gestor_tareas/src/components/NotificationDropdown.tsx)
+- Add explicit user-gesture push activation button/toggle ("Activar notificaciones en esta laptop/celular") and contextual guidance for iOS users outside standalone PWA mode.
+
+#### [MODIFY] [index.html](file:///d:/Sistemas/Proyectos/Gestor_tareas/index.html)
+- Add `<link rel="manifest" href="/manifest.json">` and register Service Worker on load.
 
 #### [NEW] [ProjectsView.tsx](file:///d:/Sistemas/Proyectos/Gestor_tareas/src/components/projects/ProjectsView.tsx)
 - Top-level container toggling between `ProjectsHub` and `ProjectWorkspace`.

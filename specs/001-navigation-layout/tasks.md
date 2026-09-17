@@ -1,4 +1,4 @@
-# Tasks: Navigation Layout, Objetivos & Proyectos Management
+# Tasks: Navigation Layout, Objetivos, Proyectos, Eventos & Web Push Notifications (PWA)
 
 **Input**: Design documents from `/specs/001-navigation-layout/` (`spec.md`, `plan.md`, `research.md`, `data-model.md`, `contracts/api.md`, `quickstart.md`)
 
@@ -170,6 +170,37 @@
 
 ---
 
+## Phase 9: User Story 6 - Web Push Notifications & PWA Support (Priority: P1)
+
+**Goal**: Deliver native Web Push Notifications across laptops (desktop browsers) and mobile phones (Android & iOS 16.4+ as PWA) using standard VAPID protocol with `pywebpush` in Django and native Service Worker (`sw.js`) + PWA manifest (`manifest.json`) in React/Vite. Support multi-device 1:N subscriptions per user with automatic pruning of invalid endpoints (HTTP 410/404), a lightweight in-process background scheduler for timely event reminder and deadline evaluation, contextual deep linking with window reuse on notification click, and explicit user-gesture subscription controls with iOS PWA onboarding guidance.
+
+**Independent Test**:
+1. Open Aura on laptop (Chrome/Edge/Safari); verify `manifest.json` loads and `sw.js` is registered without triggering unsolicited permission prompts.
+2. Click "Activar notificaciones en este dispositivo" in the notification dropdown; grant permission and verify the device subscription is persisted in `PushSubscription` on the backend.
+3. Trigger a test push notification via `POST /api/v1/notifications/push/test/` or simulate an event reminder; verify the OS desktop banner displays title and body.
+4. Click the OS banner; verify the Service Worker focuses the active Aura tab and navigates directly to the notified event/task without opening redundant tabs.
+5. In iOS Safari, open Aura and verify the onboarding banner guides the user to "Añadir a pantalla de inicio"; verify that opening the installed PWA allows enabling push alerts.
+
+- [ ] T075 [P] [US6] Define TypeScript domain types for PushSubscriptionKeys, PushSubscriptionDTO, and WebPushStatus in src/domain/types.ts
+- [ ] T076 [P] [US6] Implement database model PushSubscription with 1:N user relationship and unique endpoint constraint in backend/models.py
+- [ ] T077 [P] [US6] Create DRF serializer PushSubscriptionSerializer for validating subscription endpoints and cryptographic keys in backend/serializers.py
+- [ ] T078 [US6] Generate and apply database migrations for PushSubscription model in backend/
+- [ ] T079 [US6] Implement WebPushService in backend/services.py with VAPID signing, pywebpush payload delivery, and automatic HTTP 410/404 subscription pruning
+- [ ] T080 [US6] Implement lightweight in-process background scheduler in backend/services.py evaluating approaching event reminders and task deadlines on periodic intervals
+- [ ] T081 [P] [US6] Implement REST API endpoints for VAPID public key, push subscribe, unsubscribe, and test dispatch in backend/views.py and backend/urls.py
+- [ ] T082 [P] [US6] Create automated tests for PushSubscription CRUD, VAPID delivery, and 410 Gone pruning in backend/tests.py
+- [ ] T083 [P] [US6] Create Web App Manifest with standalone display mode, branding icons, and theme color in public/manifest.json
+- [ ] T084 [P] [US6] Create native Service Worker handling push events and notificationclick deep linking with window reuse in public/sw.js
+- [ ] T085 [US6] Register manifest and Service Worker in index.html and configure Vite build output in vite.config.ts
+- [ ] T086 [P] [US6] Implement typed API client service methods for Web Push subscription and test dispatch in src/services/api.ts
+- [ ] T087 [US6] Implement usePushNotifications custom React hook for permission handling, VAPID key conversion, and backend synchronization in src/hooks/usePushNotifications.ts
+- [ ] T088 [US6] Update NotificationDropdown component with explicit user-gesture push activation button and iOS PWA onboarding guidance in src/components/NotificationDropdown.tsx
+- [ ] T089 [US6] Execute backend test suite for Web Push with pytest backend/tests.py
+- [ ] T090 [US6] Run frontend production build check with npm run build to verify zero TypeScript errors
+- [ ] T091 [US6] Execute end-to-end verification Scenario 15 for Web Push and PWA in quickstart.md
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase Dependencies
@@ -179,62 +210,61 @@
 - **User Story 1 (Phase 3)**: Completed [X].
 - **User Story 2 (Phase 4)**: Completed [X].
 - **User Story 3 (Phase 5)**: Completed [X].
-- **User Story 4 (Phase 6)**: Ready to execute. Depends on Foundational phase and integrates with US2 (Goals/Calendar).
-- **Polish (Phase 7)**: Depends on User Story 4 completion.
+- **User Story 4 (Phase 6)**: Completed [X].
+- **Polish (Phase 7)**: Completed [X].
+- **User Story 5 (Phase 8)**: Completed [X].
+- **User Story 6 (Phase 9 - Web Push & PWA)**: Ready to execute. Depends on Foundational phase (Phase 2), User Story 1 (Navbar shell), and User Story 3 (Notification Dropdown).
 
-### User Story 4 Parallel Opportunities
+### User Story 6 Parallel Opportunities
 
-- **Backend & Models**: T033 (domain types), T034 (models), T035 (serializers), and T040 (API client) can be created in parallel.
-- **Frontend Components**:
-  - `ProjectCard` (T042) and `ProjectsHub` (T043) can be built concurrently with `TaskCard` (T044) and `KanbanColumn` (T045).
-  - Drawers `ProjectDrawer` (T048) and `TaskDrawer` (T049) can be built in parallel.
-- **Testing & Verification**: T039 (unit tests) and T054 (test execution) validate backend integrity independently from frontend UI components.
+- **Backend Models & Serializers**: T075 (domain types), T076 (models), T077 (serializers), and T086 (client api) can be implemented in parallel.
+- **PWA & Service Worker**: T083 (`manifest.json`) and T084 (`sw.js`) can be built concurrently with backend endpoints (T081) and tests (T082).
+- **Frontend Hook & UI**: `usePushNotifications.ts` (T087) and `NotificationDropdown.tsx` (T088) can be developed once the API client (T086) and Service Worker (T084) are in place.
+- **Verification**: T089 (backend pytest) and T090 (frontend build) validate stack health before end-to-end manual validation in T091.
 
 ---
 
-## Parallel Example: User Story 4
+## Parallel Example: User Story 6
 
 ```bash
 # Launch backend models and serializers together:
-Task: "Implement database models Project, ProjectTask, and TaskSubtask in backend/models.py"
-Task: "Create DRF serializers ProjectSerializer, ProjectTaskSerializer, and TaskSubtaskSerializer in backend/serializers.py"
+Task: "Implement database model PushSubscription in backend/models.py"
+Task: "Create DRF serializer PushSubscriptionSerializer in backend/serializers.py"
 
-# Launch frontend domain types and API client together:
-Task: "Define TypeScript domain models and interfaces in src/domain/types.ts"
+# Launch PWA infrastructure together:
+Task: "Create Web App Manifest in public/manifest.json"
+Task: "Create native Service Worker in public/sw.js"
+
+# Launch client types and API client together:
+Task: "Define TypeScript domain types in src/domain/types.ts"
 Task: "Implement typed API client service methods in src/services/api.ts"
-
-# Launch UI components together:
-Task: "Build ProjectCard component in src/components/projects/ProjectCard.tsx"
-Task: "Build TaskCard component in src/components/projects/TaskCard.tsx"
-Task: "Build ProjectDrawer in src/components/projects/ProjectDrawer.tsx"
-Task: "Build TaskDrawer in src/components/projects/TaskDrawer.tsx"
 ```
 
 ---
 
 ## Implementation Strategy
 
-### Incremental Delivery for User Story 4
+### Incremental Delivery for User Story 6 (Web Push & PWA)
 
-1. **Step 1: Data & Service Foundations (T033 - T040)**:
-   - TypeScript domain types & Django ORM models (`Project`, `ProjectTask`, `TaskSubtask`).
-   - DRF serializers & service logic (progress formula, calendar sync).
-   - Database migrations & API ViewSets.
-   - Backend unit tests.
-2. **Step 2: Frontend State & Hub (T041 - T043, T048)**:
-   - State management in `AuraState.tsx` (projects, filter state, project drawer).
-   - Visual cards in `ProjectCard.tsx` and grid in `ProjectsHub.tsx`.
-   - `ProjectDrawer.tsx` for creating/editing projects and linking to Goals.
-3. **Step 3: Kanban Workspace & Tasks (T044 - T047, T049 - T050)**:
-   - `TaskCard.tsx` with priority tags, deadlines, and checklists.
-   - `KanbanColumn.tsx` and `KanbanBoard.tsx` (3-column workflow with drag-and-drop).
-   - `TaskDrawer.tsx` for task details and checklist subtasks.
-   - `ProjectWorkspace.tsx` and container `ProjectsView.tsx`.
-4. **Step 4: Cross-Section Integration & Layout (T051 - T052)**:
-   - Project task deadline markers in `CalendarGrid.tsx`.
-   - Wire `ProjectsView` into `App.tsx` on tab `'PROYECTOS'`.
-5. **Step 5: Polish & Full Verification (T053 - T056)**:
-   - Mobile responsive check for Kanban columns.
-   - Run `pytest backend/tests.py` and `npm run build`.
-   - Validate Quickstart scenarios 6-10.
+1. **Step 1: Data & Serialization Foundations (T075 - T078)**:
+   - TypeScript interfaces (`PushSubscriptionKeys`, `PushSubscriptionDTO`, `WebPushStatus`).
+   - Django model `PushSubscription` (1:N user relationship) and migration.
+   - DRF serializer for subscription validation.
+2. **Step 2: Push Delivery & Scheduling Logic (T079 - T082)**:
+   - `WebPushService` utilizing `pywebpush` with VAPID signing and automatic pruning on HTTP 410/404.
+   - In-process background scheduler for evaluating approaching deadlines and event reminders.
+   - REST endpoints (`public-key/`, `subscribe/`, `unsubscribe/`, `test/`) and unit tests in `backend/tests.py`.
+3. **Step 3: PWA Manifest & Service Worker (T083 - T085)**:
+   - `public/manifest.json` with standalone display for mobile installation.
+   - `public/sw.js` with `push` handler and `notificationclick` deep linking with window reuse.
+   - Registration in `index.html` and Vite configuration.
+4. **Step 4: Frontend State & User-Gesture UI (T086 - T088)**:
+   - Typed API calls in `src/services/api.ts`.
+   - `usePushNotifications` hook with permission state and VAPID key conversion.
+   - Explicit activation toggle and iOS PWA onboarding in `NotificationDropdown.tsx`.
+5. **Step 5: Testing & Validation (T089 - T091)**:
+   - Run backend test suite (`pytest backend/tests.py`).
+   - Run production build (`npm run build`).
+   - Execute Quickstart Scenario 15 across laptop and mobile browsers.
+
 
