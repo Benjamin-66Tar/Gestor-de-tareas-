@@ -135,6 +135,40 @@ The application is available at `http://localhost:5173`.
 2. Verify that the task deadline appears on the calendar grid, styled with the parent project's theme color.
 3. Click the calendar item to see the task name and direct link back to its project.
 
+### Scenario 11: Events Agenda Time-Block Grouping & Filtering
+1. Click on the **"EVENTOS"** tab in the TabBar.
+2. Verify the section renders with 4 chronological time blocks:
+   - **"Hoy"** (events scheduled for today)
+   - **"Esta semana"** (events later in the current calendar week)
+   - **"Próximos"** (events scheduled for future dates)
+   - **"Pasados"** (past events whose end time has elapsed)
+3. Test category filters (e.g., filter by "Trabajo" or "Salud"); verify cards filter instantly (<50ms).
+
+### Scenario 12: Event Creation via Slide-over Drawer
+1. In the "Eventos" tab, click **"+ Nuevo Evento"**.
+2. Verify the **Slide-over Drawer** opens from the right edge without disrupting the background agenda view.
+3. Fill in event details:
+   - Title: "Reunión de sincronización semanal"
+   - Start Time: Today at 15:00
+   - End Time: Today at 16:00
+   - Location / Link: `https://meet.google.com/abc-defg-hij`
+   - Category: "Trabajo" (Color: Blue `#3B82F6`)
+   - Reminder: 15 minutos antes
+4. Click **"Guardar Evento"**.
+5. Verify the event card appears under the **"Hoy"** time block with its vibrant category badge and formatted time span.
+
+### Scenario 13: Event Lifecycle Quick Actions (Completar / Cancelar)
+1. On the newly created event card, click the **"Completar"** action button.
+2. Verify the status changes to `COMPLETED`, rendering with a completed visual badge and muted contrast.
+3. Open the drawer and toggle status to `CANCELED`; verify the event card reflects the canceled state.
+4. Reactivate the event back to `PROGRAMMED`.
+
+### Scenario 14: Event Projection on Calendar & Approaching Alerts
+1. Navigate to the **"CALENDARIO"** tab in the TabBar.
+2. Verify that the event appears on today's calendar slot with its category color theme (`#3B82F6`) and time range.
+3. Click the event in the calendar to view its quick details (location, link, category).
+4. When the event start time approaches (within configured reminder minutes), verify the Navbar bell icon updates its unread badge count with a reminder alert notification.
+
 ---
 
 ## 4. Automated Testing

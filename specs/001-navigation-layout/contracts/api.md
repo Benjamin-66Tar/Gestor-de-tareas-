@@ -208,6 +208,16 @@ All endpoints are served under the `/api/v1` namespace and expect/return `applic
     "color_hex": "#6366F1",
     "source_id": "t1-1111-2222-3333",
     "status": "IN_PROGRESS"
+  },
+  {
+    "id": "event-e1-schedule",
+    "title": "📅 Evento: Reunión de sincronización de equipo",
+    "type": "EVENT_SCHEDULE",
+    "start_time": "2026-09-17T15:00:00Z",
+    "end_time": "2026-09-17T16:00:00Z",
+    "color_hex": "#3B82F6",
+    "source_id": "e1-1111-2222-3333",
+    "status": "PROGRAMMED"
   }
 ]
 ```
@@ -339,4 +349,92 @@ All endpoints are served under the `/api/v1` namespace and expect/return `applic
   "is_completed": true
 }
 ```
+
+---
+
+## 8. Events (Eventos)
+
+### List Events
+- **Method**: `GET`
+- **URL**: `/api/v1/events/`
+- **Query Params**:
+  - `status`: `PROGRAMMED`, `COMPLETED`, `CANCELED` (optional)
+  - `category`: Category name (optional)
+  - `time_block`: `TODAY`, `THIS_WEEK`, `UPCOMING`, `PAST` (optional)
+  - `search`: Search query string matching title, description, or location (optional)
+- **Response (200 OK)**:
+```json
+[
+  {
+    "id": "e1-1111-2222-3333-444455556666",
+    "title": "Reunión de sincronización de equipo",
+    "description": "Revisión del sprint y demos de componentes UI.",
+    "start_time": "2026-09-17T15:00:00Z",
+    "end_time": "2026-09-17T16:00:00Z",
+    "location": "Sala de Juntas 2B",
+    "meeting_url": "https://meet.google.com/abc-defg-hij",
+    "category": "Trabajo",
+    "color_hex": "#3B82F6",
+    "status": "PROGRAMMED",
+    "reminder_minutes": 15,
+    "time_block": "TODAY",
+    "created_at": "2026-09-16T18:00:00Z",
+    "updated_at": "2026-09-16T18:00:00Z"
+  }
+]
+```
+
+### Create Event
+- **Method**: `POST`
+- **URL**: `/api/v1/events/`
+- **Request Body**:
+```json
+{
+  "title": "Cita médica general",
+  "description": "Chequeo preventivo anual.",
+  "start_time": "2026-09-20T10:00:00Z",
+  "end_time": "2026-09-20T11:00:00Z",
+  "location": "Clínica Central",
+  "meeting_url": null,
+  "category": "Salud",
+  "color_hex": "#EC4899",
+  "status": "PROGRAMMED",
+  "reminder_minutes": 30
+}
+```
+- **Response (201 Created)**: Created Event object.
+
+### Get Event Details
+- **Method**: `GET`
+- **URL**: `/api/v1/events/{id}/`
+- **Response (200 OK)**: Event object.
+
+### Update Event Details
+- **Method**: `PUT` / `PATCH`
+- **URL**: `/api/v1/events/{id}/`
+- **Request Body**: Partial or full fields (`title`, `description`, `start_time`, `end_time`, `location`, `meeting_url`, `category`, `color_hex`, `status`, `reminder_minutes`).
+- **Response (200 OK)**: Updated Event object.
+
+### Update Event Status (Quick Action)
+- **Method**: `PATCH`
+- **URL**: `/api/v1/events/{id}/status/`
+- **Request Body**:
+```json
+{
+  "status": "COMPLETED"
+}
+```
+- **Response (200 OK)**:
+```json
+{
+  "id": "e1-1111-2222-3333-444455556666",
+  "status": "COMPLETED"
+}
+```
+
+### Delete Event
+- **Method**: `DELETE`
+- **URL**: `/api/v1/events/{id}/`
+- **Response (204 No Content)**
+
 

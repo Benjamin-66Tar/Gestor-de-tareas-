@@ -116,6 +116,28 @@ Represents a lightweight checklist item within a task.
 
 ---
 
+### 8. `EventItem` (Evento)
+Represents a scheduled agenda event (meeting, appointment, deadline, special date).
+
+| Field Name | Type | Constraints | Description |
+|---|---|---|---|
+| `id` | UUIDField | Primary Key, default=uuid4 | Unique event identifier. |
+| `user` | ForeignKey (User) | On Delete: Cascade | Event owner/attendee. |
+| `title` | CharField | Max Length: 200 | Event summary/title. |
+| `description` | TextField | Blank, Nullable | Detailed notes, agenda, or context. |
+| `start_time` | DateTimeField | DB Index | Event start datetime. |
+| `end_time` | DateTimeField | DB Index | Event end datetime. |
+| `location` | CharField | Max Length: 250, Blank, Nullable | Physical location (office, address, room). |
+| `meeting_url` | URLField | Max Length: 500, Blank, Nullable | Virtual meeting link (Zoom, Meet, Teams). |
+| `category` | CharField | Max Length: 50, Default: `'General'` | Thematic category (e.g. 'Trabajo', 'Personal'). |
+| `color_hex` | CharField | Max Length: 7, Default: `'#3B82F6'` | Vibrant color hex for card badges and calendar. |
+| `status` | CharField | Choices: `['PROGRAMMED', 'COMPLETED', 'CANCELED']`, Default: `'PROGRAMMED'` | Current event lifecycle state. |
+| `reminder_minutes` | PositiveIntegerField | Default: 15, Nullable, Blank | Minutes prior to start for notification alert. |
+| `created_at` | DateTimeField | Auto Now Add | Timestamp of creation. |
+| `updated_at` | DateTimeField | Auto Now | Timestamp of last update. |
+
+---
+
 ## Validation & Business Rules
 
 1. **Progress Range**: `progress_percentage` must always be between 0 and 100 inclusive.
@@ -127,7 +149,14 @@ Represents a lightweight checklist item within a task.
 4. **Status Transitions**:
    - Marking a goal status as `COMPLETED` automatically sets `progress_percentage = 100`.
    - In `MILESTONES` mode, when all milestones are completed, `status` automatically transitions to `COMPLETED` unless manually overridden.
-5. **Calendar Sync**: Any `Goal` with a non-null `deadline`, `GoalMilestone` with a non-null `target_date`, or `ProjectTask` with a non-null `deadline` is automatically projected as an event into the Calendar layer styled with the respective entity's color.
+5. **Calendar Sync**: Any `Goal` with a non-null `deadline`, `GoalMilestone` with a non-null `target_date`, `ProjectTask` with a non-null `deadline`, or `EventItem` with non-null `start_time`/`end_time` is automatically projected into the Calendar layer styled with the respective entity's color.
+6. **Event Date Ordering**: An event's `end_time` must be equal to or greater than its `start_time`.
+7. **Event Lifecycle Transitions**: Events start in `PROGRAMMED` and can transition to `COMPLETED` or `CANCELED`. A canceled or completed event can be reactivated back to `PROGRAMMED`.
+8. **Chronological Time Block Classification**:
+   - **Hoy**: $T_{\text{start}} \le \text{today } 23:59:59 \land T_{\text{end}} \ge \text{today } 00:00:00$ and $T_{\text{end}} \ge \text{now}$.
+   - **Esta semana**: $T_{\text{start}} > \text{today } 23:59:59$ and $T_{\text{start}} \le \text{end of current week}$.
+   - **Próximos**: $T_{\text{start}} > \text{end of current week}$.
+   - **Pasados**: $T_{\text{end}} < \text{now}$.
 
 ---
 
@@ -234,6 +263,32 @@ export interface Project {
 
 export interface ProjectFilterCriteria {
   status: 'ALL' | ProjectStatus;
+  searchQuery: string;
+}
+
+export type EventStatus = 'PROGRAMMED' | 'COMPLETED' | 'CANCELED';
+
+export type TimeBlock = 'TODAY' | 'THIS_WEEK' | 'UPCOMING' | 'PAST';
+
+export interface EventItem {
+  id: string;
+  title: string;
+  description?: string;
+  startTime: string; // ISO 8601 string
+  endTime: string;   // ISO 8601 string
+  location?: string | null;
+  meetingUrl?: string | null;
+  category: string;
+  colorHex: string;
+  status: EventStatus;
+  reminderMinutes?: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface EventFilterCriteria {
+  status: 'ALL' | EventStatus;
+  category: string; // 'ALL' or specific category
   searchQuery: string;
 }
 ```

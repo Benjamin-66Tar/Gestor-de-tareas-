@@ -1,8 +1,8 @@
-# Implementation Plan: Navigation Layout, Objetivos & Proyectos Management
+# Implementation Plan: Navigation Layout, Objetivos, Proyectos & Eventos Management
 
-**Branch**: `001-navigation-layout` | **Date**: 2026-09-07 | **Spec**: [spec.md](file:///d:/Sistemas/Proyectos/Gestor_tareas/specs/001-navigation-layout/spec.md)
+**Branch**: `001-navigation-layout` | **Date**: 2026-09-16 | **Spec**: [spec.md](file:///d:/Sistemas/Proyectos/Gestor_tareas/specs/001-navigation-layout/spec.md)
 
-**Input**: Feature specification from `/specs/001-navigation-layout/spec.md` including Navbar, TabBar, Objetivos, and the newly clarified Proyectos section (Hub, Workspace Kanban 3-state, List view, Tasks, Subtasks, Project progress calculation, Goal linkage, Calendar deadline projection, Slide-over drawer, filter pills and instant search).
+**Input**: Feature specification from `/specs/001-navigation-layout/spec.md` including Navbar, TabBar, Objetivos, Proyectos (Hub, Workspace Kanban, Tasks, Subtasks), and the newly clarified Eventos section (Agenda chronologique por bloques temporales: "Hoy", "Esta semana", "Próximos", "Pasados"; tarjetas visuales con categorías temáticas; slide-over drawer para creación/edición; estados de ciclo de vida "Programado", "Completado", "Cancelado"; sincronización con Calendario y alertas preventivas).
 
 ## Summary
 
@@ -17,6 +17,11 @@ The Navigation Layout & Workspaces feature establishes the core visual shell and
    - **Automatic Progress Calculation**: Project completion percentage dynamically computed as `(completed tasks / total tasks) * 100`.
    - **Cross-Sectional Integration**: Project tasks with deadlines project directly onto the **Calendario** view styled with the project's color theme, and emit approaching deadline alerts.
    - **Slide-over Drawers**: Consistent right-edge drawers for detailed editing of projects and tasks without losing workspace context.
+4. **Eventos Section**:
+   - **Chronological Agenda**: Events organized into 4 dynamic time blocks (*"Hoy"*, *"Esta semana"*, *"Próximos"*, *"Pasados"*) with visual color-coded category cards and instant category filtering.
+   - **Lifecycle State Management**: Explicit statuses (*"Programado"*, *"Completado"*, *"Cancelado"*) with one-click quick completion/cancellation actions.
+   - **Slide-over Event Drawer**: Non-blocking right-edge drawer for configuring dates, times, locations or virtual meeting links, category themes, and reminder lead times.
+   - **Unified Calendar Projection**: Full time-range projection into the **Calendario** tab and proactive approaching-event alerts on the Navbar notification bell.
 
 The implementation strictly enforces a **Layered Architecture (Arquitectura de Capas)** across both backend and frontend to ensure high maintainability, testability, separation of concerns, and ultra-fast UI responsiveness.
 
@@ -62,10 +67,10 @@ The implementation strictly enforces a **Layered Architecture (Arquitectura de C
 ```mermaid
 graph TD
     subgraph Frontend["Frontend Layered Architecture (React + Vite + TypeScript)"]
-        UI["Presentation Layer: Components & Views<br/>(Navbar, TabBar, GoalsView, ProjectsView, KanbanBoard, ProjectDrawer, TaskDrawer)"]
-        STATE["State / Application Layer: Hooks & Context<br/>(AuraState, useGoals, useProjects, useNotifications)"]
-        SERVICE_FE["Service / API Client Layer<br/>(goalsApi.ts, projectsApi.ts, notificationApi.ts)"]
-        DOMAIN_FE["Domain Model Layer<br/>(types.ts: Goal, Milestone, Project, ProjectTask, TaskSubtask)"]
+        UI["Presentation Layer: Components & Views<br/>(Navbar, TabBar, GoalsView, ProjectsView, EventsView, Drawers)"]
+        STATE["State / Application Layer: Hooks & Context<br/>(AuraState, useGoals, useProjects, useEvents, useNotifications)"]
+        SERVICE_FE["Service / API Client Layer<br/>(goalsApi, projectsApi, eventsApi, notificationApi)"]
+        DOMAIN_FE["Domain Model Layer<br/>(types.ts: Goal, Project, EventItem, ProjectTask)"]
         UI --> STATE
         STATE --> SERVICE_FE
         SERVICE_FE --> DOMAIN_FE
@@ -74,7 +79,7 @@ graph TD
 
     subgraph Backend["Backend Layered Architecture (Django + DRF)"]
         API["Presentation / Controller Layer<br/>(views.py, urls.py - REST Endpoints)"]
-        SERVICE_BE["Service / Business Logic Layer<br/>(services.py - Progress Calculation, Calendar Sync, Alerts)"]
+        SERVICE_BE["Service / Business Logic Layer<br/>(services.py - Progress, Calendar Sync, Alerts)"]
         SERIALIZER["Serialization / DTO Layer<br/>(serializers.py - Schema Validation & Mapping)"]
         PERSISTENCE["Persistence / Data Layer<br/>(models.py, Django ORM, SQLite/PostgreSQL)"]
         API --> SERVICE_BE
@@ -91,17 +96,17 @@ graph TD
 #### 1. Backend Layers (`backend/`)
 - **Presentation / API Layer (`views.py`, `urls.py`)**:
   - Handles incoming HTTP requests, route dispatching, request authentication, and response status formatting.
-  - Implements ViewSets for Profiles, Notifications, Goals, Projects, and ProjectTasks.
+  - Implements ViewSets for Profiles, Notifications, Goals, Projects, ProjectTasks, and EventItems.
 - **Service / Business Logic Layer (`services.py`)**:
   - Implements core business logic:
     - Goal progress calculation (manual vs milestone weighting).
     - Project progress calculation: `(completed tasks / total tasks) * 100`.
-    - Unified calendar projection: combines Goal deadlines, Milestones, and dated Project Tasks.
-    - Proactive deadline alert evaluation.
+    - Unified calendar projection: combines Goal deadlines, Milestones, Project Tasks, and scheduled EventItems.
+    - Proactive deadline and event alert evaluation.
 - **Serialization / DTO Layer (`serializers.py`)**:
-  - Validates payload structures, deserializes client data, and serializes ORM models into clean JSON schemas (`GoalSerializer`, `ProjectSerializer`, `ProjectTaskSerializer`, `TaskSubtaskSerializer`).
+  - Validates payload structures, deserializes client data, and serializes ORM models into clean JSON schemas (`GoalSerializer`, `ProjectSerializer`, `ProjectTaskSerializer`, `TaskSubtaskSerializer`, `EventItemSerializer`).
 - **Persistence Layer (`models.py`)**:
-  - Defines database schema for `UserProfile`, `Notification`, `ElementoAura`, `Goal`, `GoalMilestone`, `Project`, `ProjectTask`, and `TaskSubtask`.
+  - Defines database schema for `UserProfile`, `Notification`, `ElementoAura`, `Goal`, `GoalMilestone`, `Project`, `ProjectTask`, `TaskSubtask`, and `EventItem`.
 
 #### 2. Frontend Layers (`src/`)
 - **Presentation Layer (`src/components/`, `src/App.tsx`)**:
@@ -109,13 +114,14 @@ graph TD
     - Shell: `Navbar.tsx`, `TabBar.tsx`.
     - Goals: `GoalsView.tsx`, `GoalCard.tsx`, `GoalTable.tsx`, `GoalDrawer.tsx`.
     - Projects: `ProjectsView.tsx`, `ProjectsHub.tsx`, `ProjectCard.tsx`, `ProjectWorkspace.tsx`, `KanbanBoard.tsx`, `KanbanColumn.tsx`, `TaskCard.tsx`, `ProjectDrawer.tsx`, `TaskDrawer.tsx`.
+    - Events: `EventsView.tsx`, `EventTimelineBlock.tsx`, `EventCard.tsx`, `EventDrawer.tsx`.
     - Calendar: `CalendarGrid.tsx`.
 - **State / Application Layer (`src/context/AuraState.tsx`)**:
-  - Centralized application state management for active tab, notifications, goals, projects, active project workspace, task dragging/status updates, filters, and drawer visibility.
+  - Centralized application state management for active tab, notifications, goals, projects, events, filters, time-block classification, quick status transitions, and drawer visibility.
 - **Service Layer (`src/services/`)**:
   - Typed HTTP API client isolating network requests, error transformations, and base URL configurations (`api.ts`).
 - **Domain Layer (`src/domain/types.ts`)**:
-  - Pure TypeScript interfaces, enums (`ProgressMode`, `GoalStatus`, `ProjectStatus`, `TaskStatus`, `TaskPriority`, `ActiveTab`), and validation rules.
+  - Pure TypeScript interfaces, enums (`ProgressMode`, `GoalStatus`, `ProjectStatus`, `TaskStatus`, `TaskPriority`, `EventStatus`, `TimeBlock`, `ActiveTab`), and validation rules.
 
 ---
 
@@ -138,17 +144,17 @@ specs/001-navigation-layout/
 
 ```text
 backend/
-├── models.py            # Persistence: UserProfile, Notification, Goal, GoalMilestone, Project, ProjectTask, TaskSubtask
-├── serializers.py       # Serialization: DTOs & validation schemas for all entities
-├── services.py          # Business Logic: Progress calculators, calendar sync, alerts
-├── views.py             # Presentation: REST API ViewSets & endpoints
+├── models.py            # Persistence: UserProfile, Notification, Goal, GoalMilestone, Project, ProjectTask, TaskSubtask, EventItem
+├── serializers.py       # Serialization: DTOs & validation schemas for all entities including EventItem
+├── services.py          # Business Logic: Progress calculators, calendar sync, alerts & event reminders
+├── views.py             # Presentation: REST API ViewSets & endpoints (Goals, Projects, Tasks, Events)
 ├── urls.py              # URL routing (/api/v1/...)
 ├── settings.py          # Django & Redis configuration
 └── tests.py             # Unit and integration test suites
 
 src/
 ├── domain/
-│   └── types.ts         # Domain models & TypeScript interfaces
+│   └── types.ts         # Domain models & TypeScript interfaces (Goals, Projects, Tasks, Events)
 ├── services/
 │   └── api.ts           # Frontend API client service
 ├── context/
@@ -171,7 +177,12 @@ src/
 │   │   ├── TaskCard.tsx          # Task card with priority pill, deadline, and checklist counter
 │   │   ├── ProjectDrawer.tsx     # Slide-over drawer for creating/editing projects
 │   │   └── TaskDrawer.tsx        # Slide-over drawer for editing task details & subtasks
-│   ├── CalendarGrid.tsx     # Calendar view displaying synchronized goal & task deadlines
+│   ├── events/
+│   │   ├── EventsView.tsx          # Main events view with time-block grouping & category filter pills
+│   │   ├── EventTimelineBlock.tsx  # Section container for each time block (Hoy, Esta semana, Próximos, Pasados)
+│   │   ├── EventCard.tsx           # Visual card with time span, location/link, category, and quick actions
+│   │   └── EventDrawer.tsx         # Slide-over drawer for creating/editing event details
+│   ├── CalendarGrid.tsx     # Calendar view displaying synchronized goal & task deadlines and events
 │   └── ElementoModal.tsx    # Creation/editing modal for calendar activities
 ├── App.tsx              # Application shell integration
 └── index.css            # Tailwind directives and theme variables
@@ -189,36 +200,42 @@ src/
   - `Project`: Title, description, color_hex, status (`ACTIVE`, `COMPLETED`, `ARCHIVED`), progress_percentage, goal FK (nullable).
   - `ProjectTask`: Project FK, title, description, status (`TODO`, `IN_PROGRESS`, `DONE`), priority (`LOW`, `MEDIUM`, `HIGH`), deadline, order.
   - `TaskSubtask`: Task FK, title, is_completed, order.
+  - `EventItem`: User FK, title, description, start_time, end_time, location, meeting_url, category, color_hex, status (`PROGRAMMED`, `COMPLETED`, `CANCELED`), reminder_minutes.
 
 #### [MODIFY] [serializers.py](file:///d:/Sistemas/Proyectos/Gestor_tareas/backend/serializers.py)
 - Serializers:
   - `TaskSubtaskSerializer` & `ProjectTaskSerializer`.
   - `ProjectSerializer` with computed task metrics and progress validation.
+  - `EventItemSerializer` with start/end time validation and computed time-block tags.
   - `GoalSerializer`, `NotificationSerializer`, `UserProfileSerializer`.
 
 #### [MODIFY] [services.py](file:///d:/Sistemas/Proyectos/Gestor_tareas/backend/services.py)
 - `calculate_goal_progress(goal)`
 - `calculate_project_progress(project)`: Computes `(completed_tasks / total_tasks) * 100`.
-- `sync_all_to_calendar(user)`: Derives calendar deadline markers from active goals, milestones, and project tasks.
+- `sync_all_to_calendar(user)`: Derives calendar deadline markers and scheduled time spans from goals, milestones, project tasks, and event items.
 - `check_approaching_deadlines(user)`: Evaluates approaching deadlines for goals and project tasks.
+- `check_approaching_event_reminders(user)`: Generates real-time notifications for events approaching their scheduled start time within `reminder_minutes`.
 
 #### [MODIFY] [views.py](file:///d:/Sistemas/Proyectos/Gestor_tareas/backend/views.py)
 - Endpoints for:
   - `GET/POST /api/v1/projects/`, `GET/PUT/DELETE /api/v1/projects/{id}/`
   - `GET/POST /api/v1/projects/{id}/tasks/`, `PUT/PATCH/DELETE /api/v1/tasks/{id}/`, `PATCH /api/v1/tasks/{id}/status/`
   - `PATCH /api/v1/subtasks/{id}/toggle/`
-  - `GET /api/v1/calendar/events/` (including projected task deadlines)
+  - `GET/POST /api/v1/events/`, `GET/PUT/PATCH/DELETE /api/v1/events/{id}/`, `PATCH /api/v1/events/{id}/status/`
+  - `GET /api/v1/calendar/events/` (including projected task deadlines and scheduled event slots)
 
 ### Frontend (React + Vite + TypeScript)
 
 #### [MODIFY] [types.ts](file:///d:/Sistemas/Proyectos/Gestor_tareas/src/domain/types.ts)
 - Add domain types: `Project`, `ProjectTask`, `TaskSubtask`, `ProjectStatus`, `TaskStatus`, `TaskPriority`, `ProjectFilterCriteria`.
+- Add event domain types: `EventItem`, `EventStatus`, `TimeBlock`, `EventFilterCriteria`.
 
 #### [MODIFY] [AuraState.tsx](file:///d:/Sistemas/Proyectos/Gestor_tareas/src/context/AuraState.tsx)
 - Expose state and handlers for projects collection, active project workspace, project filtering, task creation, task status movement (Kanban), subtask toggling, and project/task drawer toggles.
+- Expose state and handlers for events collection, time-block classification ("Hoy", "Esta semana", "Próximos", "Pasados"), category filters, quick status toggling (Completado/Cancelado), and event drawer visibility.
 
 #### [MODIFY] [api.ts](file:///d:/Sistemas/Proyectos/Gestor_tareas/src/services/api.ts)
-- Add API client methods for Projects, Tasks, and Subtasks.
+- Add API client methods for Projects, Tasks, Subtasks, and Events (`getEvents`, `createEvent`, `updateEvent`, `updateEventStatus`, `deleteEvent`).
 
 #### [NEW] [ProjectsView.tsx](file:///d:/Sistemas/Proyectos/Gestor_tareas/src/components/projects/ProjectsView.tsx)
 - Top-level container toggling between `ProjectsHub` and `ProjectWorkspace`.
@@ -247,8 +264,21 @@ src/
 #### [NEW] [TaskDrawer.tsx](file:///d:/Sistemas/Proyectos/Gestor_tareas/src/components/projects/TaskDrawer.tsx)
 - Slide-over drawer for editing task title, description, priority, deadline, and checklist subtasks.
 
+#### [NEW] [EventsView.tsx](file:///d:/Sistemas/Proyectos/Gestor_tareas/src/components/events/EventsView.tsx)
+- Top-level container for the Eventos tab featuring header actions, "+ Nuevo Evento" trigger, category filter pills, and grouped chronological timeline blocks.
+
+#### [NEW] [EventTimelineBlock.tsx](file:///d:/Sistemas/Proyectos/Gestor_tareas/src/components/events/EventTimelineBlock.tsx)
+- Section block rendering events belonging to a specific temporal grouping (*Hoy, Esta semana, Próximos, Pasados*) with empty state handling.
+
+#### [NEW] [EventCard.tsx](file:///d:/Sistemas/Proyectos/Gestor_tareas/src/components/events/EventCard.tsx)
+- Interactive event card displaying category color badge, time span, location or meeting link button, description snippet, and quick-actions (*Completar, Cancelar, Editar*).
+
+#### [NEW] [EventDrawer.tsx](file:///d:/Sistemas/Proyectos/Gestor_tareas/src/components/events/EventDrawer.tsx)
+- Slide-over drawer panel for creating and editing event details, time pickers, category theme, virtual links, and reminder lead times.
+
 #### [MODIFY] [App.tsx](file:///d:/Sistemas/Proyectos/Gestor_tareas/src/App.tsx)
 - Render `ProjectsView` when `tabActiva === 'PROYECTOS'`.
+- Render `EventsView` when `tabActiva === 'EVENTOS'`.
 
 ---
 
