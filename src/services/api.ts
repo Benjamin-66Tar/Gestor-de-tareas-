@@ -1,4 +1,4 @@
-import { Goal, GoalMilestone, NotificationItem, UserProfile, PlanElemento, Project, ProjectTask, TaskSubtask, TaskStatus, EventItem, EventStatus } from '../domain/types';
+import { Goal, GoalMilestone, NotificationItem, UserProfile, PlanElemento, Project, ProjectTask, TaskSubtask, TaskStatus, EventItem, EventStatus, PushSubscriptionDTO, PushSubscriptionKeys } from '../domain/types';
 
 const API_BASE = '/api/v1';
 
@@ -534,6 +534,54 @@ export async function updateEventStatusApi(eventId: string, status: EventStatus)
 
 export async function deleteEventApi(eventId: string): Promise<void> {
   await apiRequest(`/events/${eventId}/`, { method: 'DELETE' });
+}
+
+// --- Web Push Notification Services ---
+
+export async function getVapidPublicKey(): Promise<string> {
+  const data = await apiRequest<{ public_key: string }>('/notifications/push/public-key/');
+  return data.public_key;
+}
+
+export async function subscribePushApi(subscriptionData: {
+  endpoint: string;
+  keys: PushSubscriptionKeys;
+  userAgent?: string;
+}): Promise<PushSubscriptionDTO> {
+  const payload = {
+    endpoint: subscriptionData.endpoint,
+    keys: subscriptionData.keys,
+    user_agent: subscriptionData.userAgent || (typeof navigator !== 'undefined' ? navigator.userAgent : ''),
+  };
+  const data = await apiRequest<any>('/notifications/push/subscribe/', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  return {
+    id: data.id,
+    endpoint: data.endpoint,
+    keys: data.keys,
+    userAgent: data.user_agent,
+    createdAt: data.created_at,
+  };
+}
+
+export async function unsubscribePushApi(endpoint: string): Promise<{ detail: string; deleted_count: number }> {
+  return await apiRequest<{ detail: string; deleted_count: number }>('/notifications/push/unsubscribe/', {
+    method: 'POST',
+    body: JSON.stringify({ endpoint }),
+  });
+}
+
+export async function testPushNotificationApi(payload?: {
+  title?: string;
+  message?: string;
+  url?: string;
+}): Promise<{ dispatched: number; failed: number }> {
+  return await apiRequest<{ dispatched: number; failed: number }>('/notifications/push/test/', {
+    method: 'POST',
+    body: JSON.stringify(payload || {}),
+  });
 }
 
 

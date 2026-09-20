@@ -178,3 +178,25 @@ export interface EventFilterCriteria {
   searchQuery: string;
 }
 
+// --- Web Push Notifications & PWA Domain Models ---
+
+export interface PushSubscriptionKeys {
+  p256dh: string;
+  auth: string;
+}
+
+export interface PushSubscriptionDTO {
+  id: string;
+  endpoint: string;
+  keys: PushSubscriptionKeys;
+  userAgent?: string;
+  createdAt: string;
+}
+
+export interface WebPushStatus {
+  isSupported: boolean;
+  isSubscribed: boolean;
+  permission: NotificationPermission;
+  isStandalone: boolean; // True if running as installed PWA (essential for iOS)
+}
+
