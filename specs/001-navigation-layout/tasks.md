@@ -181,23 +181,23 @@
 4. Click the OS banner; verify the Service Worker focuses the active Aura tab and navigates directly to the notified event/task without opening redundant tabs.
 5. In iOS Safari, open Aura and verify the onboarding banner guides the user to "Añadir a pantalla de inicio"; verify that opening the installed PWA allows enabling push alerts.
 
-- [ ] T075 [P] [US6] Define TypeScript domain types for PushSubscriptionKeys, PushSubscriptionDTO, and WebPushStatus in src/domain/types.ts
-- [ ] T076 [P] [US6] Implement database model PushSubscription with 1:N user relationship and unique endpoint constraint in backend/models.py
-- [ ] T077 [P] [US6] Create DRF serializer PushSubscriptionSerializer for validating subscription endpoints and cryptographic keys in backend/serializers.py
-- [ ] T078 [US6] Generate and apply database migrations for PushSubscription model in backend/
-- [ ] T079 [US6] Implement WebPushService in backend/services.py with VAPID signing, pywebpush payload delivery, and automatic HTTP 410/404 subscription pruning
-- [ ] T080 [US6] Implement lightweight in-process background scheduler in backend/services.py evaluating approaching event reminders and task deadlines on periodic intervals
-- [ ] T081 [P] [US6] Implement REST API endpoints for VAPID public key, push subscribe, unsubscribe, and test dispatch in backend/views.py and backend/urls.py
-- [ ] T082 [P] [US6] Create automated tests for PushSubscription CRUD, VAPID delivery, and 410 Gone pruning in backend/tests.py
-- [ ] T083 [P] [US6] Create Web App Manifest with standalone display mode, branding icons, and theme color in public/manifest.json
-- [ ] T084 [P] [US6] Create native Service Worker handling push events and notificationclick deep linking with window reuse in public/sw.js
-- [ ] T085 [US6] Register manifest and Service Worker in index.html and configure Vite build output in vite.config.ts
-- [ ] T086 [P] [US6] Implement typed API client service methods for Web Push subscription and test dispatch in src/services/api.ts
-- [ ] T087 [US6] Implement usePushNotifications custom React hook for permission handling, VAPID key conversion, and backend synchronization in src/hooks/usePushNotifications.ts
-- [ ] T088 [US6] Update NotificationDropdown component with explicit user-gesture push activation button and iOS PWA onboarding guidance in src/components/NotificationDropdown.tsx
-- [ ] T089 [US6] Execute backend test suite for Web Push with pytest backend/tests.py
-- [ ] T090 [US6] Run frontend production build check with npm run build to verify zero TypeScript errors
-- [ ] T091 [US6] Execute end-to-end verification Scenario 15 for Web Push and PWA in quickstart.md
+- [X] T075 [P] [US6] Define TypeScript domain types for PushSubscriptionKeys, PushSubscriptionDTO, and WebPushStatus in src/domain/types.ts
+- [X] T076 [P] [US6] Implement database model PushSubscription with 1:N user relationship and unique endpoint constraint in backend/models.py
+- [X] T077 [P] [US6] Create DRF serializer PushSubscriptionSerializer for validating subscription endpoints and cryptographic keys in backend/serializers.py
+- [X] T078 [US6] Generate and apply database migrations for PushSubscription model in backend/
+- [X] T079 [US6] Implement WebPushService in backend/services.py with VAPID signing, pywebpush payload delivery, and automatic HTTP 410/404 subscription pruning
+- [X] T080 [US6] Implement lightweight in-process background scheduler in backend/services.py evaluating approaching event reminders and task deadlines on periodic intervals
+- [X] T081 [P] [US6] Implement REST API endpoints for VAPID public key, push subscribe, unsubscribe, and test dispatch in backend/views.py and backend/urls.py
+- [X] T082 [P] [US6] Create automated tests for PushSubscription CRUD, VAPID delivery, and 410 Gone pruning in backend/tests.py
+- [X] T083 [P] [US6] Create Web App Manifest with standalone display mode, branding icons, and theme color in public/manifest.json
+- [X] T084 [P] [US6] Create native Service Worker handling push events and notificationclick deep linking with window reuse in public/sw.js
+- [X] T085 [US6] Register manifest and Service Worker in index.html and configure Vite build output in vite.config.ts
+- [X] T086 [P] [US6] Implement typed API client service methods for Web Push subscription and test dispatch in src/services/api.ts
+- [X] T087 [US6] Implement usePushNotifications custom React hook for permission handling, VAPID key conversion, and backend synchronization in src/hooks/usePushNotifications.ts
+- [X] T088 [US6] Update NotificationDropdown component with explicit user-gesture push activation button and iOS PWA onboarding guidance in src/components/NotificationDropdown.tsx
+- [X] T089 [US6] Execute backend test suite for Web Push with pytest backend/tests.py
+- [X] T090 [US6] Run frontend production build check with npm run build to verify zero TypeScript errors
+- [X] T091 [US6] Execute end-to-end verification Scenario 15 for Web Push and PWA in quickstart.md
 
 ---
 

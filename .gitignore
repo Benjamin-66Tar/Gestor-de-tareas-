@@ -21,6 +21,7 @@ pip-delete-this-directory.txt
 db.sqlite3
 media/
 staticfiles/
+.vapid/
 
 # Node (React/Vite)
 node_modules/
