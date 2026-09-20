@@ -145,6 +145,53 @@ class NotificationMarkReadAPI(APIView):
             return Response({"detail": "Notification not found."}, status=status.HTTP_404_NOT_FOUND)
 
 
+# --- Web Push Subscriptions & Alerts APIs ---
+
+class VapidPublicKeyAPI(APIView):
+    def get(self, request):
+        from django.conf import settings
+        public_key = getattr(settings, 'VAPID_PUBLIC_KEY', '')
+        return Response({"public_key": public_key}, status=status.HTTP_200_OK)
+
+
+class PushSubscribeAPI(APIView):
+    def post(self, request):
+        from .serializers import PushSubscriptionSerializer
+        serializer = PushSubscriptionSerializer(data=request.data)
+        if serializer.is_valid():
+            user = request.user if request.user.is_authenticated else None
+            sub = serializer.save(user=user)
+            return Response(PushSubscriptionSerializer(sub).data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class PushUnsubscribeAPI(APIView):
+    def post(self, request):
+        from .models import PushSubscription
+        endpoint = request.data.get('endpoint')
+        if not endpoint:
+            return Response({"error": "endpoint is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        qs = PushSubscription.objects.filter(endpoint=endpoint)
+        if request.user.is_authenticated:
+            qs = qs.filter(user=request.user)
+
+        deleted_count, _ = qs.delete()
+        return Response({"detail": "Subscription removed successfully.", "deleted_count": deleted_count}, status=status.HTTP_200_OK)
+
+
+class PushTestDispatchAPI(APIView):
+    def post(self, request):
+        from .services import send_web_push
+        user = request.user if request.user.is_authenticated else None
+        title = request.data.get('title', 'Aura: Notificación de prueba')
+        message = request.data.get('message', 'Las notificaciones Web Push están funcionando correctamente.')
+        url = request.data.get('url', '/#eventos')
+
+        result = send_web_push(user=user, title=title, message=message, url=url)
+        return Response(result, status=status.HTTP_200_OK)
+
+
 # --- Goal & Milestone APIs ---
 
 class GoalListCreateAPI(APIView):

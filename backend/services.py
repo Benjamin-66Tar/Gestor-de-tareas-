@@ -294,3 +294,175 @@ def check_approaching_event_reminders(user=None):
     return notifications_created
 
 
+def send_web_push(user=None, title="Aura", message="", url="/#eventos", icon=None):
+    """
+    Delivers an encrypted Web Push notification via VAPID (RFC 8291 / 8292)
+    to all active push subscriptions belonging to the user.
+    Automatically prunes stale subscriptions returning HTTP 410 (Gone) or 404.
+    """
+    import json
+    from django.conf import settings
+    from .models import PushSubscription
+
+    try:
+        from pywebpush import webpush, WebPushException
+    except ImportError:
+        return {"dispatched_count": 0, "failed_pruned_count": 0, "error": "pywebpush not installed"}
+
+    subs_qs = PushSubscription.objects.all()
+    if user and user.is_authenticated:
+        subs_qs = subs_qs.filter(user=user)
+
+    payload = {
+        "title": title,
+        "message": message,
+        "body": message,
+        "url": url or "/#eventos",
+        "icon": icon or "/icons/icon-192x192.png",
+        "badge": "/icons/icon-192x192.png",
+    }
+
+    dispatched_count = 0
+    failed_pruned_count = 0
+
+    vapid_private_key = getattr(settings, 'VAPID_PRIVATE_KEY', None)
+    vapid_claims = {"sub": getattr(settings, 'VAPID_ADMIN_EMAIL', "mailto:admin@aura.app")}
+
+    if not vapid_private_key or vapid_private_key in ('sample_private_key', 'mock-private-key'):
+        return {"dispatched_count": subs_qs.count(), "failed_pruned_count": 0, "mocked": True}
+
+    for sub in subs_qs:
+        sub_info = {
+            "endpoint": sub.endpoint,
+            "keys": {
+                "p256dh": sub.p256dh,
+                "auth": sub.auth,
+            }
+        }
+        try:
+            webpush(
+                subscription_info=sub_info,
+                data=json.dumps(payload),
+                vapid_private_key=vapid_private_key,
+                vapid_claims=vapid_claims,
+                ttl=86400
+            )
+            dispatched_count += 1
+        except WebPushException as ex:
+            status_code = getattr(getattr(ex, 'response', None), 'status_code', None)
+            if status_code in (404, 410):
+                sub.delete()
+                failed_pruned_count += 1
+        except Exception:
+            pass
+
+    return {
+        "dispatched_count": dispatched_count,
+        "failed_pruned_count": failed_pruned_count,
+    }
+
+
+def check_approaching_task_deadlines(user=None):
+    """
+    Evaluates project tasks whose deadline is within 24 hours and not yet DONE.
+    Issues proactive in-app notifications and dispatches Web Push notifications.
+    """
+    from django.utils import timezone
+    from datetime import timedelta
+    from .models import ProjectTask, Notification
+
+    now = timezone.now()
+    threshold = now + timedelta(hours=24)
+    notifications_created = []
+
+    tasks_qs = ProjectTask.objects.filter(
+        deadline__isnull=False,
+        deadline__gt=now,
+        deadline__lte=threshold
+    ).exclude(status='DONE')
+
+    if user and user.is_authenticated:
+        tasks_qs = tasks_qs.filter(project__user=user)
+
+    for task in tasks_qs:
+        owner = task.project.user
+        time_str = task.deadline.strftime("%d/%m a las %H:%M")
+        title = f"Tarea por vencer: {task.title}"
+        message = f"Tu tarea '{task.title}' en '{task.project.title}' vence el {time_str}."
+
+        existing = Notification.objects.filter(
+            title=title,
+            message=message,
+            user=owner
+        ).exists()
+
+        if not existing:
+            notif = Notification.objects.create(
+                user=owner,
+                title=title,
+                message=message,
+                is_read=False
+            )
+            notifications_created.append(notif)
+            send_web_push(
+                user=owner,
+                title=title,
+                message=message,
+                url=f"/#proyectos?taskId={task.id}"
+            )
+
+    return notifications_created
+
+
+def check_and_dispatch_all_reminders(user=None):
+    """
+    Aggregates approaching event reminders and task deadlines,
+    ensuring notifications and Web Push alerts are dispatched.
+    """
+    event_notifs = check_approaching_event_reminders(user=user)
+    for notif in event_notifs:
+        send_web_push(
+            user=notif.user,
+            title=notif.title,
+            message=notif.message,
+            url="/#eventos"
+        )
+
+    task_notifs = check_approaching_task_deadlines(user=user)
+    return event_notifs + task_notifs
+
+
+# --- Lightweight In-Process Background Scheduler ---
+
+import threading
+import time
+
+_scheduler_thread = None
+_scheduler_running = False
+
+def _scheduler_loop(interval_seconds=60):
+    global _scheduler_running
+    while _scheduler_running:
+        try:
+            check_and_dispatch_all_reminders()
+        except Exception:
+            pass
+        time.sleep(interval_seconds)
+
+def start_notification_scheduler(interval_seconds=60):
+    """
+    Starts the in-process background thread to evaluate approaching deadlines and events.
+    """
+    global _scheduler_thread, _scheduler_running
+    if _scheduler_thread is None or not _scheduler_thread.is_alive():
+        _scheduler_running = True
+        _scheduler_thread = threading.Thread(
+            target=_scheduler_loop,
+            args=(interval_seconds,),
+            daemon=True,
+            name="AuraNotificationScheduler"
+        )
+        _scheduler_thread.start()
+
+
+

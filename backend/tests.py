@@ -436,3 +436,111 @@ class EventAPITests(APITestCase):
         self.assertTrue(any("Reunión Inminente" in n.title for n in notifs))
         self.assertTrue(Notification.objects.filter(title__contains="Reunión Inminente").exists())
 
+
+class WebPushNotificationTests(APITestCase):
+    def setUp(self):
+        from .models import PushSubscription
+        PushSubscription.objects.all().delete()
+        self.sub_data_laptop = {
+            "endpoint": "https://fcm.googleapis.com/fcm/send/laptop-endpoint-123",
+            "keys": {
+                "p256dh": "BNcRdreALRFXTkOOUHK1EtK2wtaz5Ry4YfYCA_0QT9t0A3c85yNiYnvFPzCXTXGoLqSWWNiXY2Z6AAEBDeltaqU=",
+                "auth": "tBHItJI5svbpez7KI4CCXg=="
+            },
+            "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/128.0.0.0"
+        }
+        self.sub_data_mobile = {
+            "endpoint": "https://web.push.apple.com/mobile-endpoint-456",
+            "keys": {
+                "p256dh": "BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDhkWPbjWIgFYXyVzN7u1d_sample_key_1234567890=",
+                "auth": "mobileAuth123=="
+            },
+            "user_agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15"
+        }
+
+    def test_get_vapid_public_key(self):
+        url = reverse('push-public-key')
+        res = self.client.get(url)
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertIn('public_key', res.data)
+        self.assertTrue(len(res.data['public_key']) > 10)
+
+    def test_push_subscribe_and_multi_device(self):
+        from .models import PushSubscription
+        url = reverse('push-subscribe')
+        
+        # Subscribe Laptop
+        res1 = self.client.post(url, self.sub_data_laptop, format='json')
+        self.assertEqual(res1.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(PushSubscription.objects.count(), 1)
+        
+        # Subscribe Mobile (Concurrent multi-device registration)
+        res2 = self.client.post(url, self.sub_data_mobile, format='json')
+        self.assertEqual(res2.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(PushSubscription.objects.count(), 2)
+
+    def test_push_subscribe_updates_existing_endpoint(self):
+        from .models import PushSubscription
+        url = reverse('push-subscribe')
+        
+        self.client.post(url, self.sub_data_laptop, format='json')
+        self.assertEqual(PushSubscription.objects.count(), 1)
+
+        # Update with new auth key for the same endpoint
+        updated_data = dict(self.sub_data_laptop)
+        updated_data['keys'] = {
+            "p256dh": self.sub_data_laptop['keys']['p256dh'],
+            "auth": "newAuthKey999=="
+        }
+        res = self.client.post(url, updated_data, format='json')
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(PushSubscription.objects.count(), 1)
+        sub = PushSubscription.objects.get(endpoint=self.sub_data_laptop['endpoint'])
+        self.assertEqual(sub.auth, "newAuthKey999==")
+
+    def test_push_unsubscribe(self):
+        from .models import PushSubscription
+        sub_url = reverse('push-subscribe')
+        unsub_url = reverse('push-unsubscribe')
+        
+        self.client.post(sub_url, self.sub_data_laptop, format='json')
+        self.assertEqual(PushSubscription.objects.count(), 1)
+
+        res = self.client.post(unsub_url, {"endpoint": self.sub_data_laptop['endpoint']}, format='json')
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(PushSubscription.objects.count(), 0)
+
+    def test_push_test_dispatch(self):
+        url = reverse('push-test-dispatch')
+        res = self.client.post(url, {
+            "title": "Aura Test",
+            "message": "Notificación de prueba",
+            "url": "/#eventos"
+        }, format='json')
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertIn("dispatched_count", res.data)
+
+    def test_auto_pruning_on_410_gone(self):
+        from unittest.mock import patch
+        from pywebpush import WebPushException
+        from .models import PushSubscription
+        from .services import send_web_push
+        import requests
+
+        sub = PushSubscription.objects.create(
+            endpoint="https://fcm.googleapis.com/fcm/send/expired-device-token",
+            p256dh="test-p256dh",
+            auth="test-auth"
+        )
+        self.assertEqual(PushSubscription.objects.count(), 1)
+
+        # Create mock 410 Gone response
+        mock_response = requests.Response()
+        mock_response.status_code = 410
+
+        with patch('pywebpush.webpush', side_effect=WebPushException("Device unsubscribed", response=mock_response)):
+            result = send_web_push(title="Test", message="Test alert")
+            self.assertEqual(result['failed_pruned_count'], 1)
+            # Subscription should be automatically deleted
+            self.assertEqual(PushSubscription.objects.count(), 0)
+

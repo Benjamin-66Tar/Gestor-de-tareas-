@@ -20,6 +20,10 @@ from .views import (
     EventListCreateAPI,
     EventDetailAPI,
     EventStatusAPI,
+    VapidPublicKeyAPI,
+    PushSubscribeAPI,
+    PushUnsubscribeAPI,
+    PushTestDispatchAPI,
 )
 
 urlpatterns = [
@@ -34,6 +38,10 @@ urlpatterns = [
     path('api/v1/notifications/unread-count/', NotificationUnreadCountAPI.as_view(), name='notifications-unread-count'),
     path('api/v1/notifications/', NotificationListAPI.as_view(), name='notifications-list'),
     path('api/v1/notifications/<uuid:pk>/read/', NotificationMarkReadAPI.as_view(), name='notification-mark-read'),
+    path('api/v1/notifications/push/public-key/', VapidPublicKeyAPI.as_view(), name='push-public-key'),
+    path('api/v1/notifications/push/subscribe/', PushSubscribeAPI.as_view(), name='push-subscribe'),
+    path('api/v1/notifications/push/unsubscribe/', PushUnsubscribeAPI.as_view(), name='push-unsubscribe'),
+    path('api/v1/notifications/push/test/', PushTestDispatchAPI.as_view(), name='push-test-dispatch'),
     
     # Goals
     path('api/v1/goals/', GoalListCreateAPI.as_view(), name='goals-list-create'),
