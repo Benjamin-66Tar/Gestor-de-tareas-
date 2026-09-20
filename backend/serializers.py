@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import ElementoAura, UserProfile, Notification, Goal, GoalMilestone, Project, ProjectTask, TaskSubtask, EventItem
+from .models import ElementoAura, UserProfile, Notification, Goal, GoalMilestone, Project, ProjectTask, TaskSubtask, EventItem, PushSubscription
 
 class ElementoAuraSerializer(serializers.ModelSerializer):
     class Meta:
@@ -207,5 +207,46 @@ class EventItemSerializer(serializers.ModelSerializer):
             return 'THIS_WEEK'
 
         return 'UPCOMING'
+
+
+class PushSubscriptionKeysSerializer(serializers.Serializer):
+    p256dh = serializers.CharField(max_length=255)
+    auth = serializers.CharField(max_length=255)
+
+
+class PushSubscriptionSerializer(serializers.ModelSerializer):
+    keys = PushSubscriptionKeysSerializer(write_only=True)
+
+    class Meta:
+        model = PushSubscription
+        fields = ['id', 'endpoint', 'keys', 'user_agent', 'created_at']
+        read_only_fields = ['id', 'created_at']
+
+    def create(self, validated_data):
+        keys_data = validated_data.pop('keys')
+        endpoint = validated_data.get('endpoint')
+        user = validated_data.get('user', None)
+        user_agent = validated_data.get('user_agent', '')
+        p256dh = keys_data.get('p256dh')
+        auth = keys_data.get('auth')
+
+        subscription, created = PushSubscription.objects.update_or_create(
+            user=user,
+            endpoint=endpoint,
+            defaults={
+                'p256dh': p256dh,
+                'auth': auth,
+                'user_agent': user_agent,
+            }
+        )
+        return subscription
+
+    def to_representation(self, instance):
+        ret = super().to_representation(instance)
+        ret['keys'] = {
+            'p256dh': instance.p256dh,
+            'auth': instance.auth
+        }
+        return ret
 
 

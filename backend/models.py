@@ -192,3 +192,24 @@ class EventItem(models.Model):
         return f"[{self.status}] {self.title} ({self.start_time})"
 
 
+class PushSubscription(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='push_subscriptions', null=True, blank=True)
+    endpoint = models.TextField(db_index=True)
+    p256dh = models.CharField(max_length=255)
+    auth = models.CharField(max_length=255)
+    user_agent = models.CharField(max_length=255, blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['user', 'endpoint'], name='unique_user_push_endpoint')
+        ]
+        ordering = ['-created_at']
+
+    def __str__(self):
+        username = self.user.username if self.user else "Anonymous"
+        return f"PushSubscription ({username}) - {self.endpoint[:30]}..."
+
+
