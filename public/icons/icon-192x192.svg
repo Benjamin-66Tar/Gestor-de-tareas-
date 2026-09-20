@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192">
+  <defs>
+    <linearGradient id="auraGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#818CF8" />
+      <stop offset="50%" stop-color="#6366F1" />
+      <stop offset="100%" stop-color="#4F46E5" />
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#6366F1" flood-opacity="0.4" />
+    </filter>
+  </defs>
+  <rect width="192" height="192" rx="42" fill="#0F172A" />
+  <circle cx="96" cy="96" r="64" fill="url(#auraGrad)" filter="url(#glow)" />
+  <path d="M96 56 L124 136 H108 L101 114 H91 L84 136 H68 Z M96 78 L93 100 H99 Z" fill="#FFFFFF" />
+</svg>
