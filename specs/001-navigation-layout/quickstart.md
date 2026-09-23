@@ -187,6 +187,39 @@ The application is available at `http://localhost:5173`.
    - Click the system notification banner.
    - Verify that the Service Worker focuses the existing Aura tab (without opening a redundant duplicate window) and navigates to the notified event or task.
 
+### Scenario 16: Account Registration & Split-Screen View
+1. Open the application in a fresh browser session (or private browsing window).
+2. Verify the screen is divided into two distinct parts:
+   - **Left / Hero Visual Panel**: Displays Aura illustration, branding badge, and the two inspirational quotes.
+   - **Right / Interactive Auth Panel**: Displays the tabs **"Iniciar Sesión"** and **"Crear Cuenta"**.
+3. Click on the **"Crear Cuenta"** tab; verify form inputs switch smoothly without page reload.
+4. Attempt to submit with mismatched passwords; verify client-side validation error displays clearly.
+5. Fill in valid username, email, and matching passwords, then click **"Registrarse"**.
+6. Verify the account is created, session is established, and the user enters the main application navigation.
+
+### Scenario 17: Returning User Welcome View & Direct 1-Click Entry
+1. Reload or reopen the browser window while having the active account created in Scenario 16.
+2. Verify that **only the Welcome Hero panel** is displayed:
+   - Displays the hero illustration, Aura branding, the two inspirational quotes, and a personalized greeting (*"¡Hola, [Usuario]!"*).
+   - The registration/login credential form is **NOT shown**.
+3. Verify the primary button **"Entrar a Aura"** is prominently displayed.
+4. Click **"Entrar a Aura"**.
+5. Verify the transition to the main dashboard (TabBar and Navbar) occurs in **under 1 second** without prompting for passwords.
+
+### Scenario 18: Account Switching & Session Logout
+1. From within the application, click the avatar in the Navbar to open the profile dropdown.
+2. Click **"Cerrar sesión"** (or click **"Cambiar de cuenta"** from the welcome screen).
+3. Verify that the session is cleared from local storage.
+4. Verify the screen immediately restores the full split layout with the hero panel and the interactive **"Iniciar Sesión"** / **"Crear Cuenta"** tabs.
+5. Test logging in with the previously created credentials on the **"Iniciar Sesión"** tab; verify successful entry.
+
+### Scenario 19: Mobile Responsive Stacking (<768px)
+1. Open Chrome DevTools and toggle device toolbar to a mobile device (e.g. iPhone 14 or Pixel 7, width < 768px).
+2. Verify the split screen collapses gracefully into a single vertical column:
+   - Hero visual banner is scaled proportionally at the top with both quotes legible.
+   - Interactive auth tabs/form or welcome button sit comfortably below without horizontal scroll.
+3. Test switching tabs and typing into fields on mobile viewport; verify no layout clipping occurs.
+
 ---
 
 ## 4. Automated Testing

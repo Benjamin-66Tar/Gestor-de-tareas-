@@ -222,3 +222,32 @@ Implement native **Web Push Notifications** utilizing the standard W3C Push API 
 - **Firebase Cloud Messaging (FCM Web SDK)**: Rejected due to unnecessary bundle bloat, Google Cloud configuration complexity, and identical iOS 16.4+ PWA restrictions.
 - **Celery + Redis + Celery Beat**: Rejected because it introduces external container/broker overhead that conflicts with Aura's rapid lightweight SQLite development constitution.
 - **WebSocket-Only**: Rejected because WebSockets cannot deliver alerts when the browser tab is closed or the mobile screen is locked.
+
+---
+
+## 15. Welcome & Authentication Screen Architecture (Split Layout & Session Persistence)
+
+### Decision
+Implement an integrated **Welcome & Authentication Screen** serving as the application's entrance gateway, composed of a split 2-part responsive layout and persistent session state:
+1. **Split 2-Part Visual Layout**:
+   - **Part 1 (Hero Visual Banner)**: A colorful, high-visual-contrast panel containing a modern SVG productivity illustration, Aura branding logo, and two inspirational quotes (*"Organiza tu día con claridad y propósito."* y *"Transforma cada meta en un logro tangible."* as placeholders until final assets).
+   - **Part 2 (Interactive Authentication / Welcome)**:
+     - For new visitors or logged-out users: A card containing toggleable tabs (*"Iniciar Sesión"* / *"Crear Cuenta"*) with form validation (username, email, password matching).
+     - For returning users with an active account/session: Renders the welcome greeting displaying the user's name/avatar, a prominent primary button (*"Entrar a Aura"* / *"Continuar"*), and a secondary link (*"Cambiar de cuenta"* / *"Cerrar sesión"*).
+2. **Session Persistence & Returning Flow**:
+   - Utilize standard Token / Session Storage in browser `localStorage` (`aura_user_session`).
+   - On page startup, `AuraState` verifies whether a valid session exists. If present, it initializes in `isWelcomeOnly = true` mode, presenting the inspiring hero banner with the direct-entry button, satisfying SC-005 (<1s entry without retyping credentials).
+3. **Logout & Account Switch Flow**:
+   - Calling `logout()` or `switchAccount()` clears `localStorage`, resets session state in `AuraState`, and immediately transitions the view back to the full split screen with login/registration tabs.
+4. **Mobile Responsive Grid**:
+   - On desktop and tablet viewports ($\ge 768$px): 2-column layout (`grid grid-cols-1 md:grid-cols-2`).
+   - On mobile screens ($<768$px): Automatically stacks into a clean single vertical column with a compact hero banner at the top and interactive form/button below, preventing horizontal scroll or truncated text.
+
+### Rationale
+- **Zero Friction for Returning Users**: Avoids annoying credential prompts on every visit while keeping user data private and allowing effortless account switching.
+- **High Visual Appeal**: First impressions set the tone for Aura's colorful, motivating, and ultra-fast ethos.
+- **Constitution Compliance**: Implements pure React state transition (<50ms) without full-page reloads, adhering strictly to Principle II (Rendimiento Ultra Rápido) and Principle I (Colorido y Altamente Visual).
+
+### Alternatives Considered
+- **Separate dedicated route pages (`/login` and `/register`)**: Rejected because full-page navigation creates unnecessary routing overhead and disrupts the split-screen aesthetic.
+- **Modal Popup Login**: Rejected because authentication is the front door of the app; modal popups over an empty blurred background look unpolished and perform poorly on mobile viewports.

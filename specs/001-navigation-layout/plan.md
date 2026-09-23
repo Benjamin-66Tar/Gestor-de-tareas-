@@ -1,8 +1,8 @@
-# Implementation Plan: Navigation Layout, Objetivos, Proyectos, Eventos & Web Push Notifications (PWA)
+# Implementation Plan: Navigation Layout, Objetivos, Proyectos, Eventos, Web Push (PWA) & Auth Welcome Screen
 
-**Branch**: `001-navigation-layout` | **Date**: 2026-09-17 | **Spec**: [spec.md](file:///d:/Sistemas/Proyectos/Gestor_tareas/specs/001-navigation-layout/spec.md)
+**Branch**: `001-navigation-layout` | **Date**: 2026-09-23 | **Spec**: [spec.md](file:///d:/Sistemas/Proyectos/Gestor_tareas/specs/001-navigation-layout/spec.md)
 
-**Input**: Feature specification from `/specs/001-navigation-layout/spec.md` including Navbar, TabBar, Objetivos, Proyectos (Hub, Workspace Kanban, Tasks, Subtasks), Eventos (Chronological Agenda), and the newly clarified **Native Web Push Notifications with VAPID + PWA** (Laptops & Mobiles: Android & iOS 16.4+).
+**Input**: Feature specification from `/specs/001-navigation-layout/spec.md` including Navbar, TabBar, Objetivos, Proyectos (Hub, Workspace Kanban, Tasks, Subtasks), Eventos (Chronological Agenda), Native Web Push Notifications (PWA), and the newly clarified **Welcome & Authentication Screen (Inicio de Sesión y Registro con pantalla de bienvenida dividida en 2 partes)**.
 
 ## Summary
 
@@ -29,6 +29,12 @@ The Navigation Layout & Workspaces feature establishes the core visual shell and
    - **PWA & Mobile Installability**: Standalone web app manifest (`manifest.json`) fulfilling iOS 16.4+ Home Screen requirement and Android installability.
    - **Contextual Deep Linking & Window Reuse**: Service Worker (`sw.js`) intercepts notifications, detects and focuses existing app tabs, and routes straight to the notified event/task.
    - **User-Gesture UX**: Explicit activation toggle in the notification dropdown respecting Apple/Google strict user gesture constraints, with assistive onboarding guidance for iOS.
+6. **Welcome & Authentication Screen (Inicio de Sesión y Registro en 2 partes)**:
+   - **Split 2-Part Layout**: Left/First part featuring a vibrant hero visual banner with branding illustration and 2 inspirational phrases/quotes; Right/Second part featuring interactive authentication forms.
+   - **Toggleable Auth Forms**: Seamless header tabs (*"Iniciar Sesión"* and *"Crear Cuenta"*) allowing instant switching without page reload.
+   - **Frictionless Return Experience**: When a user already has an account created and active session, opening the application shows only the welcome section (hero illustration and 2 phrases) with a primary one-click entry button (*"Entrar a Aura"*) and secondary action to switch accounts or sign out.
+   - **Session Lifecycle & Account Switching**: Signing out or choosing "Cambiar de cuenta" immediately clears the session and restores the full split screen with authentication tabs.
+   - **Responsive Single-Column Stacking**: On mobile viewports (<768px), the layout automatically collapses from side-by-side columns into a single vertical stack, scaling the hero image and keeping input forms and buttons easily accessible.
 
 The implementation strictly enforces a **Layered Architecture (Arquitectura de Capas)** across both backend and frontend to ensure high maintainability, testability, separation of concerns, and ultra-fast UI responsiveness.
 
@@ -235,6 +241,9 @@ src/
   - `EventItemSerializer` with start/end time validation and computed time-block tags.
   - `GoalSerializer`, `NotificationSerializer`, `UserProfileSerializer`.
   - `PushSubscriptionSerializer` for validating endpoint and client cryptographic keys.
+  - `UserRegisterSerializer` for validating username uniqueness, email format, and password confirmation matching.
+  - `UserLoginSerializer` for validating username/email and password credentials.
+  - `UserSessionSerializer` for returning authenticated session user details.
 
 #### [MODIFY] [services.py](file:///d:/Sistemas/Proyectos/Gestor_tareas/backend/services.py)
 - `calculate_goal_progress(goal)`
@@ -244,6 +253,7 @@ src/
 - `check_approaching_event_reminders(user)`: Generates real-time notifications for events approaching their scheduled start time within `reminder_minutes`.
 - `send_web_push(user, title, message, url)`: Delivers encrypted push payload to all registered user devices via `pywebpush`, with automatic pruning of dead endpoints (HTTP 410/404).
 - `start_notification_scheduler()`: Lightweight in-process background worker checking approaching deadlines and event reminders on periodic intervals.
+- `authenticate_user(username_or_email, password)`: Flexible authentication helper supporting login via username or email address.
 
 #### [MODIFY] [views.py](file:///d:/Sistemas/Proyectos/Gestor_tareas/backend/views.py)
 - Endpoints for:
@@ -256,9 +266,14 @@ src/
   - `POST /api/v1/notifications/push/subscribe/` (`PushSubscribeAPI`)
   - `POST /api/v1/notifications/push/unsubscribe/` (`PushUnsubscribeAPI`)
   - `POST /api/v1/notifications/push/test/` (`PushTestDispatchAPI`)
+  - `POST /api/v1/auth/register/` (`RegisterAPI`: account creation with username, email, password confirmation)
+  - `POST /api/v1/auth/login/` (`LoginAPI`: session establishment via username or email)
+  - `POST /api/v1/auth/logout/` (`LogoutAPI`: session invalidation)
+  - `GET /api/v1/auth/session/` (`SessionAPI`: check persistent session validity)
 
 #### [MODIFY] [urls.py](file:///d:/Sistemas/Proyectos/Gestor_tareas/backend/urls.py)
 - Register Web Push endpoints under `/api/v1/notifications/push/`.
+- Register Authentication endpoints under `/api/v1/auth/`.
 
 ### Frontend (React + Vite + TypeScript)
 
@@ -266,14 +281,17 @@ src/
 - Add domain types: `Project`, `ProjectTask`, `TaskSubtask`, `ProjectStatus`, `TaskStatus`, `TaskPriority`, `ProjectFilterCriteria`.
 - Add event domain types: `EventItem`, `EventStatus`, `TimeBlock`, `EventFilterCriteria`.
 - Add Web Push domain types: `PushSubscriptionKeys`, `PushSubscriptionDTO`, `WebPushStatus`.
+- Add Auth domain types: `AuthMode` (*'LOGIN'* | *'REGISTER'*), `AuthState` (*user, isAuthenticated, hasExistingAccount, isWelcomeOnly*), `LoginCredentials`, `RegisterData`.
 
 #### [MODIFY] [AuraState.tsx](file:///d:/Sistemas/Proyectos/Gestor_tareas/src/context/AuraState.tsx)
 - Expose state and handlers for projects collection, active project workspace, project filtering, task creation, task status movement (Kanban), subtask toggling, and project/task drawer toggles.
 - Expose state and handlers for events collection, time-block classification ("Hoy", "Esta semana", "Próximos", "Pasados"), category filters, quick status toggling (Completado/Cancelado), and event drawer visibility.
+- Expose state and handlers for authentication: `currentUser`, `isAuthenticated`, `isWelcomeOnly`, `login(creds)`, `register(data)`, `enterApp()`, `logout()`, `switchAccount()`.
 
 #### [MODIFY] [api.ts](file:///d:/Sistemas/Proyectos/Gestor_tareas/src/services/api.ts)
 - Add API client methods for Projects, Tasks, Subtasks, and Events (`getEvents`, `createEvent`, `updateEvent`, `updateEventStatus`, `deleteEvent`).
 - Add Web Push client methods: `getVapidPublicKey()`, `subscribePush(sub)`, `unsubscribePush(endpoint)`, `testPushNotification(payload)`.
+- Add Auth client methods: `login(creds)`, `register(data)`, `logout()`, `getSession()`.
 
 #### [NEW] [usePushNotifications.ts](file:///d:/Sistemas/Proyectos/Gestor_tareas/src/hooks/usePushNotifications.ts)
 - React hook encapsulating permission checking, VAPID key conversion (`urlBase64ToUint8Array`), Service Worker registration, and backend device subscription synchronization.
@@ -291,6 +309,19 @@ src/
 
 #### [MODIFY] [index.html](file:///d:/Sistemas/Proyectos/Gestor_tareas/index.html)
 - Add `<link rel="manifest" href="/manifest.json">` and register Service Worker on load.
+
+#### [NEW] [AuthView.tsx](file:///d:/Sistemas/Proyectos/Gestor_tareas/src/components/auth/AuthView.tsx)
+- Top-level split-screen container rendering the left hero banner and the right interactive block (either `AuthForms` for new visitors/login or `WelcomeView` for returning users with active session).
+- Automatically adapts to single-column vertical stack on mobile screens (<768px).
+
+#### [NEW] [HeroBanner.tsx](file:///d:/Sistemas/Proyectos/Gestor_tareas/src/components/auth/HeroBanner.tsx)
+- First/Left part of the split screen: renders Aura visual illustration, branding logo badge, and the two inspirational quotes/phrases (*"Organiza tu día con claridad y propósito."* y *"Transforma cada meta en un logro tangible."* as placeholders until final assets).
+
+#### [NEW] [AuthForms.tsx](file:///d:/Sistemas/Proyectos/Gestor_tareas/src/components/auth/AuthForms.tsx)
+- Second/Right part for unauthenticated users: toggleable tabs (*"Iniciar Sesión"* / *"Crear Cuenta"*), client-side input validation, error alerts, and animated transition between forms.
+
+#### [NEW] [WelcomeView.tsx](file:///d:/Sistemas/Proyectos/Gestor_tareas/src/components/auth/WelcomeView.tsx)
+- Welcome panel for returning users: personalized greeting with user avatar, primary action button (*"Entrar a Aura"* / *"Continuar"*), and secondary link (*"Cambiar de cuenta"* / *"Cerrar sesión"*).
 
 #### [NEW] [ProjectsView.tsx](file:///d:/Sistemas/Proyectos/Gestor_tareas/src/components/projects/ProjectsView.tsx)
 - Top-level container toggling between `ProjectsHub` and `ProjectWorkspace`.
@@ -332,8 +363,8 @@ src/
 - Slide-over drawer panel for creating and editing event details, time pickers, category theme, virtual links, and reminder lead times.
 
 #### [MODIFY] [App.tsx](file:///d:/Sistemas/Proyectos/Gestor_tareas/src/App.tsx)
-- Render `ProjectsView` when `tabActiva === 'PROYECTOS'`.
-- Render `EventsView` when `tabActiva === 'EVENTOS'`.
+- If user is not authenticated or in welcome screen mode, render `AuthView`.
+- Once authenticated and in app mode, render main application shell (`Navbar`, `TabBar`, and active section view: `GoalsView`, `ProjectsView`, `EventsView`, `CalendarGrid`).
 
 ---
 

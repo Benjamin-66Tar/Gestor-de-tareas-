@@ -173,6 +173,17 @@ Represents an active client device (laptop or mobile) registered for native Web 
    - Unique together constraint on `('user', 'endpoint')` prevents duplicate registrations per browser/device.
    - A single user can hold multiple concurrent subscriptions (e.g. Chrome on Windows Laptop and Safari on iOS PWA).
 10. **Push Endpoint Pruning**: When attempting delivery via `pywebpush`, if the remote push service responds with HTTP status 410 (Gone) or 404 (Not Found), the corresponding `PushSubscription` row MUST be automatically deleted from the database.
+11. **Registration Credential Validation**:
+    - `username`: Minimum 3 characters, alphanumeric plus underscores, must be unique across all users.
+    - `email`: Valid RFC 5322 email syntax, must be unique.
+    - `password`: Minimum 6 characters; `password_confirm` must match `password` identically.
+12. **Login Credential Evaluation**:
+    - Allows identifier as either valid `username` or registered `email`.
+    - Returns standardized session token and user profile object.
+13. **Session Persistence**:
+    - Client persists auth token and user profile in browser storage.
+    - Returning to the app with active session automatically displays the welcome hero interface with direct one-click entry ("Entrar a Aura") without re-prompting for passwords.
+    - Logout explicitly purges the local session and restores unauthenticated login/signup tabs.
 
 ---
 
@@ -326,5 +337,43 @@ export interface WebPushStatus {
   isSubscribed: boolean;
   permission: NotificationPermission;
   isStandalone: boolean; // True if running as installed PWA (essential for iOS)
+}
+
+export type AuthMode = 'LOGIN' | 'REGISTER';
+
+export interface LoginCredentials {
+  identifier: string; // username or email
+  password: string;
+}
+
+export interface RegisterData {
+  username: string;
+  email: string;
+  password: string;
+  passwordConfirm: string;
+}
+
+export interface AuthSessionUser {
+  id: string;
+  username: string;
+  email: string;
+  avatarUrl: string | null;
+  themePreference: 'light' | 'dark';
+}
+
+export interface AuthResponse {
+  token: string;
+  user: AuthSessionUser;
+  message?: string;
+}
+
+export interface AuthState {
+  user: AuthSessionUser | null;
+  token: string | null;
+  isAuthenticated: boolean;
+  isWelcomeOnly: boolean; // True when user has active session and sees welcome screen
+  activeTab: AuthMode;
+  isLoading: boolean;
+  error: string | null;
 }
 ```

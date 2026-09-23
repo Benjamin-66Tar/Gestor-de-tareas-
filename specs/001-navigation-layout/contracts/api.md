@@ -510,5 +510,101 @@ All endpoints are served under the `/api/v1` namespace and expect/return `applic
 }
 ```
 
+---
+
+## 9. Authentication & User Session
+
+### User Registration (Crear Cuenta)
+- **Method**: `POST`
+- **URL**: `/api/v1/auth/register/`
+- **Request Body**:
+```json
+{
+  "username": "benjamin",
+  "email": "benjamin@example.com",
+  "password": "Password123!",
+  "password_confirm": "Password123!"
+}
+```
+- **Response (201 Created)**:
+```json
+{
+  "token": "aura-auth-token-eyJhbGciOi...",
+  "user": {
+    "id": "u1-1111-2222-3333-444455556666",
+    "username": "benjamin",
+    "email": "benjamin@example.com",
+    "avatar_url": null,
+    "theme_preference": "dark"
+  },
+  "message": "Cuenta creada con éxito."
+}
+```
+- **Error Response (400 Bad Request)**:
+```json
+{
+  "error": "Las contraseñas no coinciden."
+}
+```
+
+### User Login (Iniciar Sesión)
+- **Method**: `POST`
+- **URL**: `/api/v1/auth/login/`
+- **Request Body**:
+```json
+{
+  "identifier": "benjamin",
+  "password": "Password123!"
+}
+```
+- **Response (200 OK)**:
+```json
+{
+  "token": "aura-auth-token-eyJhbGciOi...",
+  "user": {
+    "id": "u1-1111-2222-3333-444455556666",
+    "username": "benjamin",
+    "email": "benjamin@example.com",
+    "avatar_url": null,
+    "theme_preference": "dark"
+  }
+}
+```
+- **Error Response (401 Unauthorized)**:
+```json
+{
+  "error": "Credenciales inválidas. Por favor verifique sus datos."
+}
+```
+
+### User Logout (Cerrar Sesión)
+- **Method**: `POST`
+- **URL**: `/api/v1/auth/logout/`
+- **Headers**: `Authorization: Bearer <token>`
+- **Response (200 OK)**:
+```json
+{
+  "detail": "Sesión cerrada correctamente."
+}
+```
+
+### Check Session Validity
+- **Method**: `GET`
+- **URL**: `/api/v1/auth/session/`
+- **Headers**: `Authorization: Bearer <token>`
+- **Response (200 OK)**:
+```json
+{
+  "is_authenticated": true,
+  "user": {
+    "id": "u1-1111-2222-3333-444455556666",
+    "username": "benjamin",
+    "email": "benjamin@example.com",
+    "avatar_url": null,
+    "theme_preference": "dark"
+  }
+}
+```
+
 
 
