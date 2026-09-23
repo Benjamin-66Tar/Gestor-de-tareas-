@@ -38,6 +38,13 @@
 - Q: ¿Cómo debe reaccionar el Service Worker al pulsar una notificación push en laptop o celular? → A: Navegación contextual (Deep Link) con reutilización de ventana: el payload contiene la ruta destino; el Service Worker enfoca la pestaña existente si ya está abierta y navega al ítem concreto (evento/tarea/meta), o abre una nueva ventana si la app estaba cerrada.
 - Q: ¿Cómo debe estructurarse la interfaz y el momento de solicitud del permiso para activar las notificaciones en laptop y celular? → A: Activación contextual y explícita por botón: no solicitar permiso al cargar la página; disponer de un control visual accesible (dropdown de notificaciones o ajustes) que active el prompt tras un clic/toque explícito (respetando la restricción de User Gesture de Safari y Chrome) con una guía auxiliar de "Añadir a pantalla de inicio" si se detecta iOS fuera de PWA.
 
+### Session 2026-09-22
+- Q: ¿Cómo debe ser el flujo y la interacción cuando el usuario ya tiene su cuenta creada y vuelve a ingresar a la aplicación? → A: Pantalla de bienvenida con imagen y las 2 frases, botón de acceso directo ("Entrar a Aura") y opción secundaria para cambiar de cuenta (sesión persistente sin requerir credenciales nuevamente).
+- Q: ¿Cómo deben presentarse y alternarse los formularios de Crear Cuenta e Iniciar Sesión en la segunda parte de la pantalla? → A: Pestañas conmutables (Tabs "Iniciar Sesión" y "Crear Cuenta") en el encabezado del contenedor para alternar de forma inmediata entre ambos formularios sin recargar.
+- Q: ¿Qué datos y credenciales deben solicitarse en los formularios para Crear Cuenta e Iniciar Sesión? → A: Registro con Nombre de usuario, Correo electrónico y Contraseña (con confirmación de contraseña); Inicio de sesión mediante Correo electrónico o Nombre de usuario junto a la Contraseña.
+- Q: En pantallas de celulares o dispositivos móviles (pantallas estrechas), ¿cómo debe adaptarse la distribución de las dos partes de la pantalla? → A: Apilado vertical en una sola columna con el bloque visual (imagen y 2 frases) arriba en formato compacto y los formularios o botón de acceso debajo con desplazamiento suave.
+- Q: ¿Cómo debe comportarse la interfaz cuando el usuario pulsa "Cerrar sesión" (desde el menú de perfil de la Navbar) o "Cambiar de cuenta" (desde la pantalla de bienvenida)? → A: Invalida la sesión activa y restaura de inmediato la pantalla dividida completa, mostrando el panel visual (imagen y 2 frases) junto a las pestañas de Iniciar Sesión y Crear Cuenta.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Header Navigation Bar (Navbar) (Priority: P1)
@@ -126,9 +133,29 @@ As a user, I want to manage and view my scheduled events (meetings, appointments
 
 ---
 
+### User Story 6 - Welcome & Authentication Screen (Priority: P1)
+As a visitor or returning user, I want a split screen showing an inspiring visual panel (image and two phrases) and authentication forms (account creation and login), so that I can easily sign up or log in, and upon returning with an active account, enjoy a clean welcome screen with direct one-click entry without re-entering credentials.
+
+**Why this priority**: It is the gateway to the application, providing account creation, secure login, and a friction-free return experience.
+
+**Independent Test**: Can open the app on a fresh session to see both the visual hero panel (image and two phrases) alongside sign up and sign in options; upon creating an account or logging in, returning to the app displays the welcome screen with direct entry and account switching options.
+
+**Acceptance Scenarios**:
+1. **Given** a new visitor loads the application, **When** the auth screen renders, **Then** it MUST display a split layout with the first part featuring the hero image and two phrases, and the second part featuring account creation and login forms.
+2. **Given** a user has created an account and has an active session, **When** they re-open the application, **Then** the screen MUST display only the welcome section (hero image and two phrases) with a primary button to enter ("Entrar a Aura") and a secondary option to switch accounts or log out.
+3. **Given** a user on the welcome screen clicks "Entrar a Aura", **When** the action triggers, **Then** they MUST be routed immediately to the main application navigation without requiring password entry.
+4. **Given** a visitor or user without active session views the authentication screen, **When** they click between the "Iniciar Sesión" and "Crear Cuenta" tabs, **Then** the form fields MUST switch immediately without reloading the page, preserving the visual split layout.
+5. **Given** a user fills the registration form, **When** they provide a valid username, email, and matching password confirmation, **Then** the account MUST be created, logging the user in and routing them to the application while recording session persistence.
+6. **Given** a registered user on the login tab, **When** they submit valid credentials (username or email plus password), **Then** authentication MUST succeed and route to the main application navigation.
+7. **Given** a user opens the welcome or authentication screen on a mobile viewport, **When** the page renders, **Then** the layout MUST stack vertically into a single column showing the visual hero block at the top and the interactive form/button block below without horizontal overflow.
+8. **Given** a user clicks "Cerrar sesión" from the profile dropdown menu or "Cambiar de cuenta" from the welcome screen, **When** the action triggers, **Then** the active session MUST be cleared and the screen MUST restore the complete split layout displaying the visual hero block alongside the toggleable authentication tabs ("Iniciar Sesión" and "Crear Cuenta").
+
+---
+
 ## Edge Cases
 
 - **Mobile Viewports**: On narrow screens, the TabBar horizontal text might overflow. The system MUST render it cleanly (e.g. using horizontal swipe or compact icons with text).
+- **Mobile Auth Layout**: On narrow viewports (<768px), the split screen MUST collapse from side-by-side columns into a single vertical stack, scaling the hero image proportionally so that all inputs and action buttons remain comfortably accessible without zoom or clipped elements.
 - **Extremely High Notification Counts**: If the user has more than 99 notifications, the badge MUST display "99+" instead of wrapping or breaking the layout.
 - **Lost Connectivity**: If the application fails to fetch the latest notifications count, the badge SHOULD fail silently without displaying corrupt text or breaking the header layout.
 
@@ -180,9 +207,16 @@ As a user, I want to manage and view my scheduled events (meetings, appointments
 - **FR-043**: The frontend application MUST provide a Progressive Web App (PWA) manifest and a dedicated Service Worker configured primarily for PWA installation and Web Push event handling (`push`, `notificationclick`), utilizing a Network-First strategy for API communications to avoid stale data conflicts with real-time tasks and events.
 - **FR-044**: Upon user interaction with a Web Push notification (`notificationclick`), the Service Worker MUST detect whether an active application window or tab is already open, focusing the existing window if present or opening a new window if closed, and route directly to the relevant contextual item (event, task, or goal) indicated in the push notification payload.
 - **FR-045**: The application MUST NOT prompt for notification permissions automatically upon initial page load; instead, it MUST provide an explicit user-facing activation control (e.g. within the notification dropdown or user settings) triggered by direct user gesture, and display contextual onboarding guidance (instructing to "Añadir a pantalla de inicio") if an iOS device is detected running outside of standalone PWA mode.
+- **FR-046**: The system MUST provide an initial screen divided into two primary visual parts: the first part containing a hero image and two phrases/quotes, and the second part containing forms to create an account (Sign Up) and log in (Sign In).
+- **FR-047**: For returning users with an existing account / active session, the system MUST display only the welcome section (hero image and two phrases) featuring a primary button to enter the application ("Entrar a Aura") and a secondary option to switch accounts or sign out, without prompting for login credentials again.
+- **FR-048**: The authentication panel MUST feature toggleable tabs ("Iniciar Sesión" and "Crear Cuenta") in its header, allowing immediate switching between login and registration forms with local state transition.
+- **FR-049**: The account creation form MUST require a unique username, valid email address, password, and password confirmation with client-side and server-side validation against mismatched passwords.
+- **FR-050**: The login form MUST allow authentication using either the registered username or email address along with the password.
+- **FR-051**: The system MUST render the welcome and authentication layout using a responsive two-column grid on desktop/tablet viewports and automatically collapse into a stacked single-column layout on mobile viewports.
+- **FR-052**: Triggering a logout action from the profile dropdown or clicking "Cambiar de cuenta" from the welcome screen MUST clear local session credentials and transition the view back to the complete split screen displaying the hero banner alongside the authentication form tabs.
 
 ### Key Entities
-- **UserSession**: Represents the currently logged-in user, exposing their avatar image URL and auth state.
+- **UserSession**: Represents the currently logged-in user, exposing username, email, avatar image URL, auth state, and session persistence status.
 - **Notification**: Represents a single notification item, with properties for read/unread state and creation timestamp.
 - **PushSubscription**: Represents an active Web Push subscription device associated with a User (1:N), storing the endpoint URL, cryptographic keys (`p256dh`, `auth`), user agent metadata, and registration timestamp.
 - **NavigationSection**: Represents a valid section tab (Calendar, Goals, Projects, Events).
@@ -200,9 +234,11 @@ As a user, I want to manage and view my scheduled events (meetings, appointments
 - **SC-002**: The layout is responsive, displaying correctly on mobile, tablet, and desktop viewports without horizontal scrolling or overlapping text.
 - **SC-003**: The color coding for the active tab and notification badge is accessible, maintaining a minimum color contrast ratio of 4.5:1.
 - **SC-004**: 100% of users can successfully find and access the primary views (Calendario, Objetivos, Proyectos, Eventos) within their first 5 seconds of interaction.
+- **SC-005**: Returning users with an active session can access the main dashboard from the welcome screen in under 1 second with a single click on "Entrar a Aura" without re-entering credentials.
 
 ## Assumptions
 
 - We assume that "Aura" is the project name or main product brand.
 - The design of the active tab and notification badge will utilize the project's color palette (defined in the constitution as "Colorido y Altamente Visual").
 - User profile data and notification count will be loaded upon application startup.
+- The visual hero panel in the welcome/auth screen will initially use a vibrant, colorful placeholder illustration and inspirational productivity phrases aligned with Aura's brand identity until the user provides final assets.
