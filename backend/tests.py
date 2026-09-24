@@ -762,3 +762,91 @@ class DatabaseSecurityAndTenancyTests(APITestCase):
         alice_titles = [e['titulo'] for e in res_alice.data]
         self.assertTrue(any("Meta de Alice" in t for t in alice_titles))
         self.assertFalse(any("Meta de Bob" in t for t in alice_titles))
+
+
+from django.db.utils import IntegrityError
+
+class DatabaseIntegrityAndAcidTests(APITestCase):
+    """
+    Tests enforcing database-level constraints (CheckConstraint),
+    transactional atomicity (rollback on failure), and concurrent row-locking.
+    """
+    def setUp(self):
+        User.objects.filter(username='acid_tester').delete()
+        self.user = User.objects.create_user(username='acid_tester', password='Password123!')
+        self.client.force_authenticate(user=self.user)
+
+    def test_goal_progress_percentage_check_constraint(self):
+        """Database rejects Goal progress_percentage > 100 via SQL CheckConstraint"""
+        with self.assertRaises(IntegrityError):
+            Goal.objects.create(
+                user=self.user,
+                title="Meta fuera de rango",
+                progress_percentage=150
+            )
+
+    def test_project_progress_percentage_check_constraint(self):
+        """Database rejects Project progress_percentage > 100 via SQL CheckConstraint"""
+        with self.assertRaises(IntegrityError):
+            Project.objects.create(
+                user=self.user,
+                title="Proyecto fuera de rango",
+                progress_percentage=250
+            )
+
+    def test_event_end_time_before_start_time_check_constraint(self):
+        """Database rejects EventItem where end_time < start_time via SQL CheckConstraint"""
+        now = timezone.now()
+        with self.assertRaises(IntegrityError):
+            EventItem.objects.create(
+                user=self.user,
+                title="Evento con cronología rota",
+                start_time=now + timezone.timedelta(hours=2),
+                end_time=now + timezone.timedelta(hours=1)
+            )
+
+    def test_goal_update_atomic_rollback(self):
+        """If milestone creation fails during goal update, the entire transaction rolls back"""
+        goal = Goal.objects.create(user=self.user, title="Meta Original", progress_mode="MANUAL", progress_percentage=10)
+        from .serializers import GoalSerializer
+        from unittest.mock import patch
+
+        data = {
+            "title": "Meta Modificada",
+            "milestones": [{"title": "Hito 1", "weight": 1}]
+        }
+        serializer = GoalSerializer(goal, data=data)
+        self.assertTrue(serializer.is_valid())
+
+        # Simulate database failure during milestone creation
+        with patch('backend.models.GoalMilestone.objects.create', side_effect=RuntimeError("Simulated DB failure")):
+            with self.assertRaises(RuntimeError):
+                serializer.save()
+
+        goal.refresh_from_db()
+        # Due to transaction.atomic, title must NOT have changed
+        self.assertEqual(goal.title, "Meta Original")
+        self.assertEqual(goal.milestones.count(), 0)
+
+    def test_project_task_update_atomic_rollback(self):
+        """If subtask creation fails during task update, task changes rollback"""
+        proj = Project.objects.create(user=self.user, title="Proyecto Test")
+        task = ProjectTask.objects.create(project=proj, title="Tarea Original")
+        from .serializers import ProjectTaskSerializer
+        from unittest.mock import patch
+
+        data = {
+            "title": "Tarea Modificada",
+            "subtasks": [{"title": "Subtarea 1"}]
+        }
+        serializer = ProjectTaskSerializer(task, data=data)
+        self.assertTrue(serializer.is_valid())
+
+        with patch('backend.models.TaskSubtask.objects.create', side_effect=RuntimeError("Simulated subtask error")):
+            with self.assertRaises(RuntimeError):
+                serializer.save()
+
+        task.refresh_from_db()
+        self.assertEqual(task.title, "Tarea Original")
+        self.assertEqual(task.subtasks.count(), 0)
+

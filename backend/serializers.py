@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from django.db import transaction
 from .models import ElementoAura, UserProfile, Notification, Goal, GoalMilestone, Project, ProjectTask, TaskSubtask, EventItem, PushSubscription
 
 class ElementoAuraSerializer(serializers.ModelSerializer):
@@ -42,42 +43,44 @@ class GoalSerializer(serializers.ModelSerializer):
         ]
 
     def create(self, validated_data):
-        milestones_data = validated_data.pop('milestones', [])
-        goal = Goal.objects.create(**validated_data)
-        for idx, milestone_data in enumerate(milestones_data):
-            milestone_data.pop('id', None)
-            if 'order' not in milestone_data:
-                milestone_data['order'] = idx
-            GoalMilestone.objects.create(goal=goal, **milestone_data)
-        return goal
+        with transaction.atomic():
+            milestones_data = validated_data.pop('milestones', [])
+            goal = Goal.objects.create(**validated_data)
+            for idx, milestone_data in enumerate(milestones_data):
+                milestone_data.pop('id', None)
+                if 'order' not in milestone_data:
+                    milestone_data['order'] = idx
+                GoalMilestone.objects.create(goal=goal, **milestone_data)
+            return goal
 
     def update(self, instance, validated_data):
-        milestones_data = validated_data.pop('milestones', None)
-        for attr, value in validated_data.items():
-            setattr(instance, attr, value)
-        instance.save()
+        with transaction.atomic():
+            milestones_data = validated_data.pop('milestones', None)
+            for attr, value in validated_data.items():
+                setattr(instance, attr, value)
+            instance.save()
 
-        if milestones_data is not None:
-            existing_ids = []
-            for idx, m_data in enumerate(milestones_data):
-                m_id = m_data.get('id', None)
-                if 'order' not in m_data:
-                    m_data['order'] = idx
-                if m_id and GoalMilestone.objects.filter(id=m_id, goal=instance).exists():
-                    m_obj = GoalMilestone.objects.get(id=m_id, goal=instance)
-                    for k, v in m_data.items():
-                        if k != 'id':
-                            setattr(m_obj, k, v)
-                    m_obj.save()
-                    existing_ids.append(m_obj.id)
-                else:
-                    m_data.pop('id', None)
-                    new_m = GoalMilestone.objects.create(goal=instance, **m_data)
-                    existing_ids.append(new_m.id)
-            # Remove milestones that were deleted in the UI
-            instance.milestones.exclude(id__in=existing_ids).delete()
+            if milestones_data is not None:
+                existing_ids = []
+                for idx, m_data in enumerate(milestones_data):
+                    m_id = m_data.get('id', None)
+                    if 'order' not in m_data:
+                        m_data['order'] = idx
+                    if m_id and GoalMilestone.objects.filter(id=m_id, goal=instance).exists():
+                        m_obj = GoalMilestone.objects.get(id=m_id, goal=instance)
+                        for k, v in m_data.items():
+                            if k != 'id':
+                                setattr(m_obj, k, v)
+                        m_obj.save()
+                        existing_ids.append(m_obj.id)
+                    else:
+                        m_data.pop('id', None)
+                        new_m = GoalMilestone.objects.create(goal=instance, **m_data)
+                        existing_ids.append(new_m.id)
+                # Remove milestones that were deleted in the UI
+                instance.milestones.exclude(id__in=existing_ids).delete()
 
-        return instance
+            return instance
 
 
 class TaskSubtaskSerializer(serializers.ModelSerializer):
@@ -105,41 +108,43 @@ class ProjectTaskSerializer(serializers.ModelSerializer):
         }
 
     def create(self, validated_data):
-        subtasks_data = validated_data.pop('subtasks', [])
-        task = ProjectTask.objects.create(**validated_data)
-        for idx, s_data in enumerate(subtasks_data):
-            s_data.pop('id', None)
-            if 'order' not in s_data:
-                s_data['order'] = idx
-            TaskSubtask.objects.create(task=task, **s_data)
-        return task
-
-    def update(self, instance, validated_data):
-        subtasks_data = validated_data.pop('subtasks', None)
-        for attr, value in validated_data.items():
-            setattr(instance, attr, value)
-        instance.save()
-
-        if subtasks_data is not None:
-            existing_ids = []
+        with transaction.atomic():
+            subtasks_data = validated_data.pop('subtasks', [])
+            task = ProjectTask.objects.create(**validated_data)
             for idx, s_data in enumerate(subtasks_data):
-                s_id = s_data.get('id', None)
+                s_data.pop('id', None)
                 if 'order' not in s_data:
                     s_data['order'] = idx
-                if s_id and TaskSubtask.objects.filter(id=s_id, task=instance).exists():
-                    s_obj = TaskSubtask.objects.get(id=s_id, task=instance)
-                    for k, v in s_data.items():
-                        if k != 'id':
-                            setattr(s_obj, k, v)
-                    s_obj.save()
-                    existing_ids.append(s_obj.id)
-                else:
-                    s_data.pop('id', None)
-                    new_s = TaskSubtask.objects.create(task=instance, **s_data)
-                    existing_ids.append(new_s.id)
-            instance.subtasks.exclude(id__in=existing_ids).delete()
+                TaskSubtask.objects.create(task=task, **s_data)
+            return task
 
-        return instance
+    def update(self, instance, validated_data):
+        with transaction.atomic():
+            subtasks_data = validated_data.pop('subtasks', None)
+            for attr, value in validated_data.items():
+                setattr(instance, attr, value)
+            instance.save()
+
+            if subtasks_data is not None:
+                existing_ids = []
+                for idx, s_data in enumerate(subtasks_data):
+                    s_id = s_data.get('id', None)
+                    if 'order' not in s_data:
+                        s_data['order'] = idx
+                    if s_id and TaskSubtask.objects.filter(id=s_id, task=instance).exists():
+                        s_obj = TaskSubtask.objects.get(id=s_id, task=instance)
+                        for k, v in s_data.items():
+                            if k != 'id':
+                                setattr(s_obj, k, v)
+                        s_obj.save()
+                        existing_ids.append(s_obj.id)
+                    else:
+                        s_data.pop('id', None)
+                        new_s = TaskSubtask.objects.create(task=instance, **s_data)
+                        existing_ids.append(new_s.id)
+                instance.subtasks.exclude(id__in=existing_ids).delete()
+
+            return instance
 
 
 class ProjectSerializer(serializers.ModelSerializer):

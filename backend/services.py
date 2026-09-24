@@ -1,5 +1,6 @@
 import json
 from django.conf import settings
+from django.db import transaction
 import openai
 
 def procesar_texto_con_nlp(texto_usuario: str):
@@ -69,16 +70,18 @@ def calculate_goal_progress(goal) -> int:
     return progress
 
 
+@transaction.atomic
 def toggle_milestone_completion(milestone_id):
     """
     Toggles completion state of a milestone and recalculates goal progress.
+    Acquires row-level locks on milestone and goal to prevent lost updates under concurrency.
     """
-    from .models import GoalMilestone
-    milestone = GoalMilestone.objects.select_related('goal').get(id=milestone_id)
+    from .models import GoalMilestone, Goal
+    milestone = GoalMilestone.objects.select_for_update().select_related('goal').get(id=milestone_id)
     milestone.is_completed = not milestone.is_completed
     milestone.save(update_fields=['is_completed'])
     
-    goal = milestone.goal
+    goal = Goal.objects.select_for_update().get(id=milestone.goal_id)
     if goal.progress_mode == 'MILESTONES':
         calculate_goal_progress(goal)
     return milestone, goal
@@ -162,15 +165,19 @@ def calculate_project_progress(project) -> int:
     return progress
 
 
+@transaction.atomic
 def update_project_task_status(task_id, new_status: str):
     """
     Updates the Kanban column status of a ProjectTask and recalculates parent project progress.
+    Acquires row-level locks on the task and project to guarantee ACID consistency.
     """
-    from .models import ProjectTask
-    task = ProjectTask.objects.select_related('project').get(id=task_id)
+    from .models import ProjectTask, Project
+    task = ProjectTask.objects.select_for_update().select_related('project').get(id=task_id)
+    project = Project.objects.select_for_update().get(id=task.project_id)
     task.status = new_status
     task.save(update_fields=['status', 'updated_at'])
-    calculate_project_progress(task.project)
+    calculate_project_progress(project)
+    task.project = project
     return task
 
 

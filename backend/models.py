@@ -1,5 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import User
+from django.core.validators import MinValueValidator, MaxValueValidator
 import uuid
 
 class ElementoAura(models.Model):
@@ -66,13 +67,22 @@ class Goal(models.Model):
     start_date = models.DateTimeField(blank=True, null=True)
     deadline = models.DateTimeField(blank=True, null=True, db_index=True)
     progress_mode = models.CharField(max_length=20, choices=PROGRESS_MODES, default='MILESTONES')
-    progress_percentage = models.PositiveSmallIntegerField(default=0)
+    progress_percentage = models.PositiveSmallIntegerField(
+        default=0,
+        validators=[MinValueValidator(0), MaxValueValidator(100)]
+    )
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='ACTIVE')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ['-created_at']
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(progress_percentage__gte=0, progress_percentage__lte=100),
+                name='goal_progress_percentage_0_100'
+            )
+        ]
 
     def __str__(self):
         return f"[{self.status}] {self.title} ({self.progress_percentage}%)"
@@ -83,12 +93,23 @@ class GoalMilestone(models.Model):
     goal = models.ForeignKey(Goal, on_delete=models.CASCADE, related_name='milestones')
     title = models.CharField(max_length=200)
     is_completed = models.BooleanField(default=False)
-    weight = models.PositiveSmallIntegerField(default=1, null=True, blank=True)
+    weight = models.PositiveSmallIntegerField(
+        default=1,
+        validators=[MinValueValidator(1), MaxValueValidator(100)],
+        null=True,
+        blank=True
+    )
     target_date = models.DateField(blank=True, null=True)
     order = models.PositiveIntegerField(default=0)
 
     class Meta:
         ordering = ['order', 'id']
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(weight__gte=1, weight__lte=100) | models.Q(weight__isnull=True),
+                name='goal_milestone_weight_range'
+            )
+        ]
 
     def __str__(self):
         return f"[{'X' if self.is_completed else ' '}] {self.title} (peso: {self.weight})"
@@ -108,12 +129,21 @@ class Project(models.Model):
     description = models.TextField(blank=True, null=True)
     color_hex = models.CharField(max_length=7, default='#6366F1')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='ACTIVE')
-    progress_percentage = models.PositiveSmallIntegerField(default=0)
+    progress_percentage = models.PositiveSmallIntegerField(
+        default=0,
+        validators=[MinValueValidator(0), MaxValueValidator(100)]
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ['-created_at']
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(progress_percentage__gte=0, progress_percentage__lte=100),
+                name='project_progress_percentage_0_100'
+            )
+        ]
 
     def __str__(self):
         return f"[{self.status}] {self.title} ({self.progress_percentage}%)"
@@ -187,6 +217,12 @@ class EventItem(models.Model):
 
     class Meta:
         ordering = ['start_time']
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(end_time__gte=models.F('start_time')),
+                name='event_end_time_gte_start_time'
+            )
+        ]
 
     def __str__(self):
         return f"[{self.status}] {self.title} ({self.start_time})"
