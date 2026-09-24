@@ -42,6 +42,9 @@ class Notification(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', 'is_read', '-created_at'], name='notif_user_read_created_idx'),
+        ]
 
     def __str__(self):
         return f"[{'READ' if self.is_read else 'UNREAD'}] {self.title}"
@@ -82,6 +85,10 @@ class Goal(models.Model):
                 condition=models.Q(progress_percentage__gte=0, progress_percentage__lte=100),
                 name='goal_progress_percentage_0_100'
             )
+        ]
+        indexes = [
+            models.Index(fields=['user', 'status'], name='goal_user_status_idx'),
+            models.Index(fields=['user', '-created_at'], name='goal_user_created_idx'),
         ]
 
     def __str__(self):
@@ -144,6 +151,10 @@ class Project(models.Model):
                 name='project_progress_percentage_0_100'
             )
         ]
+        indexes = [
+            models.Index(fields=['user', 'status'], name='project_user_status_idx'),
+            models.Index(fields=['user', '-created_at'], name='project_user_created_idx'),
+        ]
 
     def __str__(self):
         return f"[{self.status}] {self.title} ({self.progress_percentage}%)"
@@ -174,6 +185,9 @@ class ProjectTask(models.Model):
 
     class Meta:
         ordering = ['order', 'created_at']
+        indexes = [
+            models.Index(fields=['project', 'status'], name='proj_task_status_idx'),
+        ]
 
     def __str__(self):
         return f"[{self.status}] {self.title} ({self.priority})"
@@ -222,6 +236,10 @@ class EventItem(models.Model):
                 condition=models.Q(end_time__gte=models.F('start_time')),
                 name='event_end_time_gte_start_time'
             )
+        ]
+        indexes = [
+            models.Index(fields=['user', 'start_time', 'end_time'], name='event_user_time_idx'),
+            models.Index(fields=['user', 'status'], name='event_user_status_idx'),
         ]
 
     def __str__(self):

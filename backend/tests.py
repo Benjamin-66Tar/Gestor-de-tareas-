@@ -850,3 +850,48 @@ class DatabaseIntegrityAndAcidTests(APITestCase):
         self.assertEqual(task.title, "Tarea Original")
         self.assertEqual(task.subtasks.count(), 0)
 
+
+class DatabasePerformanceAndNPlusOneTests(APITestCase):
+    """
+    Tests ensuring query efficiency, index presence, and resolution of N+1 query patterns.
+    """
+    def setUp(self):
+        User.objects.filter(username='perf_tester').delete()
+        self.user = User.objects.create_user(username='perf_tester', password='Password123!')
+        self.client.force_authenticate(user=self.user)
+
+    def test_project_list_avoids_n_plus_one_queries(self):
+        """
+        Fetching multiple projects with multiple tasks and subtasks should execute a constant,
+        bounded number of SQL queries rather than 1 + 2N queries.
+        """
+        # Create 5 projects, each with 3 tasks and 2 subtasks
+        for p_idx in range(5):
+            proj = Project.objects.create(
+                user=self.user,
+                title=f"Proyecto Optimizado {p_idx}",
+                status="ACTIVE"
+            )
+            for t_idx in range(3):
+                status_choice = "DONE" if t_idx % 2 == 0 else "TODO"
+                task = ProjectTask.objects.create(
+                    project=proj,
+                    title=f"Tarea {p_idx}-{t_idx}",
+                    status=status_choice
+                )
+                for s_idx in range(2):
+                    TaskSubtask.objects.create(task=task, title=f"Subtarea {s_idx}")
+
+        url = reverse('projects-list-create')
+        
+        # With annotate + select_related + prefetch_related, queries are reduced to exactly 3
+        # queries regardless of having 5 projects, 15 tasks, and 30 subtasks.
+        with self.assertNumQueries(3):
+            res = self.client.get(url)
+            self.assertEqual(res.status_code, status.HTTP_200_OK)
+            self.assertEqual(len(res.data), 5)
+            for proj_data in res.data:
+                self.assertEqual(proj_data['total_tasks'], 3)
+                self.assertEqual(proj_data['completed_tasks'], 2)
+
+

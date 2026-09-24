@@ -330,8 +330,12 @@ class ProjectListCreateAPI(APIView):
     def get(self, request):
         from .models import Project
         from .serializers import ProjectSerializer
+        from django.db.models import Count, Q
 
-        projects = Project.objects.filter(user=request.user)
+        projects = Project.objects.filter(user=request.user).annotate(
+            annotated_total_tasks=Count('tasks', distinct=True),
+            annotated_completed_tasks=Count('tasks', filter=Q(tasks__status='DONE'), distinct=True)
+        ).select_related('goal').prefetch_related('tasks__subtasks')
 
         status_param = request.query_params.get('status')
         if status_param and status_param != 'ALL':
@@ -359,8 +363,12 @@ class ProjectDetailAPI(APIView):
 
     def get_object(self, pk, user):
         from .models import Project
+        from django.db.models import Count, Q
         try:
-            return Project.objects.get(pk=pk, user=user)
+            return Project.objects.filter(pk=pk, user=user).annotate(
+                annotated_total_tasks=Count('tasks', distinct=True),
+                annotated_completed_tasks=Count('tasks', filter=Q(tasks__status='DONE'), distinct=True)
+            ).select_related('goal').prefetch_related('tasks__subtasks').get()
         except Project.DoesNotExist:
             raise Http404
 

@@ -163,9 +163,13 @@ class ProjectSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'progress_percentage', 'created_at', 'updated_at']
 
     def get_total_tasks(self, obj):
+        if hasattr(obj, 'annotated_total_tasks'):
+            return obj.annotated_total_tasks
         return obj.tasks.count()
 
     def get_completed_tasks(self, obj):
+        if hasattr(obj, 'annotated_completed_tasks'):
+            return obj.annotated_completed_tasks
         return obj.tasks.filter(status='DONE').count()
 
 
