@@ -7,7 +7,7 @@ interface ProfileMenuProps {
 }
 
 export const ProfileMenu: React.FC<ProfileMenuProps> = ({ isOpen, onClose }) => {
-  const { userProfile } = useAuraState();
+  const { userProfile, currentUser, logout } = useAuraState();
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -27,8 +27,13 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({ isOpen, onClose }) => 
 
   if (!isOpen) return null;
 
-  const username = userProfile?.username || 'AuraUser';
-  const email = userProfile?.email || 'user@aura.app';
+  const username = currentUser?.username || userProfile?.username || 'AuraUser';
+  const email = currentUser?.email || userProfile?.email || 'user@aura.app';
+
+  const handleLogout = async () => {
+    onClose();
+    await logout();
+  };
 
   return (
     <div
@@ -69,10 +74,7 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({ isOpen, onClose }) => 
 
         <div className="py-1">
           <button
-            onClick={() => {
-              alert('Sesión cerrada.');
-              onClose();
-            }}
+            onClick={handleLogout}
             className="w-full px-3 py-2 text-left text-xs text-rose-400 hover:text-rose-300 hover:bg-rose-950/20 rounded-xl transition flex items-center gap-2"
           >
             <span>🚪</span> Cerrar Sesión

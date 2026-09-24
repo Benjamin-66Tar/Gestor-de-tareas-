@@ -17,6 +17,10 @@ import {
   EventStatus,
   TimeBlock,
   EventFilterCriteria,
+  AuthMode,
+  LoginCredentials,
+  RegisterData,
+  AuthSessionUser,
 } from '../domain/types';
 import { getGridDateRange } from '../utils/dateUtils';
 import * as api from '../services/api';
@@ -124,6 +128,23 @@ interface AuraContextProps {
   openNewEventDrawer: () => void;
   openEditEventDrawer: (event: EventItem) => void;
   eventsByTimeBlock: Record<TimeBlock, EventItem[]>;
+
+  // --- Welcome & Authentication ---
+  currentUser: AuthSessionUser | null;
+  authToken: string | null;
+  isAuthenticated: boolean;
+  isWelcomeOnly: boolean;
+  hasEnteredApp: boolean;
+  authMode: AuthMode;
+  setAuthMode: (mode: AuthMode) => void;
+  authLoading: boolean;
+  authError: string | null;
+  setAuthError: (error: string | null) => void;
+  login: (credentials: LoginCredentials) => Promise<boolean>;
+  register: (data: RegisterData) => Promise<boolean>;
+  logout: () => Promise<void>;
+  enterApp: () => void;
+  switchAccount: () => void;
 }
 
 const AuraContext = createContext<AuraContextProps | undefined>(undefined);
@@ -131,6 +152,39 @@ const AuraContext = createContext<AuraContextProps | undefined>(undefined);
 const API_ELEMENTOS_BASE = '/api/v1/elementos/';
 
 export const AuraProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  // 0. Welcome & Authentication state
+  const [authToken, setAuthToken] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem('aura_session_token');
+    } catch {
+      return null;
+    }
+  });
+
+  const [currentUser, setCurrentUser] = useState<AuthSessionUser | null>(() => {
+    try {
+      const saved = localStorage.getItem('aura_session_user');
+      return saved ? (JSON.parse(saved) as AuthSessionUser) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  const isAuthenticated = !!authToken && !!currentUser;
+  const [isWelcomeOnly, setIsWelcomeOnly] = useState<boolean>(() => {
+    try {
+      const token = localStorage.getItem('aura_session_token');
+      const user = localStorage.getItem('aura_session_user');
+      return !!token && !!user;
+    } catch {
+      return false;
+    }
+  });
+  const [hasEnteredApp, setHasEnteredApp] = useState<boolean>(false);
+  const [authMode, setAuthMode] = useState<AuthMode>('LOGIN');
+  const [authLoading, setAuthLoading] = useState<boolean>(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+
   // 1. Persistent active tab navigation
   const [tabActiva, setTabActivaState] = useState<ElementoTipo>(() => {
     try {
@@ -154,11 +208,120 @@ export const AuraProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   // 2. User profile & notifications state
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(() => {
+    try {
+      const savedUser = localStorage.getItem('aura_session_user');
+      if (savedUser) {
+        return JSON.parse(savedUser) as UserProfile;
+      }
+    } catch {
+      // Fallback
+    }
+    return null;
+  });
   const [unreadNotificationsCount, setUnreadNotificationsCount] = useState<number>(3);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [notificationsOpen, setNotificationsOpen] = useState<boolean>(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState<boolean>(false);
+
+  // Validate session on mount
+  useEffect(() => {
+    if (authToken) {
+      api.getSessionApi()
+        .then(res => {
+          if (res.user) {
+            const userObj = res.user;
+            setCurrentUser(userObj);
+            localStorage.setItem('aura_session_user', JSON.stringify(userObj));
+            setUserProfile(prev => prev || userObj);
+          }
+        })
+        .catch(() => {
+          // Token expired or invalid
+          localStorage.removeItem('aura_session_token');
+          localStorage.removeItem('aura_session_user');
+          setCurrentUser(null);
+          setAuthToken(null);
+          setIsWelcomeOnly(false);
+          setHasEnteredApp(false);
+        });
+    }
+  }, [authToken]);
+
+  const login = async (credentials: LoginCredentials): Promise<boolean> => {
+    setAuthLoading(true);
+    setAuthError(null);
+    try {
+      const res = await api.loginApi(credentials);
+      setAuthToken(res.token);
+      setCurrentUser(res.user);
+      localStorage.setItem('aura_session_token', res.token);
+      localStorage.setItem('aura_session_user', JSON.stringify(res.user));
+      setUserProfile(res.user);
+      setIsWelcomeOnly(false);
+      setHasEnteredApp(true);
+      return true;
+    } catch (err: any) {
+      setAuthError(err.message || 'Error al iniciar sesión');
+      return false;
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const register = async (data: RegisterData): Promise<boolean> => {
+    setAuthLoading(true);
+    setAuthError(null);
+    try {
+      const res = await api.registerApi(data);
+      setAuthToken(res.token);
+      setCurrentUser(res.user);
+      localStorage.setItem('aura_session_token', res.token);
+      localStorage.setItem('aura_session_user', JSON.stringify(res.user));
+      setUserProfile(res.user);
+      setIsWelcomeOnly(false);
+      setHasEnteredApp(true);
+      return true;
+    } catch (err: any) {
+      setAuthError(err.message || 'Error al crear la cuenta');
+      return false;
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const logout = async () => {
+    try {
+      await api.logoutApi();
+    } catch (e) {
+      console.warn('Error reporting logout to server:', e);
+    }
+    localStorage.removeItem('aura_session_token');
+    localStorage.removeItem('aura_session_user');
+    setAuthToken(null);
+    setCurrentUser(null);
+    setUserProfile(null);
+    setIsWelcomeOnly(false);
+    setHasEnteredApp(false);
+    setAuthMode('LOGIN');
+    setAuthError(null);
+  };
+
+  const enterApp = () => {
+    setHasEnteredApp(true);
+  };
+
+  const switchAccount = () => {
+    localStorage.removeItem('aura_session_token');
+    localStorage.removeItem('aura_session_user');
+    setAuthToken(null);
+    setCurrentUser(null);
+    setUserProfile(null);
+    setIsWelcomeOnly(false);
+    setHasEnteredApp(false);
+    setAuthMode('LOGIN');
+    setAuthError(null);
+  };
 
   const refreshNotifications = useCallback(async () => {
     try {
@@ -902,6 +1065,23 @@ export const AuraProvider: React.FC<{ children: React.ReactNode }> = ({ children
       openNewEventDrawer,
       openEditEventDrawer,
       eventsByTimeBlock,
+
+      // Welcome & Authentication
+      currentUser,
+      authToken,
+      isAuthenticated,
+      isWelcomeOnly,
+      hasEnteredApp,
+      authMode,
+      setAuthMode,
+      authLoading,
+      authError,
+      setAuthError,
+      login,
+      register,
+      logout,
+      enterApp,
+      switchAccount,
     }}>
       {children}
     </AuraContext.Provider>

@@ -1,15 +1,32 @@
-import { Goal, GoalMilestone, NotificationItem, UserProfile, PlanElemento, Project, ProjectTask, TaskSubtask, TaskStatus, EventItem, EventStatus, PushSubscriptionDTO, PushSubscriptionKeys } from '../domain/types';
+import {
+  Goal, GoalMilestone, NotificationItem, UserProfile, PlanElemento,
+  Project, ProjectTask, TaskSubtask, TaskStatus, EventItem, EventStatus,
+  PushSubscriptionDTO, PushSubscriptionKeys,
+  LoginCredentials, RegisterData, AuthResponse, AuthSessionUser
+} from '../domain/types';
 
 const API_BASE = '/api/v1';
 
+function getStoredToken(): string | null {
+  try {
+    return typeof localStorage !== 'undefined' ? localStorage.getItem('aura_session_token') : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
- * Generic fetch helper with JSON parsing and fallback support
+ * Generic fetch helper with JSON parsing, Authorization header, and fallback support
  */
 async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const url = `${API_BASE}${endpoint}`;
+  const token = getStoredToken();
+  const authHeaders: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+
   const response = await fetch(url, {
     headers: {
       'Content-Type': 'application/json',
+      ...authHeaders,
       ...options.headers,
     },
     ...options,
@@ -17,7 +34,28 @@ async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promi
 
   if (!response.ok) {
     const errorBody = await response.text().catch(() => '');
-    throw new Error(`API Error [${response.status}] ${endpoint}: ${errorBody}`);
+    let errorMessage = '';
+    try {
+      const parsed = JSON.parse(errorBody);
+      errorMessage = parsed.error || parsed.detail || parsed.message;
+      if (!errorMessage && parsed.details && typeof parsed.details === 'object') {
+        const firstKey = Object.keys(parsed.details)[0];
+        const val = parsed.details[firstKey];
+        errorMessage = Array.isArray(val) ? val[0] : String(val);
+      }
+    } catch {
+      // not JSON
+    }
+
+    if (!errorMessage) {
+      if (response.status === 500 && !errorBody.trim()) {
+        errorMessage = 'No se pudo conectar con el servidor backend (puerto 6001). Asegúrate de que el servidor Django esté en ejecución.';
+      } else {
+        errorMessage = errorBody.trim() || `Error de servidor [${response.status}] en ${endpoint}`;
+      }
+    }
+
+    throw new Error(errorMessage);
   }
 
   if (response.status === 204) {
@@ -582,6 +620,82 @@ export async function testPushNotificationApi(payload?: {
     method: 'POST',
     body: JSON.stringify(payload || {}),
   });
+}
+
+// --- Welcome & Authentication Services ---
+
+export async function registerApi(data: RegisterData): Promise<AuthResponse> {
+  const payload = {
+    username: data.username,
+    email: data.email,
+    password: data.password,
+    password_confirm: data.passwordConfirm,
+  };
+  const res = await apiRequest<any>('/auth/register/', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  return {
+    token: res.token,
+    user: {
+      id: String(res.user.id),
+      username: res.user.username,
+      email: res.user.email,
+      avatarUrl: res.user.avatar_url ?? null,
+      themePreference: res.user.theme_preference ?? 'dark',
+    },
+    message: res.message,
+  };
+}
+
+export async function loginApi(credentials: LoginCredentials): Promise<AuthResponse> {
+  const payload = {
+    identifier: credentials.identifier,
+    password: credentials.password,
+  };
+  const res = await apiRequest<any>('/auth/login/', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  return {
+    token: res.token,
+    user: {
+      id: String(res.user.id),
+      username: res.user.username,
+      email: res.user.email,
+      avatarUrl: res.user.avatar_url ?? null,
+      themePreference: res.user.theme_preference ?? 'dark',
+    },
+  };
+}
+
+export async function logoutApi(): Promise<void> {
+  try {
+    await apiRequest('/auth/logout/', { method: 'POST' });
+  } catch (err) {
+    console.warn('Logout API notice:', err);
+  }
+}
+
+export async function getSessionApi(): Promise<{ isAuthenticated: boolean; user: AuthSessionUser | null }> {
+  try {
+    const res = await apiRequest<any>('/auth/session/');
+    if (res.is_authenticated && res.user) {
+      return {
+        isAuthenticated: true,
+        user: {
+          id: String(res.user.id),
+          username: res.user.username,
+          email: res.user.email,
+          avatarUrl: res.user.avatar_url ?? null,
+          themePreference: res.user.theme_preference ?? 'dark',
+        },
+      };
+    }
+    return { isAuthenticated: false, user: null };
+  } catch (err) {
+    return { isAuthenticated: false, user: null };
+  }
 }
 
 

@@ -8,6 +8,7 @@ import { GoalsView } from './components/goals/GoalsView';
 import { ProjectsView } from './components/projects/ProjectsView';
 import { EventsView } from './components/events/EventsView';
 import { ElementoModal } from './components/ElementoModal';
+import { AuthView } from './components/auth/AuthView';
 
 // Dynamic viewport content router based on active tab
 const ContenidoPrincipal: React.FC = () => {
@@ -71,15 +72,28 @@ const ContenidoPrincipal: React.FC = () => {
   );
 };
 
+// Main Application Navigation Shell
+const AppShell: React.FC = () => {
+  const { isAuthenticated, hasEnteredApp } = useAuraState();
+
+  if (!isAuthenticated || !hasEnteredApp) {
+    return <AuthView />;
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-950 flex flex-col font-sans selection:bg-pink-500 selection:text-white animate-fadeIn">
+      <Navbar />
+      <TabBar />
+      <ContenidoPrincipal />
+    </div>
+  );
+};
+
 // Root Application Shell
 const App: React.FC = () => {
   return (
     <AuraProvider>
-      <div className="min-h-screen bg-slate-950 flex flex-col font-sans selection:bg-pink-500 selection:text-white">
-        <Navbar />
-        <TabBar />
-        <ContenidoPrincipal />
-      </div>
+      <AppShell />
     </AuraProvider>
   );
 };

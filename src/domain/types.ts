@@ -200,3 +200,43 @@ export interface WebPushStatus {
   isStandalone: boolean; // True if running as installed PWA (essential for iOS)
 }
 
+// --- Welcome & Authentication Domain Models ---
+
+export type AuthMode = 'LOGIN' | 'REGISTER';
+
+export interface LoginCredentials {
+  identifier: string; // username or email
+  password: string;
+}
+
+export interface RegisterData {
+  username: string;
+  email: string;
+  password: string;
+  passwordConfirm: string;
+}
+
+export interface AuthSessionUser {
+  id: string;
+  username: string;
+  email: string;
+  avatarUrl: string | null;
+  themePreference: 'light' | 'dark';
+}
+
+export interface AuthResponse {
+  token: string;
+  user: AuthSessionUser;
+  message?: string;
+}
+
+export interface AuthState {
+  user: AuthSessionUser | null;
+  token: string | null;
+  isAuthenticated: boolean;
+  isWelcomeOnly: boolean; // True when user has active session and sees welcome screen
+  activeTab: AuthMode;
+  isLoading: boolean;
+  error: string | null;
+}
+
