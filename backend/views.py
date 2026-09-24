@@ -1,14 +1,20 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.core.cache import cache
 from django.http import Http404
+from django.db.models import Q
 from .models import ElementoAura
 from .serializers import ElementoAuraSerializer
+from .authentication import create_user_token, get_user_from_token
+
 
 class ElementoAuraListAPI(APIView):
+    permission_classes = [AllowAny]
+
     def get(self, request):
-        # Capa de Rendimiento Ultra Rápido: Caché vía Redis (con claves dinámicas por filtro)
+        # Capa de Rendimiento: Caché vía memoria local / Redis (con claves dinámicas por filtro)
         start_date_str = request.query_params.get('start_date')
         end_date_str = request.query_params.get('end_date')
         
@@ -24,7 +30,6 @@ class ElementoAuraListAPI(APIView):
         elementos = ElementoAura.objects.all()
         
         from django.utils.dateparse import parse_datetime
-        from django.db.models import Q
         if start_date_str:
             start_date = parse_datetime(start_date_str)
             if start_date:
@@ -41,8 +46,6 @@ class ElementoAuraListAPI(APIView):
                 )
                 
         serializer = ElementoAuraSerializer(elementos, many=True)
-        
-        # Guardar en caché por 60 segundos
         cache.set(cache_key, serializer.data, timeout=60)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -50,11 +53,14 @@ class ElementoAuraListAPI(APIView):
         serializer = ElementoAuraSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save()
-            cache.clear() # Invalida toda la caché ante cambios
+            cache.clear()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+
 class ElementoAuraDetailAPI(APIView):
+    permission_classes = [AllowAny]
+
     def get_object(self, pk):
         try:
             return ElementoAura.objects.get(pk=pk)
@@ -71,7 +77,7 @@ class ElementoAuraDetailAPI(APIView):
         serializer = ElementoAuraSerializer(elemento, data=request.data)
         if serializer.is_valid():
             serializer.save()
-            cache.clear() # Invalida toda la caché ante cambios
+            cache.clear()
             return Response(serializer.data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -80,32 +86,29 @@ class ElementoAuraDetailAPI(APIView):
         serializer = ElementoAuraSerializer(elemento, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
-            cache.clear() # Invalida toda la caché ante cambios
+            cache.clear()
             return Response(serializer.data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def delete(self, request, pk):
         elemento = self.get_object(pk)
         elemento.delete()
-        cache.clear() # Invalida toda la caché ante cambios
+        cache.clear()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 # --- User Profile API ---
 
 class UserProfileAPI(APIView):
+    permission_classes = [IsAuthenticated]
+
     def get(self, request):
-        user = request.user if request.user.is_authenticated else None
-        profile = None
-        if user:
-            from .models import UserProfile
-            profile = UserProfile.objects.filter(user=user).first()
-        if not profile:
-            from .models import UserProfile
-            profile = UserProfile.objects.first()
-            if not profile:
-                profile = UserProfile.objects.create(theme_preference='dark')
+        from .models import UserProfile
         from .serializers import UserProfileSerializer
+        profile, _ = UserProfile.objects.get_or_create(
+            user=request.user,
+            defaults={'theme_preference': 'dark'}
+        )
         serializer = UserProfileSerializer(profile)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -113,31 +116,32 @@ class UserProfileAPI(APIView):
 # --- Notification APIs ---
 
 class NotificationUnreadCountAPI(APIView):
+    permission_classes = [IsAuthenticated]
+
     def get(self, request):
         from .models import Notification
-        qs = Notification.objects.all()
-        if request.user.is_authenticated:
-            qs = qs.filter(user=request.user)
-        unread_count = qs.filter(is_read=False).count()
+        unread_count = Notification.objects.filter(user=request.user, is_read=False).count()
         return Response({"unread_count": unread_count}, status=status.HTTP_200_OK)
 
 
 class NotificationListAPI(APIView):
+    permission_classes = [IsAuthenticated]
+
     def get(self, request):
         from .models import Notification
         from .serializers import NotificationSerializer
-        qs = Notification.objects.all()
-        if request.user.is_authenticated:
-            qs = qs.filter(user=request.user)
-        serializer = NotificationSerializer(qs[:20], many=True)
+        qs = Notification.objects.filter(user=request.user)[:20]
+        serializer = NotificationSerializer(qs, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 class NotificationMarkReadAPI(APIView):
+    permission_classes = [IsAuthenticated]
+
     def post(self, request, pk):
         from .models import Notification
         try:
-            notif = Notification.objects.get(pk=pk)
+            notif = Notification.objects.get(pk=pk, user=request.user)
             notif.is_read = True
             notif.save(update_fields=['is_read'])
             return Response({"id": str(notif.id), "is_read": True}, status=status.HTTP_200_OK)
@@ -148,6 +152,8 @@ class NotificationMarkReadAPI(APIView):
 # --- Web Push Subscriptions & Alerts APIs ---
 
 class VapidPublicKeyAPI(APIView):
+    permission_classes = [AllowAny]
+
     def get(self, request):
         from django.conf import settings
         public_key = getattr(settings, 'VAPID_PUBLIC_KEY', '')
@@ -155,52 +161,53 @@ class VapidPublicKeyAPI(APIView):
 
 
 class PushSubscribeAPI(APIView):
+    permission_classes = [IsAuthenticated]
+
     def post(self, request):
         from .serializers import PushSubscriptionSerializer
         serializer = PushSubscriptionSerializer(data=request.data)
         if serializer.is_valid():
-            user = request.user if request.user.is_authenticated else None
-            sub = serializer.save(user=user)
+            sub = serializer.save(user=request.user)
             return Response(PushSubscriptionSerializer(sub).data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class PushUnsubscribeAPI(APIView):
+    permission_classes = [IsAuthenticated]
+
     def post(self, request):
         from .models import PushSubscription
         endpoint = request.data.get('endpoint')
         if not endpoint:
             return Response({"error": "endpoint is required."}, status=status.HTTP_400_BAD_REQUEST)
 
-        qs = PushSubscription.objects.filter(endpoint=endpoint)
-        if request.user.is_authenticated:
-            qs = qs.filter(user=request.user)
-
+        qs = PushSubscription.objects.filter(endpoint=endpoint, user=request.user)
         deleted_count, _ = qs.delete()
         return Response({"detail": "Subscription removed successfully.", "deleted_count": deleted_count}, status=status.HTTP_200_OK)
 
 
 class PushTestDispatchAPI(APIView):
+    permission_classes = [IsAuthenticated]
+
     def post(self, request):
         from .services import send_web_push
-        user = request.user if request.user.is_authenticated else None
         title = request.data.get('title', 'Aura: Notificación de prueba')
         message = request.data.get('message', 'Las notificaciones Web Push están funcionando correctamente.')
         url = request.data.get('url', '/#eventos')
 
-        result = send_web_push(user=user, title=title, message=message, url=url)
+        result = send_web_push(user=request.user, title=title, message=message, url=url)
         return Response(result, status=status.HTTP_200_OK)
 
 
 # --- Goal & Milestone APIs ---
 
 class GoalListCreateAPI(APIView):
+    permission_classes = [IsAuthenticated]
+
     def get(self, request):
         from .models import Goal
         from .serializers import GoalSerializer
-        qs = Goal.objects.prefetch_related('milestones').all()
-        if request.user.is_authenticated:
-            qs = qs.filter(user=request.user)
+        qs = Goal.objects.filter(user=request.user).prefetch_related('milestones')
         status_param = request.query_params.get('status')
         if status_param and status_param != 'ALL':
             qs = qs.filter(status=status_param)
@@ -219,8 +226,7 @@ class GoalListCreateAPI(APIView):
         from .services import calculate_goal_progress
         serializer = GoalSerializer(data=request.data)
         if serializer.is_valid():
-            user = request.user if request.user.is_authenticated else None
-            goal = serializer.save(user=user)
+            goal = serializer.save(user=request.user)
             if goal.progress_mode == 'MILESTONES':
                 calculate_goal_progress(goal)
             return Response(GoalSerializer(goal).data, status=status.HTTP_201_CREATED)
@@ -228,22 +234,24 @@ class GoalListCreateAPI(APIView):
 
 
 class GoalDetailAPI(APIView):
-    def get_object(self, pk):
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self, pk, user):
         from .models import Goal
         try:
-            return Goal.objects.prefetch_related('milestones').get(pk=pk)
+            return Goal.objects.prefetch_related('milestones').get(pk=pk, user=user)
         except Goal.DoesNotExist:
             raise Http404
 
     def get(self, request, pk):
         from .serializers import GoalSerializer
-        goal = self.get_object(pk)
+        goal = self.get_object(pk, request.user)
         return Response(GoalSerializer(goal).data, status=status.HTTP_200_OK)
 
     def put(self, request, pk):
         from .serializers import GoalSerializer
         from .services import calculate_goal_progress
-        goal = self.get_object(pk)
+        goal = self.get_object(pk, request.user)
         serializer = GoalSerializer(goal, data=request.data)
         if serializer.is_valid():
             updated_goal = serializer.save()
@@ -255,7 +263,7 @@ class GoalDetailAPI(APIView):
     def patch(self, request, pk):
         from .serializers import GoalSerializer
         from .services import calculate_goal_progress
-        goal = self.get_object(pk)
+        goal = self.get_object(pk, request.user)
         serializer = GoalSerializer(goal, data=request.data, partial=True)
         if serializer.is_valid():
             updated_goal = serializer.save()
@@ -265,14 +273,26 @@ class GoalDetailAPI(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def delete(self, request, pk):
-        goal = self.get_object(pk)
+        goal = self.get_object(pk, request.user)
         goal.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class GoalMilestoneToggleAPI(APIView):
+    permission_classes = [IsAuthenticated]
+
     def post(self, request, goal_id, milestone_id):
+        from .models import GoalMilestone
         from .services import toggle_milestone_completion
+        try:
+            milestone = GoalMilestone.objects.select_related('goal').get(
+                id=milestone_id,
+                goal_id=goal_id,
+                goal__user=request.user
+            )
+        except GoalMilestone.DoesNotExist:
+            raise Http404
+
         try:
             milestone, goal = toggle_milestone_completion(milestone_id)
             return Response({
@@ -288,6 +308,8 @@ class GoalMilestoneToggleAPI(APIView):
 # --- Calendar Sync API ---
 
 class CalendarEventsAPI(APIView):
+    permission_classes = [IsAuthenticated]
+
     def get(self, request):
         from .services import sync_all_to_calendar
         from django.utils.dateparse import parse_datetime
@@ -303,13 +325,13 @@ class CalendarEventsAPI(APIView):
 # --- Projects & Tasks API ---
 
 class ProjectListCreateAPI(APIView):
+    permission_classes = [IsAuthenticated]
+
     def get(self, request):
         from .models import Project
         from .serializers import ProjectSerializer
 
-        projects = Project.objects.all()
-        if request.user.is_authenticated:
-            projects = projects.filter(user=request.user)
+        projects = Project.objects.filter(user=request.user)
 
         status_param = request.query_params.get('status')
         if status_param and status_param != 'ALL':
@@ -317,7 +339,6 @@ class ProjectListCreateAPI(APIView):
 
         search_query = request.query_params.get('search')
         if search_query:
-            from django.db.models import Q
             projects = projects.filter(Q(title__icontains=search_query) | Q(description__icontains=search_query))
 
         serializer = ProjectSerializer(projects, many=True)
@@ -326,32 +347,32 @@ class ProjectListCreateAPI(APIView):
     def post(self, request):
         from .serializers import ProjectSerializer
         data = request.data.copy()
-        if request.user.is_authenticated and 'user' not in data:
-            data['user'] = request.user.id
         serializer = ProjectSerializer(data=data)
         if serializer.is_valid():
-            project = serializer.save()
+            project = serializer.save(user=request.user)
             return Response(ProjectSerializer(project).data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class ProjectDetailAPI(APIView):
-    def get_object(self, pk):
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self, pk, user):
         from .models import Project
         try:
-            return Project.objects.get(pk=pk)
+            return Project.objects.get(pk=pk, user=user)
         except Project.DoesNotExist:
             raise Http404
 
     def get(self, request, pk):
         from .serializers import ProjectSerializer
-        project = self.get_object(pk)
+        project = self.get_object(pk, request.user)
         serializer = ProjectSerializer(project)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     def put(self, request, pk):
         from .serializers import ProjectSerializer
-        project = self.get_object(pk)
+        project = self.get_object(pk, request.user)
         serializer = ProjectSerializer(project, data=request.data)
         if serializer.is_valid():
             updated = serializer.save()
@@ -360,7 +381,7 @@ class ProjectDetailAPI(APIView):
 
     def patch(self, request, pk):
         from .serializers import ProjectSerializer
-        project = self.get_object(pk)
+        project = self.get_object(pk, request.user)
         serializer = ProjectSerializer(project, data=request.data, partial=True)
         if serializer.is_valid():
             updated = serializer.save()
@@ -368,16 +389,23 @@ class ProjectDetailAPI(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def delete(self, request, pk):
-        project = self.get_object(pk)
+        project = self.get_object(pk, request.user)
         project.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class ProjectTaskListCreateAPI(APIView):
+    permission_classes = [IsAuthenticated]
+
     def get(self, request, project_id):
-        from .models import ProjectTask
+        from .models import Project, ProjectTask
         from .serializers import ProjectTaskSerializer
-        tasks = ProjectTask.objects.filter(project_id=project_id)
+        try:
+            project = Project.objects.get(pk=project_id, user=request.user)
+        except Project.DoesNotExist:
+            raise Http404
+
+        tasks = ProjectTask.objects.filter(project=project)
         serializer = ProjectTaskSerializer(tasks, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -386,7 +414,7 @@ class ProjectTaskListCreateAPI(APIView):
         from .serializers import ProjectTaskSerializer
         from .services import calculate_project_progress
         try:
-            project = Project.objects.get(pk=project_id)
+            project = Project.objects.get(pk=project_id, user=request.user)
         except Project.DoesNotExist:
             raise Http404
 
@@ -394,30 +422,32 @@ class ProjectTaskListCreateAPI(APIView):
         data['project'] = str(project.id)
         serializer = ProjectTaskSerializer(data=data)
         if serializer.is_valid():
-            task = serializer.save()
+            task = serializer.save(project=project)
             calculate_project_progress(project)
             return Response(ProjectTaskSerializer(task).data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class ProjectTaskDetailAPI(APIView):
-    def get_object(self, pk):
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self, pk, user):
         from .models import ProjectTask
         try:
-            return ProjectTask.objects.get(pk=pk)
+            return ProjectTask.objects.select_related('project').get(pk=pk, project__user=user)
         except ProjectTask.DoesNotExist:
             raise Http404
 
     def get(self, request, pk):
         from .serializers import ProjectTaskSerializer
-        task = self.get_object(pk)
+        task = self.get_object(pk, request.user)
         serializer = ProjectTaskSerializer(task)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     def patch(self, request, pk):
         from .serializers import ProjectTaskSerializer
         from .services import calculate_project_progress
-        task = self.get_object(pk)
+        task = self.get_object(pk, request.user)
         serializer = ProjectTaskSerializer(task, data=request.data, partial=True)
         if serializer.is_valid():
             updated = serializer.save()
@@ -427,7 +457,7 @@ class ProjectTaskDetailAPI(APIView):
 
     def delete(self, request, pk):
         from .services import calculate_project_progress
-        task = self.get_object(pk)
+        task = self.get_object(pk, request.user)
         project = task.project
         task.delete()
         calculate_project_progress(project)
@@ -435,12 +465,21 @@ class ProjectTaskDetailAPI(APIView):
 
 
 class ProjectTaskStatusAPI(APIView):
+    permission_classes = [IsAuthenticated]
+
     def patch(self, request, pk):
+        from .models import ProjectTask
         from .services import update_project_task_status
         from .serializers import ProjectTaskSerializer
         new_status = request.data.get('status')
         if not new_status or new_status not in ['TODO', 'IN_PROGRESS', 'DONE']:
             return Response({'error': 'Invalid status. Must be TODO, IN_PROGRESS, or DONE.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            ProjectTask.objects.select_related('project').get(pk=pk, project__user=request.user)
+        except ProjectTask.DoesNotExist:
+            raise Http404
+
         try:
             task = update_project_task_status(pk, new_status)
             return Response({
@@ -453,11 +492,13 @@ class ProjectTaskStatusAPI(APIView):
 
 
 class TaskSubtaskToggleAPI(APIView):
+    permission_classes = [IsAuthenticated]
+
     def patch(self, request, pk):
         from .models import TaskSubtask
         from .serializers import TaskSubtaskSerializer
         try:
-            subtask = TaskSubtask.objects.get(pk=pk)
+            subtask = TaskSubtask.objects.select_related('task__project').get(pk=pk, task__project__user=request.user)
             subtask.is_completed = not subtask.is_completed
             subtask.save(update_fields=['is_completed'])
             return Response(TaskSubtaskSerializer(subtask).data, status=status.HTTP_200_OK)
@@ -468,18 +509,16 @@ class TaskSubtaskToggleAPI(APIView):
 # --- Events API ---
 
 class EventListCreateAPI(APIView):
+    permission_classes = [IsAuthenticated]
+
     def get(self, request):
         from .models import EventItem
         from .serializers import EventItemSerializer
         from .services import check_approaching_event_reminders
-        from django.db.models import Q
 
-        # Check for upcoming reminders whenever events are fetched
-        check_approaching_event_reminders(user=request.user if request.user.is_authenticated else None)
+        check_approaching_event_reminders(user=request.user)
 
-        events = EventItem.objects.all()
-        if request.user.is_authenticated:
-            events = events.filter(user=request.user)
+        events = EventItem.objects.filter(user=request.user)
 
         status_param = request.query_params.get('status')
         if status_param and status_param != 'ALL':
@@ -510,28 +549,29 @@ class EventListCreateAPI(APIView):
         from .serializers import EventItemSerializer
         serializer = EventItemSerializer(data=request.data)
         if serializer.is_valid():
-            user = request.user if request.user.is_authenticated else None
-            event = serializer.save(user=user)
+            event = serializer.save(user=request.user)
             return Response(EventItemSerializer(event).data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class EventDetailAPI(APIView):
-    def get_object(self, pk):
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self, pk, user):
         from .models import EventItem
         try:
-            return EventItem.objects.get(pk=pk)
+            return EventItem.objects.get(pk=pk, user=user)
         except EventItem.DoesNotExist:
             raise Http404
 
     def get(self, request, pk):
         from .serializers import EventItemSerializer
-        event = self.get_object(pk)
+        event = self.get_object(pk, request.user)
         return Response(EventItemSerializer(event).data, status=status.HTTP_200_OK)
 
     def put(self, request, pk):
         from .serializers import EventItemSerializer
-        event = self.get_object(pk)
+        event = self.get_object(pk, request.user)
         serializer = EventItemSerializer(event, data=request.data)
         if serializer.is_valid():
             serializer.save()
@@ -540,7 +580,7 @@ class EventDetailAPI(APIView):
 
     def patch(self, request, pk):
         from .serializers import EventItemSerializer
-        event = self.get_object(pk)
+        event = self.get_object(pk, request.user)
         serializer = EventItemSerializer(event, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
@@ -548,12 +588,14 @@ class EventDetailAPI(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def delete(self, request, pk):
-        event = self.get_object(pk)
+        event = self.get_object(pk, request.user)
         event.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class EventStatusAPI(APIView):
+    permission_classes = [IsAuthenticated]
+
     def patch(self, request, pk):
         from .models import EventItem
         from .serializers import EventItemSerializer
@@ -562,7 +604,7 @@ class EventStatusAPI(APIView):
             return Response({'error': 'Invalid status. Must be PROGRAMMED, COMPLETED, or CANCELED.'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            event = EventItem.objects.get(pk=pk)
+            event = EventItem.objects.get(pk=pk, user=request.user)
             event.status = new_status
             event.save(update_fields=['status', 'updated_at'])
             return Response(EventItemSerializer(event).data, status=status.HTTP_200_OK)
@@ -571,29 +613,13 @@ class EventStatusAPI(APIView):
 
 
 # --- Authentication & Session APIs ---
-from django.core import signing
-from django.contrib.auth.models import User
 from .serializers import UserRegisterSerializer, UserLoginSerializer, UserSessionSerializer
 from .services import authenticate_user
 
-def create_user_token(user):
-    return signing.dumps({'user_id': user.id, 'username': user.username})
-
-def get_user_from_token(token):
-    if not token:
-        return None
-    try:
-        # Strip "Bearer " prefix if present
-        if token.startswith("Bearer "):
-            token = token[7:].strip()
-        data = signing.loads(token, max_age=60 * 60 * 24 * 30)  # 30 days valid
-        user_id = data.get('user_id')
-        return User.objects.filter(id=user_id).first()
-    except Exception:
-        return None
-
 
 class RegisterAPI(APIView):
+    permission_classes = [AllowAny]
+
     def post(self, request):
         serializer = UserRegisterSerializer(data=request.data)
         if serializer.is_valid():
@@ -614,6 +640,8 @@ class RegisterAPI(APIView):
 
 
 class LoginAPI(APIView):
+    permission_classes = [AllowAny]
+
     def post(self, request):
         serializer = UserLoginSerializer(data=request.data)
         if not serializer.is_valid():
@@ -636,16 +664,20 @@ class LoginAPI(APIView):
 
 
 class LogoutAPI(APIView):
+    permission_classes = [AllowAny]
+
     def post(self, request):
         return Response({'detail': 'Sesión cerrada correctamente.'}, status=status.HTTP_200_OK)
 
 
 class SessionAPI(APIView):
+    permission_classes = [AllowAny]
+
     def get(self, request):
-        auth_header = request.headers.get('Authorization', '')
-        user = get_user_from_token(auth_header)
-        if not user and request.user.is_authenticated:
-            user = request.user
+        user = request.user if request.user.is_authenticated else None
+        if not user:
+            auth_header = request.headers.get('Authorization', '')
+            user = get_user_from_token(auth_header)
 
         if user:
             return Response({
@@ -657,6 +689,3 @@ class SessionAPI(APIView):
             'is_authenticated': False,
             'user': None
         }, status=status.HTTP_200_OK)
-
-
-

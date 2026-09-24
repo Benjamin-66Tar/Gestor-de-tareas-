@@ -107,6 +107,10 @@ CORS_ALLOW_ALL_ORIGINS = True  # For dev purposes
 OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY', 'mock-key-if-not-set')
 
 REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'backend.authentication.SignedTokenAuthentication',
+        'rest_framework.authentication.SessionAuthentication',
+    ],
     'DEFAULT_RENDERER_CLASSES': [
         'rest_framework.renderers.JSONRenderer',
         'rest_framework.renderers.BrowsableAPIRenderer',

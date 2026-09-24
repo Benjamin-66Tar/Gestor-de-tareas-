@@ -87,14 +87,17 @@ def toggle_milestone_completion(milestone_id):
 def sync_goals_to_calendar(user=None, start_date=None, end_date=None):
     """
     Projects goal deadlines and dated milestones onto the calendar format.
+    Ensures strict tenant isolation: unauthenticated requests receive empty sets.
     """
     from .models import Goal, GoalMilestone
     events = []
-    
-    goals_qs = Goal.objects.all()
+
     if user and user.is_authenticated:
-        goals_qs = goals_qs.filter(user=user)
-    
+        goals_qs = Goal.objects.filter(user=user)
+        milestones_qs = GoalMilestone.objects.select_related('goal').filter(goal__user=user).exclude(target_date__isnull=True)
+    else:
+        return []
+
     if start_date:
         goals_qs = goals_qs.filter(deadline__gte=start_date)
     if end_date:
@@ -115,9 +118,6 @@ def sync_goals_to_calendar(user=None, start_date=None, end_date=None):
         })
         
     # Project dated milestones
-    milestones_qs = GoalMilestone.objects.select_related('goal').exclude(target_date__isnull=True)
-    if user and user.is_authenticated:
-        milestones_qs = milestones_qs.filter(goal__user=user)
     if start_date:
         milestones_qs = milestones_qs.filter(target_date__gte=start_date.date() if hasattr(start_date, 'date') else start_date)
     if end_date:
@@ -177,13 +177,15 @@ def update_project_task_status(task_id, new_status: str):
 def sync_projects_to_calendar(user=None, start_date=None, end_date=None):
     """
     Projects project tasks with deadlines onto the calendar event format.
+    Ensures strict tenant isolation: unauthenticated requests receive empty sets.
     """
     from .models import ProjectTask
     events = []
 
-    tasks_qs = ProjectTask.objects.select_related('project').exclude(deadline__isnull=True)
-    if user and user.is_authenticated:
-        tasks_qs = tasks_qs.filter(project__user=user)
+    if not (user and user.is_authenticated):
+        return []
+
+    tasks_qs = ProjectTask.objects.select_related('project').filter(project__user=user).exclude(deadline__isnull=True)
     if start_date:
         tasks_qs = tasks_qs.filter(deadline__gte=start_date)
     if end_date:
@@ -210,13 +212,15 @@ def sync_projects_to_calendar(user=None, start_date=None, end_date=None):
 def sync_events_to_calendar(user=None, start_date=None, end_date=None):
     """
     Projects scheduled events onto the calendar event format with full start/end duration.
+    Ensures strict tenant isolation: unauthenticated requests receive empty sets.
     """
     from .models import EventItem
     events = []
 
-    events_qs = EventItem.objects.all()
-    if user and user.is_authenticated:
-        events_qs = events_qs.filter(user=user)
+    if not (user and user.is_authenticated):
+        return []
+
+    events_qs = EventItem.objects.filter(user=user)
     if start_date:
         events_qs = events_qs.filter(end_time__gte=start_date)
     if end_date:
@@ -309,9 +313,12 @@ def send_web_push(user=None, title="Aura", message="", url="/#eventos", icon=Non
     except ImportError:
         return {"dispatched_count": 0, "failed_pruned_count": 0, "error": "pywebpush not installed"}
 
-    subs_qs = PushSubscription.objects.all()
     if user and user.is_authenticated:
-        subs_qs = subs_qs.filter(user=user)
+        subs_qs = PushSubscription.objects.filter(user=user)
+    elif user is not None:
+        subs_qs = PushSubscription.objects.filter(user=user)
+    else:
+        return {"dispatched_count": 0, "failed_pruned_count": 0, "detail": "User is required for push dispatch."}
 
     payload = {
         "title": title,

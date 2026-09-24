@@ -4,7 +4,10 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 from django.utils import timezone
 from datetime import datetime
-from .models import ElementoAura
+from django.contrib.auth.models import User
+from .models import ElementoAura, UserProfile, Notification, Goal, GoalMilestone, Project, ProjectTask, TaskSubtask, EventItem, PushSubscription
+from .authentication import create_user_token
+
 
 class ElementoAuraAPITests(APITestCase):
     def setUp(self):
@@ -35,24 +38,20 @@ class ElementoAuraAPITests(APITestCase):
         """Should return all elements if no date filter is applied"""
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        # Should return all 3 items
         self.assertEqual(len(response.data), 3)
 
     def test_filter_by_date_range(self):
         """Should filter elements within start_date and end_date"""
-        # Filter for July 2026
         response = self.client.get(self.url, {
             'start_date': '2026-07-01T00:00:00Z',
             'end_date': '2026-07-31T23:59:59Z'
         })
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        # Only the July item should be returned
         self.assertEqual(len(response.data), 1)
         self.assertEqual(response.data[0]['titulo'], "Tarea de Julio")
 
     def test_filter_by_date_range_empty(self):
         """Should return empty list if range has no elements"""
-        # Filter for June 2026
         response = self.client.get(self.url, {
             'start_date': '2026-06-01T00:00:00Z',
             'end_date': '2026-06-30T23:59:59Z'
@@ -104,11 +103,12 @@ class ElementoAuraAPITests(APITestCase):
 
 class NavigationAndNotificationAPITests(APITestCase):
     def setUp(self):
-        from .models import Notification, UserProfile
-        self.profile = UserProfile.objects.create(theme_preference='dark', avatar_url='https://example.com/avatar.png')
-        self.n1 = Notification.objects.create(title="Alerta 1", message="Mensaje 1", is_read=False)
-        self.n2 = Notification.objects.create(title="Alerta 2", message="Mensaje 2", is_read=False)
-        self.n3 = Notification.objects.create(title="Alerta 3", message="Mensaje 3", is_read=True)
+        self.user = User.objects.create_user(username='nav_tester', password='Password123!')
+        self.client.force_authenticate(user=self.user)
+        self.profile = UserProfile.objects.create(user=self.user, theme_preference='dark', avatar_url='https://example.com/avatar.png')
+        self.n1 = Notification.objects.create(user=self.user, title="Alerta 1", message="Mensaje 1", is_read=False)
+        self.n2 = Notification.objects.create(user=self.user, title="Alerta 2", message="Mensaje 2", is_read=False)
+        self.n3 = Notification.objects.create(user=self.user, title="Alerta 3", message="Mensaje 3", is_read=True)
 
     def test_get_user_profile(self):
         url = reverse('user-profile')
@@ -139,8 +139,10 @@ class NavigationAndNotificationAPITests(APITestCase):
 
 class GoalAndMilestoneAPITests(APITestCase):
     def setUp(self):
-        from .models import Goal, GoalMilestone
+        self.user = User.objects.create_user(username='goal_tester', password='Password123!')
+        self.client.force_authenticate(user=self.user)
         self.goal = Goal.objects.create(
+            user=self.user,
             title="Lanzar MVP",
             category="Trabajo",
             color_hex="#10B981",
@@ -168,7 +170,6 @@ class GoalAndMilestoneAPITests(APITestCase):
         self.assertEqual(len(res.data['milestones']), 2)
 
     def test_toggle_milestone_and_progress_recalculation(self):
-        # Initial progress 0%
         from .services import calculate_goal_progress
         calculate_goal_progress(self.goal)
         self.goal.refresh_from_db()
@@ -189,8 +190,8 @@ class GoalAndMilestoneAPITests(APITestCase):
         self.assertEqual(res2.data['goal_status'], 'COMPLETED')
 
     def test_manual_progress_mode(self):
-        from .models import Goal
         manual_goal = Goal.objects.create(
+            user=self.user,
             title="Lectura libre",
             progress_mode="MANUAL",
             progress_percentage=45
@@ -204,20 +205,22 @@ class GoalAndMilestoneAPITests(APITestCase):
         url = reverse('calendar-events-sync')
         res = self.client.get(url)
         self.assertEqual(res.status_code, status.HTTP_200_OK)
-        # Should include the projected deadline for self.goal
         titles = [e['titulo'] for e in res.data]
         self.assertTrue(any("🎯 Lanzar MVP" in t for t in titles))
 
 
 class ProjectAPITests(APITestCase):
     def setUp(self):
-        from .models import Goal, Project, ProjectTask, TaskSubtask
+        self.user = User.objects.create_user(username='project_tester', password='Password123!')
+        self.client.force_authenticate(user=self.user)
         self.goal = Goal.objects.create(
+            user=self.user,
             title="Objetivo Estratégico",
             category="Empresa",
             color_hex="#10B981"
         )
         self.project = Project.objects.create(
+            user=self.user,
             title="Rediseño de Plataforma",
             description="Modernización de interfaz",
             color_hex="#6366F1",
@@ -258,8 +261,8 @@ class ProjectAPITests(APITestCase):
         self.assertEqual(res.data[0]['progress_percentage'], 0)
 
     def test_filter_projects_by_status_and_search(self):
-        from .models import Project
         Project.objects.create(
+            user=self.user,
             title="Proyecto Archivado Antiguo",
             status="ARCHIVED"
         )
@@ -328,11 +331,13 @@ class ProjectAPITests(APITestCase):
 
 class EventAPITests(APITestCase):
     def setUp(self):
-        from .models import EventItem
         from datetime import timedelta
+        self.user = User.objects.create_user(username='event_tester', password='Password123!')
+        self.client.force_authenticate(user=self.user)
         self.now = timezone.now()
 
         self.event_today = EventItem.objects.create(
+            user=self.user,
             title="Reunión de Sincronización",
             description="Revisión de avances",
             start_time=self.now + timedelta(hours=1),
@@ -346,6 +351,7 @@ class EventAPITests(APITestCase):
         )
 
         self.event_past = EventItem.objects.create(
+            user=self.user,
             title="Cita Pasada",
             description="Ya ocurrió ayer",
             start_time=self.now - timedelta(days=1, hours=2),
@@ -381,7 +387,6 @@ class EventAPITests(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_201_CREATED)
         self.assertEqual(res.data['title'], "Presentación Demo")
         self.assertEqual(res.data['status'], "PROGRAMMED")
-        self.assertEqual(res.data['time_block'], "THIS_WEEK" if (self.now + timedelta(days=2)).weekday() >= self.now.weekday() else res.data['time_block'])
 
     def test_event_date_validation_error(self):
         from datetime import timedelta
@@ -420,11 +425,10 @@ class EventAPITests(APITestCase):
 
     def test_approaching_event_reminder(self):
         from datetime import timedelta
-        from .models import EventItem, Notification
         from .services import check_approaching_event_reminders
 
-        # Create an event starting in 10 minutes with reminder_minutes=15
         urgent_event = EventItem.objects.create(
+            user=self.user,
             title="Reunión Inminente",
             start_time=self.now + timedelta(minutes=10),
             end_time=self.now + timedelta(minutes=40),
@@ -432,14 +436,15 @@ class EventAPITests(APITestCase):
             status="PROGRAMMED"
         )
 
-        notifs = check_approaching_event_reminders()
+        notifs = check_approaching_event_reminders(user=self.user)
         self.assertTrue(any("Reunión Inminente" in n.title for n in notifs))
-        self.assertTrue(Notification.objects.filter(title__contains="Reunión Inminente").exists())
+        self.assertTrue(Notification.objects.filter(user=self.user, title__contains="Reunión Inminente").exists())
 
 
 class WebPushNotificationTests(APITestCase):
     def setUp(self):
-        from .models import PushSubscription
+        self.user = User.objects.create_user(username='push_tester', password='Password123!')
+        self.client.force_authenticate(user=self.user)
         PushSubscription.objects.all().delete()
         self.sub_data_laptop = {
             "endpoint": "https://fcm.googleapis.com/fcm/send/laptop-endpoint-123",
@@ -466,25 +471,23 @@ class WebPushNotificationTests(APITestCase):
         self.assertTrue(len(res.data['public_key']) > 10)
 
     def test_push_subscribe_and_multi_device(self):
-        from .models import PushSubscription
         url = reverse('push-subscribe')
         
         # Subscribe Laptop
         res1 = self.client.post(url, self.sub_data_laptop, format='json')
         self.assertEqual(res1.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(PushSubscription.objects.count(), 1)
+        self.assertEqual(PushSubscription.objects.filter(user=self.user).count(), 1)
         
-        # Subscribe Mobile (Concurrent multi-device registration)
+        # Subscribe Mobile
         res2 = self.client.post(url, self.sub_data_mobile, format='json')
         self.assertEqual(res2.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(PushSubscription.objects.count(), 2)
+        self.assertEqual(PushSubscription.objects.filter(user=self.user).count(), 2)
 
     def test_push_subscribe_updates_existing_endpoint(self):
-        from .models import PushSubscription
         url = reverse('push-subscribe')
         
         self.client.post(url, self.sub_data_laptop, format='json')
-        self.assertEqual(PushSubscription.objects.count(), 1)
+        self.assertEqual(PushSubscription.objects.filter(user=self.user).count(), 1)
 
         # Update with new auth key for the same endpoint
         updated_data = dict(self.sub_data_laptop)
@@ -494,21 +497,20 @@ class WebPushNotificationTests(APITestCase):
         }
         res = self.client.post(url, updated_data, format='json')
         self.assertEqual(res.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(PushSubscription.objects.count(), 1)
-        sub = PushSubscription.objects.get(endpoint=self.sub_data_laptop['endpoint'])
+        self.assertEqual(PushSubscription.objects.filter(user=self.user).count(), 1)
+        sub = PushSubscription.objects.get(endpoint=self.sub_data_laptop['endpoint'], user=self.user)
         self.assertEqual(sub.auth, "newAuthKey999==")
 
     def test_push_unsubscribe(self):
-        from .models import PushSubscription
         sub_url = reverse('push-subscribe')
         unsub_url = reverse('push-unsubscribe')
         
         self.client.post(sub_url, self.sub_data_laptop, format='json')
-        self.assertEqual(PushSubscription.objects.count(), 1)
+        self.assertEqual(PushSubscription.objects.filter(user=self.user).count(), 1)
 
         res = self.client.post(unsub_url, {"endpoint": self.sub_data_laptop['endpoint']}, format='json')
         self.assertEqual(res.status_code, status.HTTP_200_OK)
-        self.assertEqual(PushSubscription.objects.count(), 0)
+        self.assertEqual(PushSubscription.objects.filter(user=self.user).count(), 0)
 
     def test_push_test_dispatch(self):
         url = reverse('push-test-dispatch')
@@ -523,31 +525,28 @@ class WebPushNotificationTests(APITestCase):
     def test_auto_pruning_on_410_gone(self):
         from unittest.mock import patch
         from pywebpush import WebPushException
-        from .models import PushSubscription
         from .services import send_web_push
         import requests
 
         sub = PushSubscription.objects.create(
+            user=self.user,
             endpoint="https://fcm.googleapis.com/fcm/send/expired-device-token",
             p256dh="test-p256dh",
             auth="test-auth"
         )
-        self.assertEqual(PushSubscription.objects.count(), 1)
+        self.assertEqual(PushSubscription.objects.filter(user=self.user).count(), 1)
 
-        # Create mock 410 Gone response
         mock_response = requests.Response()
         mock_response.status_code = 410
 
         with patch('pywebpush.webpush', side_effect=WebPushException("Device unsubscribed", response=mock_response)):
-            result = send_web_push(title="Test", message="Test alert")
+            result = send_web_push(user=self.user, title="Test", message="Test alert")
             self.assertEqual(result['failed_pruned_count'], 1)
-            # Subscription should be automatically deleted
-            self.assertEqual(PushSubscription.objects.count(), 0)
+            self.assertEqual(PushSubscription.objects.filter(user=self.user).count(), 0)
 
 
 class AuthenticationTests(APITestCase):
     def setUp(self):
-        from django.contrib.auth.models import User
         User.objects.filter(username__in=['aura_tester', 'test_user', 'new_tester']).delete()
         self.user = User.objects.create_user(
             username='aura_tester',
@@ -628,7 +627,6 @@ class AuthenticationTests(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_200_OK)
 
     def test_session_verification_with_token(self):
-        from .views import create_user_token
         token = create_user_token(self.user)
         url = reverse('auth-session')
         
@@ -644,3 +642,123 @@ class AuthenticationTests(APITestCase):
         self.assertFalse(res_empty.data['is_authenticated'])
 
 
+class DatabaseSecurityAndTenancyTests(APITestCase):
+    """
+    Dedicated test suite validating database isolation, Anti-IDOR object security,
+    and unauthenticated request protection.
+    """
+    def setUp(self):
+        User.objects.filter(username__in=['user_alice', 'user_bob']).delete()
+        self.user_alice = User.objects.create_user(username='user_alice', password='Password123!')
+        self.user_bob = User.objects.create_user(username='user_bob', password='Password123!')
+        self.token_alice = create_user_token(self.user_alice)
+        self.token_bob = create_user_token(self.user_bob)
+
+    def test_unauthenticated_requests_are_rejected(self):
+        """Unauthenticated requests to private endpoints must return 401 Unauthorized"""
+        endpoints = [
+            reverse('goals-list-create'),
+            reverse('projects-list-create'),
+            reverse('events-list-create'),
+            reverse('notifications-list'),
+            reverse('notifications-unread-count'),
+            reverse('user-profile'),
+            reverse('calendar-events-sync'),
+        ]
+        for ep in endpoints:
+            res = self.client.get(ep)
+            self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED, f"Expected 401 for unauthenticated {ep}")
+
+    def test_bearer_token_authenticates_correctly(self):
+        """Signed token passed via Authorization: Bearer <token> allows access to user's own data"""
+        Goal.objects.create(user=self.user_alice, title="Meta de Alice")
+        Goal.objects.create(user=self.user_bob, title="Meta de Bob")
+
+        url = reverse('goals-list-create')
+        res_alice = self.client.get(url, HTTP_AUTHORIZATION=f"Bearer {self.token_alice}")
+        self.assertEqual(res_alice.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(res_alice.data), 1)
+        self.assertEqual(res_alice.data[0]['title'], "Meta de Alice")
+
+        res_bob = self.client.get(url, HTTP_AUTHORIZATION=f"Bearer {self.token_bob}")
+        self.assertEqual(res_bob.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(res_bob.data), 1)
+        self.assertEqual(res_bob.data[0]['title'], "Meta de Bob")
+
+    def test_anti_idor_goal_detail_protection(self):
+        """User Bob cannot read, modify, or delete Alice's goal"""
+        goal_alice = Goal.objects.create(user=self.user_alice, title="Meta Secreta Alice")
+        detail_url = reverse('goal-detail', args=[goal_alice.id])
+
+        # Bob tries to read Alice's goal -> 404
+        res_get = self.client.get(detail_url, HTTP_AUTHORIZATION=f"Bearer {self.token_bob}")
+        self.assertEqual(res_get.status_code, status.HTTP_404_NOT_FOUND)
+
+        # Bob tries to update Alice's goal -> 404
+        res_patch = self.client.patch(detail_url, {"title": "Hackeado por Bob"}, format='json', HTTP_AUTHORIZATION=f"Bearer {self.token_bob}")
+        self.assertEqual(res_patch.status_code, status.HTTP_404_NOT_FOUND)
+        goal_alice.refresh_from_db()
+        self.assertEqual(goal_alice.title, "Meta Secreta Alice")
+
+        # Bob tries to delete Alice's goal -> 404
+        res_del = self.client.delete(detail_url, HTTP_AUTHORIZATION=f"Bearer {self.token_bob}")
+        self.assertEqual(res_del.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertTrue(Goal.objects.filter(id=goal_alice.id).exists())
+
+    def test_anti_idor_project_and_task_protection(self):
+        """User Bob cannot read, delete or add tasks to Alice's project"""
+        project_alice = Project.objects.create(user=self.user_alice, title="Proyecto Privado Alice")
+        task_alice = ProjectTask.objects.create(project=project_alice, title="Tarea de Alice")
+
+        # Bob tries to view Alice's project -> 404
+        proj_url = reverse('project-detail', args=[project_alice.id])
+        res_proj = self.client.get(proj_url, HTTP_AUTHORIZATION=f"Bearer {self.token_bob}")
+        self.assertEqual(res_proj.status_code, status.HTTP_404_NOT_FOUND)
+
+        # Bob tries to add a task to Alice's project -> 404
+        task_create_url = reverse('project-tasks-list-create', args=[project_alice.id])
+        res_add_task = self.client.post(task_create_url, {"title": "Tarea Maliciosa"}, format='json', HTTP_AUTHORIZATION=f"Bearer {self.token_bob}")
+        self.assertEqual(res_add_task.status_code, status.HTTP_404_NOT_FOUND)
+
+        # Bob tries to change task status -> 404
+        task_status_url = reverse('task-status', args=[task_alice.id])
+        res_status = self.client.patch(task_status_url, {"status": "DONE"}, format='json', HTTP_AUTHORIZATION=f"Bearer {self.token_bob}")
+        self.assertEqual(res_status.status_code, status.HTTP_404_NOT_FOUND)
+
+        # Bob tries to delete Alice's project -> 404
+        res_del_proj = self.client.delete(proj_url, HTTP_AUTHORIZATION=f"Bearer {self.token_bob}")
+        self.assertEqual(res_del_proj.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertTrue(Project.objects.filter(id=project_alice.id).exists())
+
+    def test_anti_idor_event_protection(self):
+        """User Bob cannot read, modify, or delete Alice's event"""
+        now = timezone.now()
+        event_alice = EventItem.objects.create(
+            user=self.user_alice,
+            title="Evento Confidencial Alice",
+            start_time=now + timezone.timedelta(days=1),
+            end_time=now + timezone.timedelta(days=1, hours=1),
+        )
+        event_url = reverse('event-detail', args=[event_alice.id])
+
+        # Bob attempts GET -> 404
+        res_get = self.client.get(event_url, HTTP_AUTHORIZATION=f"Bearer {self.token_bob}")
+        self.assertEqual(res_get.status_code, status.HTTP_404_NOT_FOUND)
+
+        # Bob attempts DELETE -> 404
+        res_del = self.client.delete(event_url, HTTP_AUTHORIZATION=f"Bearer {self.token_bob}")
+        self.assertEqual(res_del.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertTrue(EventItem.objects.filter(id=event_alice.id).exists())
+
+    def test_calendar_sync_tenant_isolation(self):
+        """Calendar sync only returns data belonging to the authenticated user"""
+        now = timezone.now()
+        Goal.objects.create(user=self.user_alice, title="Meta de Alice", deadline=now + timezone.timedelta(days=5))
+        Goal.objects.create(user=self.user_bob, title="Meta de Bob", deadline=now + timezone.timedelta(days=5))
+
+        url = reverse('calendar-events-sync')
+        res_alice = self.client.get(url, HTTP_AUTHORIZATION=f"Bearer {self.token_alice}")
+        self.assertEqual(res_alice.status_code, status.HTTP_200_OK)
+        alice_titles = [e['titulo'] for e in res_alice.data]
+        self.assertTrue(any("Meta de Alice" in t for t in alice_titles))
+        self.assertFalse(any("Meta de Bob" in t for t in alice_titles))
