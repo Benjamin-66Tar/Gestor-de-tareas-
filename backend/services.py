@@ -465,4 +465,24 @@ def start_notification_scheduler(interval_seconds=60):
         _scheduler_thread.start()
 
 
+def authenticate_user(identifier, password):
+    """
+    Authenticates a user using either their username or email address and password.
+    Returns the User instance if valid, or None if authentication fails.
+    """
+    from django.contrib.auth.models import User
+    from django.contrib.auth import authenticate
+
+    if not identifier or not password:
+        return None
+
+    # If identifier looks like an email or exists as email, resolve username
+    if '@' in identifier:
+        user_by_email = User.objects.filter(email__iexact=identifier).first()
+        if user_by_email:
+            identifier = user_by_email.username
+
+    return authenticate(username=identifier, password=password)
+
+
 

@@ -24,10 +24,20 @@ from .views import (
     PushSubscribeAPI,
     PushUnsubscribeAPI,
     PushTestDispatchAPI,
+    RegisterAPI,
+    LoginAPI,
+    LogoutAPI,
+    SessionAPI,
 )
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+
+    # Authentication & Session
+    path('api/v1/auth/register/', RegisterAPI.as_view(), name='auth-register'),
+    path('api/v1/auth/login/', LoginAPI.as_view(), name='auth-login'),
+    path('api/v1/auth/logout/', LogoutAPI.as_view(), name='auth-logout'),
+    path('api/v1/auth/session/', SessionAPI.as_view(), name='auth-session'),
     path('api/v1/elementos/', ElementoAuraListAPI.as_view(), name='elemento-aura-list'),
     path('api/v1/elementos/<int:pk>/', ElementoAuraDetailAPI.as_view(), name='elemento-aura-detail'),
     

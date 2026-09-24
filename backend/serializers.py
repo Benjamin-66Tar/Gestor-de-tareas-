@@ -250,3 +250,65 @@ class PushSubscriptionSerializer(serializers.ModelSerializer):
         return ret
 
 
+# --- Authentication Serializers ---
+from django.contrib.auth.models import User
+
+class UserRegisterSerializer(serializers.Serializer):
+    username = serializers.CharField(min_length=3, max_length=150)
+    email = serializers.EmailField()
+    password = serializers.CharField(min_length=6, write_only=True)
+    password_confirm = serializers.CharField(min_length=6, write_only=True)
+
+    def validate_username(self, value):
+        if User.objects.filter(username__iexact=value).exists():
+            raise serializers.ValidationError("Este nombre de usuario ya está registrado.")
+        return value
+
+    def validate_email(self, value):
+        if User.objects.filter(email__iexact=value).exists():
+            raise serializers.ValidationError("Este correo electrónico ya está registrado.")
+        return value
+
+    def validate(self, data):
+        if data['password'] != data['password_confirm']:
+            raise serializers.ValidationError({
+                "password_confirm": "Las contraseñas no coinciden."
+            })
+        return data
+
+    def create(self, validated_data):
+        username = validated_data['username']
+        email = validated_data['email']
+        password = validated_data['password']
+
+        user = User.objects.create_user(
+            username=username,
+            email=email,
+            password=password
+        )
+        UserProfile.objects.get_or_create(user=user)
+        return user
+
+
+class UserLoginSerializer(serializers.Serializer):
+    identifier = serializers.CharField(required=True)
+    password = serializers.CharField(required=True, write_only=True)
+
+
+class UserSessionSerializer(serializers.ModelSerializer):
+    avatar_url = serializers.SerializerMethodField()
+    theme_preference = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = ['id', 'username', 'email', 'avatar_url', 'theme_preference']
+
+    def get_avatar_url(self, obj):
+        profile = getattr(obj, 'userprofile', None)
+        return profile.avatar_url if profile else None
+
+    def get_theme_preference(self, obj):
+        profile = getattr(obj, 'userprofile', None)
+        return profile.theme_preference if profile else 'dark'
+
+

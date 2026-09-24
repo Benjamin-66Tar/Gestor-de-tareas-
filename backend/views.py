@@ -570,4 +570,93 @@ class EventStatusAPI(APIView):
             raise Http404
 
 
+# --- Authentication & Session APIs ---
+from django.core import signing
+from django.contrib.auth.models import User
+from .serializers import UserRegisterSerializer, UserLoginSerializer, UserSessionSerializer
+from .services import authenticate_user
+
+def create_user_token(user):
+    return signing.dumps({'user_id': user.id, 'username': user.username})
+
+def get_user_from_token(token):
+    if not token:
+        return None
+    try:
+        # Strip "Bearer " prefix if present
+        if token.startswith("Bearer "):
+            token = token[7:].strip()
+        data = signing.loads(token, max_age=60 * 60 * 24 * 30)  # 30 days valid
+        user_id = data.get('user_id')
+        return User.objects.filter(id=user_id).first()
+    except Exception:
+        return None
+
+
+class RegisterAPI(APIView):
+    def post(self, request):
+        serializer = UserRegisterSerializer(data=request.data)
+        if serializer.is_valid():
+            user = serializer.save()
+            token = create_user_token(user)
+            return Response({
+                'token': token,
+                'user': UserSessionSerializer(user).data,
+                'message': 'Cuenta creada con éxito.'
+            }, status=status.HTTP_201_CREATED)
+        # Format errors cleanly
+        error_msg = "Error al registrar la cuenta."
+        if serializer.errors:
+            first_key = next(iter(serializer.errors))
+            first_err = serializer.errors[first_key]
+            error_msg = first_err[0] if isinstance(first_err, list) else str(first_err)
+        return Response({'error': error_msg, 'details': serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class LoginAPI(APIView):
+    def post(self, request):
+        serializer = UserLoginSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response({'error': 'Debe proporcionar identificador y contraseña.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        identifier = serializer.validated_data['identifier']
+        password = serializer.validated_data['password']
+
+        user = authenticate_user(identifier, password)
+        if not user:
+            return Response({
+                'error': 'Credenciales inválidas. Por favor verifique sus datos.'
+            }, status=status.HTTP_401_UNAUTHORIZED)
+
+        token = create_user_token(user)
+        return Response({
+            'token': token,
+            'user': UserSessionSerializer(user).data
+        }, status=status.HTTP_200_OK)
+
+
+class LogoutAPI(APIView):
+    def post(self, request):
+        return Response({'detail': 'Sesión cerrada correctamente.'}, status=status.HTTP_200_OK)
+
+
+class SessionAPI(APIView):
+    def get(self, request):
+        auth_header = request.headers.get('Authorization', '')
+        user = get_user_from_token(auth_header)
+        if not user and request.user.is_authenticated:
+            user = request.user
+
+        if user:
+            return Response({
+                'is_authenticated': True,
+                'user': UserSessionSerializer(user).data
+            }, status=status.HTTP_200_OK)
+
+        return Response({
+            'is_authenticated': False,
+            'user': None
+        }, status=status.HTTP_200_OK)
+
+
 

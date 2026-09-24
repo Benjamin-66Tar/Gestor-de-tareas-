@@ -544,3 +544,103 @@ class WebPushNotificationTests(APITestCase):
             # Subscription should be automatically deleted
             self.assertEqual(PushSubscription.objects.count(), 0)
 
+
+class AuthenticationTests(APITestCase):
+    def setUp(self):
+        from django.contrib.auth.models import User
+        User.objects.filter(username__in=['aura_tester', 'test_user', 'new_tester']).delete()
+        self.user = User.objects.create_user(
+            username='aura_tester',
+            email='aura_tester@example.com',
+            password='Password123!'
+        )
+
+    def test_user_registration_success(self):
+        url = reverse('auth-register')
+        data = {
+            'username': 'new_tester',
+            'email': 'new_tester@example.com',
+            'password': 'StrongPassword123!',
+            'password_confirm': 'StrongPassword123!'
+        }
+        res = self.client.post(url, data, format='json')
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        self.assertIn('token', res.data)
+        self.assertIn('user', res.data)
+        self.assertEqual(res.data['user']['username'], 'new_tester')
+
+    def test_user_registration_mismatched_password(self):
+        url = reverse('auth-register')
+        data = {
+            'username': 'mismatch_tester',
+            'email': 'mismatch@example.com',
+            'password': 'StrongPassword123!',
+            'password_confirm': 'DifferentPassword123!'
+        }
+        res = self.client.post(url, data, format='json')
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_user_registration_duplicate_username(self):
+        url = reverse('auth-register')
+        data = {
+            'username': 'aura_tester',
+            'email': 'different_email@example.com',
+            'password': 'StrongPassword123!',
+            'password_confirm': 'StrongPassword123!'
+        }
+        res = self.client.post(url, data, format='json')
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_user_login_with_username(self):
+        url = reverse('auth-login')
+        data = {
+            'identifier': 'aura_tester',
+            'password': 'Password123!'
+        }
+        res = self.client.post(url, data, format='json')
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertIn('token', res.data)
+        self.assertEqual(res.data['user']['username'], 'aura_tester')
+
+    def test_user_login_with_email(self):
+        url = reverse('auth-login')
+        data = {
+            'identifier': 'aura_tester@example.com',
+            'password': 'Password123!'
+        }
+        res = self.client.post(url, data, format='json')
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertIn('token', res.data)
+        self.assertEqual(res.data['user']['username'], 'aura_tester')
+
+    def test_user_login_invalid_password(self):
+        url = reverse('auth-login')
+        data = {
+            'identifier': 'aura_tester',
+            'password': 'WrongPassword999!'
+        }
+        res = self.client.post(url, data, format='json')
+        self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_user_logout(self):
+        url = reverse('auth-logout')
+        res = self.client.post(url, {}, format='json')
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+
+    def test_session_verification_with_token(self):
+        from .views import create_user_token
+        token = create_user_token(self.user)
+        url = reverse('auth-session')
+        
+        # Valid token
+        res = self.client.get(url, HTTP_AUTHORIZATION=f"Bearer {token}")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertTrue(res.data['is_authenticated'])
+        self.assertEqual(res.data['user']['username'], 'aura_tester')
+
+        # No token
+        res_empty = self.client.get(url)
+        self.assertEqual(res_empty.status_code, status.HTTP_200_OK)
+        self.assertFalse(res_empty.data['is_authenticated'])
+
+

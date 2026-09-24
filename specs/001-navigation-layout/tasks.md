@@ -267,4 +267,36 @@ Task: "Implement typed API client service methods in src/services/api.ts"
    - Run production build (`npm run build`).
    - Execute Quickstart Scenario 15 across laptop and mobile browsers.
 
+---
+
+## Phase 10: User Story 7 - Welcome & Authentication Screen (Inicio de Sesión y Registro en 2 partes) (Priority: P1)
+
+**Goal**: Deliver the split 2-part welcome and authentication screen: left hero visual banner with branding illustration and 2 inspirational quotes; right interactive block with toggleable tabs (*"Iniciar Sesión"* and *"Crear Cuenta"*) for new visitors; frictionless return experience showing only the welcome hero banner with 1-click direct entry (*"Entrar a Aura"*) in <1s for users with an active account; account switching and full session logout restoring the split screen; and clean single-column responsive stacking for mobile devices (<768px).
+
+**Independent Test**:
+1. Open Aura on fresh session: verify split screen (hero panel left with quotes and illustration, auth tabs right).
+2. Register account: verify validation and immediate transition into the application.
+3. Reload page: verify returning experience shows only the welcome hero panel with "Entrar a Aura" without asking for passwords.
+4. Click "Entrar a Aura": verify entry into the dashboard in <1 second.
+5. Click "Cerrar sesión" or "Cambiar de cuenta": verify session is cleared and the full split screen with tabs is restored.
+6. Open on mobile (<768px): verify single vertical stack layout without horizontal scroll.
+
+- [X] T092 [P] [US7] Define TypeScript domain types for AuthMode, LoginCredentials, RegisterData, AuthSessionUser, AuthResponse, and AuthState in src/domain/types.ts
+- [X] T093 [P] [US7] Implement DRF serializers UserRegisterSerializer, UserLoginSerializer, and UserSessionSerializer in backend/serializers.py
+- [X] T094 [US7] Implement flexible authentication helper authenticate_user(identifier, password) supporting username or email in backend/services.py
+- [X] T095 [P] [US7] Implement REST API endpoints for register, login, logout, and session verification in backend/views.py and backend/urls.py
+- [X] T096 [P] [US7] Create automated unit tests for user registration, login with username/email, password validation, and logout in backend/tests.py
+- [X] T097 [P] [US7] Implement typed auth API client service methods (register, login, logout, getSession) in src/services/api.ts
+- [X] T098 [US7] Extend application state context with authentication state, localStorage persistence, isWelcomeOnly flag, and auth action handlers in src/context/AuraState.tsx
+- [X] T099 [P] [US7] Build HeroBanner component rendering colorful SVG productivity illustration, Aura branding, and the two inspirational quotes in src/components/auth/HeroBanner.tsx
+- [X] T100 [P] [US7] Build AuthForms component with toggleable tabs (Iniciar Sesión / Crear Cuenta), live validation, and error alerts in src/components/auth/AuthForms.tsx
+- [X] T101 [P] [US7] Build WelcomeView component for returning users with personalized greeting, "Entrar a Aura" direct entry button, and "Cambiar de cuenta" link in src/components/auth/WelcomeView.tsx
+- [X] T102 [US7] Build AuthView top-level split container combining HeroBanner with AuthForms or WelcomeView, with single-column responsive stacking on mobile in src/components/auth/AuthView.tsx
+- [X] T103 [US7] Integrate AuthView into main application router in src/App.tsx, guarding main shell until user enters the application
+- [X] T104 [US7] Update ProfileMenu in src/components/ProfileMenu.tsx to wire "Cerrar sesión" to the auth logout handler restoring the full split screen
+- [X] T105 [US7] Execute backend test suite for authentication with pytest backend/tests.py
+- [X] T106 [US7] Run frontend production build check with npm run build to verify zero TypeScript errors
+- [X] T107 [US7] Execute end-to-end verification Scenarios 16 through 19 in quickstart.md
+
+
 
