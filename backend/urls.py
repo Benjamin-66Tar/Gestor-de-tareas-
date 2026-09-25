@@ -32,6 +32,7 @@ from .views import (
     LoginAPI,
     LogoutAPI,
     SessionAPI,
+    DatabaseHealthCheckAPI,
 )
 
 urlpatterns = [
@@ -80,6 +81,9 @@ urlpatterns = [
 
     # Audit Trail
     path('api/v1/audit/logs/', AuditLogListAPI.as_view(), name='audit-logs-list'),
+
+    # Health & Diagnostics
+    path('api/v1/health/', DatabaseHealthCheckAPI.as_view(), name='database-health-check'),
 
     # Calendar Sync
     path('api/v1/calendar/events/', CalendarEventsAPI.as_view(), name='calendar-events-sync'),

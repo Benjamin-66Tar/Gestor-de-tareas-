@@ -947,3 +947,45 @@ class SessionAPI(APIView):
             'is_authenticated': False,
             'user': None
         }, status=status.HTTP_200_OK)
+
+
+class DatabaseHealthCheckAPI(APIView):
+    """
+    Public diagnostic and health check endpoint for uptime monitors,
+    load balancers, and cloud container orchestrators.
+    Directly pings the active database and returns response latency and engine details.
+    """
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        import time
+        from django.db import connection
+        from django.utils import timezone
+
+        start_time = time.perf_counter()
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT 1;")
+                cursor.fetchone()
+            latency_ms = round((time.perf_counter() - start_time) * 1000, 2)
+            return Response({
+                "status": "healthy",
+                "database": {
+                    "connected": True,
+                    "vendor": connection.vendor,
+                    "latency_ms": latency_ms,
+                },
+                "timestamp": timezone.now().isoformat(),
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            latency_ms = round((time.perf_counter() - start_time) * 1000, 2)
+            return Response({
+                "status": "unhealthy",
+                "database": {
+                    "connected": False,
+                    "error": str(e),
+                    "latency_ms": latency_ms,
+                },
+                "timestamp": timezone.now().isoformat(),
+            }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+

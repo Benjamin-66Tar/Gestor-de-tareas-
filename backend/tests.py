@@ -1,3 +1,5 @@
+import os
+import json
 from django.test import TestCase
 from django.urls import reverse
 from rest_framework import status
@@ -1093,6 +1095,50 @@ class AuditTrailAPITests(APITestCase):
         logs_res = self.client.get(reverse('audit-logs-list'))
         self.assertEqual(logs_res.status_code, status.HTTP_200_OK)
         self.assertEqual(len(logs_res.data), 0)
+
+
+class InfrastructureAndHealthTests(APITestCase):
+    def test_database_health_check_endpoint(self):
+        """
+        Public healthcheck endpoint must ping the DB and report latency, engine, and status.
+        """
+        url = reverse('database-health-check')
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['status'], 'healthy')
+        self.assertTrue(response.data['database']['connected'])
+        self.assertIn('vendor', response.data['database'])
+        self.assertGreaterEqual(response.data['database']['latency_ms'], 0)
+        self.assertIn('timestamp', response.data)
+
+    def test_backup_database_command(self):
+        """
+        Management command 'backup_database' should generate a valid JSON dump and SHA-256 checksum.
+        """
+        import tempfile
+        from django.core.management import call_command
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            call_command('backup_database', output_dir=tmpdir)
+            files = os.listdir(tmpdir)
+            json_files = [f for f in files if f.endswith('.json')]
+            sha_files = [f for f in files if f.endswith('.sha256')]
+            self.assertEqual(len(json_files), 1)
+            self.assertEqual(len(sha_files), 1)
+
+            # Check that JSON is parseable
+            with open(os.path.join(tmpdir, json_files[0]), 'r', encoding='utf-8') as f:
+                dump_data = json.load(f)
+                self.assertIsInstance(dump_data, list)
+
+    def test_dispatch_reminders_command(self):
+        """
+        Management command 'dispatch_reminders' must execute cleanly without error.
+        """
+        from django.core.management import call_command
+        # Should execute without raising any exceptions
+        call_command('dispatch_reminders')
+
 
 
 
