@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.db import transaction
-from .models import ElementoAura, UserProfile, Notification, Goal, GoalMilestone, Project, ProjectTask, TaskSubtask, EventItem, PushSubscription
+from .models import ElementoAura, UserProfile, Notification, Goal, GoalMilestone, Project, ProjectTask, TaskSubtask, EventItem, PushSubscription, AuditLog
 
 class ElementoAuraSerializer(serializers.ModelSerializer):
     class Meta:
@@ -39,8 +39,9 @@ class GoalSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'title', 'description', 'category', 'color_hex',
             'start_date', 'deadline', 'progress_mode', 'progress_percentage', 'status',
-            'milestones', 'created_at', 'updated_at'
+            'milestones', 'is_deleted', 'deleted_at', 'created_at', 'updated_at'
         ]
+        read_only_fields = ['id', 'is_deleted', 'deleted_at', 'created_at', 'updated_at']
 
     def create(self, validated_data):
         with transaction.atomic():
@@ -158,9 +159,9 @@ class ProjectSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'user', 'goal', 'goal_title', 'title', 'description',
             'color_hex', 'status', 'progress_percentage', 'tasks',
-            'total_tasks', 'completed_tasks', 'created_at', 'updated_at'
+            'total_tasks', 'completed_tasks', 'is_deleted', 'deleted_at', 'created_at', 'updated_at'
         ]
-        read_only_fields = ['id', 'progress_percentage', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'progress_percentage', 'is_deleted', 'deleted_at', 'created_at', 'updated_at']
 
     def get_total_tasks(self, obj):
         if hasattr(obj, 'annotated_total_tasks'):
@@ -181,9 +182,9 @@ class EventItemSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'user', 'title', 'description', 'start_time', 'end_time',
             'location', 'meeting_url', 'category', 'color_hex', 'status',
-            'reminder_minutes', 'time_block', 'created_at', 'updated_at'
+            'reminder_minutes', 'time_block', 'is_deleted', 'deleted_at', 'created_at', 'updated_at'
         ]
-        read_only_fields = ['id', 'time_block', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'time_block', 'is_deleted', 'deleted_at', 'created_at', 'updated_at']
 
     def validate(self, data):
         start_time = data.get('start_time') or (self.instance.start_time if self.instance else None)
@@ -319,5 +320,18 @@ class UserSessionSerializer(serializers.ModelSerializer):
     def get_theme_preference(self, obj):
         profile = getattr(obj, 'userprofile', None)
         return profile.theme_preference if profile else 'dark'
+
+
+class AuditLogSerializer(serializers.ModelSerializer):
+    username = serializers.CharField(source='user.username', read_only=True, default='Anónimo')
+
+    class Meta:
+        model = AuditLog
+        fields = [
+            'id', 'user', 'username', 'action', 'model_name',
+            'object_id', 'object_repr', 'changes', 'ip_address', 'created_at'
+        ]
+        read_only_fields = fields
+
 
 

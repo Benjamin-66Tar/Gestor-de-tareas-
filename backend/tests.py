@@ -5,7 +5,7 @@ from rest_framework.test import APITestCase
 from django.utils import timezone
 from datetime import datetime
 from django.contrib.auth.models import User
-from .models import ElementoAura, UserProfile, Notification, Goal, GoalMilestone, Project, ProjectTask, TaskSubtask, EventItem, PushSubscription
+from .models import ElementoAura, UserProfile, Notification, Goal, GoalMilestone, Project, ProjectTask, TaskSubtask, EventItem, PushSubscription, AuditLog
 from .authentication import create_user_token
 
 
@@ -893,5 +893,206 @@ class DatabasePerformanceAndNPlusOneTests(APITestCase):
             for proj_data in res.data:
                 self.assertEqual(proj_data['total_tasks'], 3)
                 self.assertEqual(proj_data['completed_tasks'], 2)
+
+
+class SoftDeleteAPITests(APITestCase):
+    def setUp(self):
+        User.objects.filter(username='softdel_user').delete()
+        self.user = User.objects.create_user(username='softdel_user', password='Password123!')
+        self.client.force_authenticate(user=self.user)
+
+    def test_goal_soft_delete_and_restore(self):
+        # 1. Create a goal
+        goal = Goal.objects.create(
+            user=self.user,
+            title="Meta a eliminar suavemente",
+            deadline=timezone.now() + timezone.timedelta(days=7),
+            status="ACTIVE"
+        )
+        url_detail = reverse('goal-detail', kwargs={'pk': goal.id})
+        url_list = reverse('goals-list-create')
+        url_restore = reverse('goal-restore', kwargs={'pk': goal.id})
+
+        # 2. Delete goal via API
+        del_res = self.client.delete(url_detail)
+        self.assertEqual(del_res.status_code, status.HTTP_204_NO_CONTENT)
+
+        # 3. Verify in DB: still exists, marked as is_deleted=True
+        goal.refresh_from_db()
+        self.assertTrue(goal.is_deleted)
+        self.assertIsNotNone(goal.deleted_at)
+
+        # 4. Standard list excludes soft-deleted goal
+        list_res = self.client.get(url_list)
+        self.assertEqual(list_res.status_code, status.HTTP_200_OK)
+        goal_ids = [g['id'] for g in list_res.data]
+        self.assertNotIn(str(goal.id), goal_ids)
+
+        # 5. Trash list includes soft-deleted goal
+        trash_res = self.client.get(url_list, {'is_deleted': 'true'})
+        self.assertEqual(trash_res.status_code, status.HTTP_200_OK)
+        trash_ids = [g['id'] for g in trash_res.data]
+        self.assertIn(str(goal.id), trash_ids)
+
+        # 6. Direct detail GET returns 404 for soft-deleted goal
+        detail_res = self.client.get(url_detail)
+        self.assertEqual(detail_res.status_code, status.HTTP_404_NOT_FOUND)
+
+        # 7. Calendar sync excludes soft-deleted goal
+        cal_url = reverse('calendar-events-sync')
+        cal_res = self.client.get(cal_url)
+        event_sources = [ev.get('source_id') for ev in cal_res.data]
+        self.assertNotIn(str(goal.id), event_sources)
+
+        # 8. Restore goal via restore endpoint
+        restore_res = self.client.post(url_restore)
+        self.assertEqual(restore_res.status_code, status.HTTP_200_OK)
+        self.assertFalse(restore_res.data['is_deleted'])
+        self.assertIsNone(restore_res.data['deleted_at'])
+
+        # 9. Detail GET now succeeds
+        detail_after_restore = self.client.get(url_detail)
+        self.assertEqual(detail_after_restore.status_code, status.HTTP_200_OK)
+
+        # 10. Calendar sync includes it again
+        cal_res_restored = self.client.get(cal_url)
+        event_sources_restored = [ev.get('source_id') for ev in cal_res_restored.data]
+        self.assertIn(str(goal.id), event_sources_restored)
+
+    def test_project_soft_delete_and_restore(self):
+        project = Project.objects.create(
+            user=self.user,
+            title="Proyecto a eliminar suavemente",
+            status="ACTIVE"
+        )
+        url_detail = reverse('project-detail', kwargs={'pk': project.id})
+        url_list = reverse('projects-list-create')
+        url_restore = reverse('project-restore', kwargs={'pk': project.id})
+
+        # Soft delete
+        del_res = self.client.delete(url_detail)
+        self.assertEqual(del_res.status_code, status.HTTP_204_NO_CONTENT)
+
+        project.refresh_from_db()
+        self.assertTrue(project.is_deleted)
+        self.assertIsNotNone(project.deleted_at)
+
+        # List excludes soft-deleted project
+        list_res = self.client.get(url_list)
+        proj_ids = [p['id'] for p in list_res.data]
+        self.assertNotIn(str(project.id), proj_ids)
+
+        # Restore
+        restore_res = self.client.post(url_restore)
+        self.assertEqual(restore_res.status_code, status.HTTP_200_OK)
+        self.assertFalse(restore_res.data['is_deleted'])
+
+    def test_event_soft_delete_and_restore(self):
+        now = timezone.now()
+        event = EventItem.objects.create(
+            user=self.user,
+            title="Evento a eliminar suavemente",
+            start_time=now + timezone.timedelta(hours=1),
+            end_time=now + timezone.timedelta(hours=2),
+            status="PROGRAMMED"
+        )
+        url_detail = reverse('event-detail', kwargs={'pk': event.id})
+        url_list = reverse('events-list-create')
+        url_restore = reverse('event-restore', kwargs={'pk': event.id})
+
+        # Soft delete
+        del_res = self.client.delete(url_detail)
+        self.assertEqual(del_res.status_code, status.HTTP_204_NO_CONTENT)
+
+        event.refresh_from_db()
+        self.assertTrue(event.is_deleted)
+        self.assertIsNotNone(event.deleted_at)
+
+        # List excludes soft deleted event
+        list_res = self.client.get(url_list)
+        event_ids = [e['id'] for e in list_res.data]
+        self.assertNotIn(str(event.id), event_ids)
+
+        # Restore
+        restore_res = self.client.post(url_restore)
+        self.assertEqual(restore_res.status_code, status.HTTP_200_OK)
+        self.assertFalse(restore_res.data['is_deleted'])
+
+
+class AuditTrailAPITests(APITestCase):
+    def setUp(self):
+        User.objects.filter(username__in=['audit_user_a', 'audit_user_b']).delete()
+        self.user_a = User.objects.create_user(username='audit_user_a', password='Password123!')
+        self.user_b = User.objects.create_user(username='audit_user_b', password='Password123!')
+        self.client.force_authenticate(user=self.user_a)
+
+    def test_audit_logs_recorded_on_crud_and_restore(self):
+        # 1. CREATE Goal via API
+        create_res = self.client.post(reverse('goals-list-create'), {
+            'title': 'Meta Auditada',
+            'category': 'Desarrollo',
+            'color_hex': '#10B981',
+            'progress_mode': 'MANUAL',
+            'progress_percentage': 10
+        }, format='json')
+        self.assertEqual(create_res.status_code, status.HTTP_201_CREATED)
+        goal_id = create_res.data['id']
+
+        create_log = AuditLog.objects.filter(object_id=goal_id, action='CREATE').first()
+        self.assertIsNotNone(create_log)
+        self.assertEqual(create_log.user, self.user_a)
+        self.assertEqual(create_log.model_name, 'Goal')
+
+        # 2. UPDATE Goal via API
+        patch_res = self.client.patch(reverse('goal-detail', kwargs={'pk': goal_id}), {
+            'title': 'Meta Auditada Modificada'
+        }, format='json')
+        self.assertEqual(patch_res.status_code, status.HTTP_200_OK)
+
+        update_log = AuditLog.objects.filter(object_id=goal_id, action='UPDATE').first()
+        self.assertIsNotNone(update_log)
+        self.assertEqual(update_log.user, self.user_a)
+
+        # 3. DELETE (Soft Delete) Goal via API
+        del_res = self.client.delete(reverse('goal-detail', kwargs={'pk': goal_id}))
+        self.assertEqual(del_res.status_code, status.HTTP_204_NO_CONTENT)
+
+        del_log = AuditLog.objects.filter(object_id=goal_id, action='DELETE').first()
+        self.assertIsNotNone(del_log)
+        self.assertEqual(del_log.user, self.user_a)
+
+        # 4. RESTORE Goal via API
+        restore_res = self.client.post(reverse('goal-restore', kwargs={'pk': goal_id}))
+        self.assertEqual(restore_res.status_code, status.HTTP_200_OK)
+
+        restore_log = AuditLog.objects.filter(object_id=goal_id, action='RESTORE').first()
+        self.assertIsNotNone(restore_log)
+        self.assertEqual(restore_log.user, self.user_a)
+
+        # 5. Verify Audit Logs API returns all records in chronological order
+        logs_res = self.client.get(reverse('audit-logs-list'))
+        self.assertEqual(logs_res.status_code, status.HTTP_200_OK)
+        actions = [item['action'] for item in logs_res.data]
+        self.assertIn('CREATE', actions)
+        self.assertIn('UPDATE', actions)
+        self.assertIn('DELETE', actions)
+        self.assertIn('RESTORE', actions)
+
+    def test_audit_logs_tenant_isolation(self):
+        # User A creates a goal -> generates audit log
+        self.client.post(reverse('goals-list-create'), {
+            'title': 'Meta Privada Usuario A',
+            'progress_mode': 'MANUAL',
+            'progress_percentage': 0
+        }, format='json')
+
+        # Switch to User B
+        self.client.force_authenticate(user=self.user_b)
+
+        # User B queries audit logs -> must receive empty list
+        logs_res = self.client.get(reverse('audit-logs-list'))
+        self.assertEqual(logs_res.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(logs_res.data), 0)
+
 
 

@@ -207,7 +207,12 @@ class GoalListCreateAPI(APIView):
     def get(self, request):
         from .models import Goal
         from .serializers import GoalSerializer
-        qs = Goal.objects.filter(user=request.user).prefetch_related('milestones')
+        is_deleted_param = request.query_params.get('is_deleted')
+        if is_deleted_param == 'true':
+            qs = Goal.objects.filter(user=request.user, is_deleted=True).prefetch_related('milestones')
+        else:
+            qs = Goal.objects.filter(user=request.user, is_deleted=False).prefetch_related('milestones')
+
         status_param = request.query_params.get('status')
         if status_param and status_param != 'ALL':
             qs = qs.filter(status=status_param)
@@ -223,12 +228,21 @@ class GoalListCreateAPI(APIView):
 
     def post(self, request):
         from .serializers import GoalSerializer
-        from .services import calculate_goal_progress
+        from .services import calculate_goal_progress, log_audit_event, get_client_ip
         serializer = GoalSerializer(data=request.data)
         if serializer.is_valid():
             goal = serializer.save(user=request.user)
             if goal.progress_mode == 'MILESTONES':
                 calculate_goal_progress(goal)
+            log_audit_event(
+                user=request.user,
+                action='CREATE',
+                model_name='Goal',
+                object_id=goal.id,
+                object_repr=goal.title,
+                changes={'status': goal.status, 'progress_percentage': goal.progress_percentage},
+                ip_address=get_client_ip(request)
+            )
             return Response(GoalSerializer(goal).data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -239,7 +253,7 @@ class GoalDetailAPI(APIView):
     def get_object(self, pk, user):
         from .models import Goal
         try:
-            return Goal.objects.prefetch_related('milestones').get(pk=pk, user=user)
+            return Goal.objects.prefetch_related('milestones').get(pk=pk, user=user, is_deleted=False)
         except Goal.DoesNotExist:
             raise Http404
 
@@ -250,32 +264,90 @@ class GoalDetailAPI(APIView):
 
     def put(self, request, pk):
         from .serializers import GoalSerializer
-        from .services import calculate_goal_progress
+        from .services import calculate_goal_progress, log_audit_event, get_client_ip
         goal = self.get_object(pk, request.user)
         serializer = GoalSerializer(goal, data=request.data)
         if serializer.is_valid():
             updated_goal = serializer.save()
             if updated_goal.progress_mode == 'MILESTONES':
                 calculate_goal_progress(updated_goal)
+            log_audit_event(
+                user=request.user,
+                action='UPDATE',
+                model_name='Goal',
+                object_id=updated_goal.id,
+                object_repr=updated_goal.title,
+                changes=serializer.validated_data,
+                ip_address=get_client_ip(request)
+            )
             return Response(GoalSerializer(updated_goal).data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def patch(self, request, pk):
         from .serializers import GoalSerializer
-        from .services import calculate_goal_progress
+        from .services import calculate_goal_progress, log_audit_event, get_client_ip
         goal = self.get_object(pk, request.user)
         serializer = GoalSerializer(goal, data=request.data, partial=True)
         if serializer.is_valid():
             updated_goal = serializer.save()
             if updated_goal.progress_mode == 'MILESTONES':
                 calculate_goal_progress(updated_goal)
+            log_audit_event(
+                user=request.user,
+                action='UPDATE',
+                model_name='Goal',
+                object_id=updated_goal.id,
+                object_repr=updated_goal.title,
+                changes=serializer.validated_data,
+                ip_address=get_client_ip(request)
+            )
             return Response(GoalSerializer(updated_goal).data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def delete(self, request, pk):
+        from django.utils import timezone
+        from .services import log_audit_event, get_client_ip
         goal = self.get_object(pk, request.user)
-        goal.delete()
+        goal.is_deleted = True
+        goal.deleted_at = timezone.now()
+        goal.save(update_fields=['is_deleted', 'deleted_at', 'updated_at'])
+        log_audit_event(
+            user=request.user,
+            action='DELETE',
+            model_name='Goal',
+            object_id=goal.id,
+            object_repr=goal.title,
+            changes={'is_deleted': True},
+            ip_address=get_client_ip(request)
+        )
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class GoalRestoreAPI(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        from .models import Goal
+        from .serializers import GoalSerializer
+        from .services import log_audit_event, get_client_ip
+        try:
+            goal = Goal.objects.prefetch_related('milestones').get(pk=pk, user=request.user, is_deleted=True)
+        except Goal.DoesNotExist:
+            raise Http404
+
+        goal.is_deleted = False
+        goal.deleted_at = None
+        goal.save(update_fields=['is_deleted', 'deleted_at', 'updated_at'])
+        log_audit_event(
+            user=request.user,
+            action='RESTORE',
+            model_name='Goal',
+            object_id=goal.id,
+            object_repr=goal.title,
+            changes={'is_deleted': False},
+            ip_address=get_client_ip(request)
+        )
+        return Response(GoalSerializer(goal).data, status=status.HTTP_200_OK)
 
 
 class GoalMilestoneToggleAPI(APIView):
@@ -332,7 +404,13 @@ class ProjectListCreateAPI(APIView):
         from .serializers import ProjectSerializer
         from django.db.models import Count, Q
 
-        projects = Project.objects.filter(user=request.user).annotate(
+        is_deleted_param = request.query_params.get('is_deleted')
+        if is_deleted_param == 'true':
+            projects = Project.objects.filter(user=request.user, is_deleted=True)
+        else:
+            projects = Project.objects.filter(user=request.user, is_deleted=False)
+
+        projects = projects.annotate(
             annotated_total_tasks=Count('tasks', distinct=True),
             annotated_completed_tasks=Count('tasks', filter=Q(tasks__status='DONE'), distinct=True)
         ).select_related('goal').prefetch_related('tasks__subtasks')
@@ -350,10 +428,20 @@ class ProjectListCreateAPI(APIView):
 
     def post(self, request):
         from .serializers import ProjectSerializer
+        from .services import log_audit_event, get_client_ip
         data = request.data.copy()
         serializer = ProjectSerializer(data=data)
         if serializer.is_valid():
             project = serializer.save(user=request.user)
+            log_audit_event(
+                user=request.user,
+                action='CREATE',
+                model_name='Project',
+                object_id=project.id,
+                object_repr=project.title,
+                changes={'status': project.status, 'progress_percentage': project.progress_percentage},
+                ip_address=get_client_ip(request)
+            )
             return Response(ProjectSerializer(project).data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -365,7 +453,7 @@ class ProjectDetailAPI(APIView):
         from .models import Project
         from django.db.models import Count, Q
         try:
-            return Project.objects.filter(pk=pk, user=user).annotate(
+            return Project.objects.filter(pk=pk, user=user, is_deleted=False).annotate(
                 annotated_total_tasks=Count('tasks', distinct=True),
                 annotated_completed_tasks=Count('tasks', filter=Q(tasks__status='DONE'), distinct=True)
             ).select_related('goal').prefetch_related('tasks__subtasks').get()
@@ -380,26 +468,86 @@ class ProjectDetailAPI(APIView):
 
     def put(self, request, pk):
         from .serializers import ProjectSerializer
+        from .services import log_audit_event, get_client_ip
         project = self.get_object(pk, request.user)
         serializer = ProjectSerializer(project, data=request.data)
         if serializer.is_valid():
             updated = serializer.save()
+            log_audit_event(
+                user=request.user,
+                action='UPDATE',
+                model_name='Project',
+                object_id=updated.id,
+                object_repr=updated.title,
+                changes=serializer.validated_data,
+                ip_address=get_client_ip(request)
+            )
             return Response(ProjectSerializer(updated).data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def patch(self, request, pk):
         from .serializers import ProjectSerializer
+        from .services import log_audit_event, get_client_ip
         project = self.get_object(pk, request.user)
         serializer = ProjectSerializer(project, data=request.data, partial=True)
         if serializer.is_valid():
             updated = serializer.save()
+            log_audit_event(
+                user=request.user,
+                action='UPDATE',
+                model_name='Project',
+                object_id=updated.id,
+                object_repr=updated.title,
+                changes=serializer.validated_data,
+                ip_address=get_client_ip(request)
+            )
             return Response(ProjectSerializer(updated).data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def delete(self, request, pk):
+        from django.utils import timezone
+        from .services import log_audit_event, get_client_ip
         project = self.get_object(pk, request.user)
-        project.delete()
+        project.is_deleted = True
+        project.deleted_at = timezone.now()
+        project.save(update_fields=['is_deleted', 'deleted_at', 'updated_at'])
+        log_audit_event(
+            user=request.user,
+            action='DELETE',
+            model_name='Project',
+            object_id=project.id,
+            object_repr=project.title,
+            changes={'is_deleted': True},
+            ip_address=get_client_ip(request)
+        )
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class ProjectRestoreAPI(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        from .models import Project
+        from .serializers import ProjectSerializer
+        from .services import log_audit_event, get_client_ip
+        try:
+            project = Project.objects.get(pk=pk, user=request.user, is_deleted=True)
+        except Project.DoesNotExist:
+            raise Http404
+
+        project.is_deleted = False
+        project.deleted_at = None
+        project.save(update_fields=['is_deleted', 'deleted_at', 'updated_at'])
+        log_audit_event(
+            user=request.user,
+            action='RESTORE',
+            model_name='Project',
+            object_id=project.id,
+            object_repr=project.title,
+            changes={'is_deleted': False},
+            ip_address=get_client_ip(request)
+        )
+        return Response(ProjectSerializer(project).data, status=status.HTTP_200_OK)
 
 
 class ProjectTaskListCreateAPI(APIView):
@@ -526,7 +674,11 @@ class EventListCreateAPI(APIView):
 
         check_approaching_event_reminders(user=request.user)
 
-        events = EventItem.objects.filter(user=request.user)
+        is_deleted_param = request.query_params.get('is_deleted')
+        if is_deleted_param == 'true':
+            events = EventItem.objects.filter(user=request.user, is_deleted=True)
+        else:
+            events = EventItem.objects.filter(user=request.user, is_deleted=False)
 
         status_param = request.query_params.get('status')
         if status_param and status_param != 'ALL':
@@ -555,9 +707,19 @@ class EventListCreateAPI(APIView):
 
     def post(self, request):
         from .serializers import EventItemSerializer
+        from .services import log_audit_event, get_client_ip
         serializer = EventItemSerializer(data=request.data)
         if serializer.is_valid():
             event = serializer.save(user=request.user)
+            log_audit_event(
+                user=request.user,
+                action='CREATE',
+                model_name='EventItem',
+                object_id=event.id,
+                object_repr=event.title,
+                changes={'status': event.status, 'start_time': str(event.start_time)},
+                ip_address=get_client_ip(request)
+            )
             return Response(EventItemSerializer(event).data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -568,7 +730,7 @@ class EventDetailAPI(APIView):
     def get_object(self, pk, user):
         from .models import EventItem
         try:
-            return EventItem.objects.get(pk=pk, user=user)
+            return EventItem.objects.get(pk=pk, user=user, is_deleted=False)
         except EventItem.DoesNotExist:
             raise Http404
 
@@ -579,26 +741,86 @@ class EventDetailAPI(APIView):
 
     def put(self, request, pk):
         from .serializers import EventItemSerializer
+        from .services import log_audit_event, get_client_ip
         event = self.get_object(pk, request.user)
         serializer = EventItemSerializer(event, data=request.data)
         if serializer.is_valid():
             serializer.save()
+            log_audit_event(
+                user=request.user,
+                action='UPDATE',
+                model_name='EventItem',
+                object_id=event.id,
+                object_repr=event.title,
+                changes=serializer.validated_data,
+                ip_address=get_client_ip(request)
+            )
             return Response(serializer.data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def patch(self, request, pk):
         from .serializers import EventItemSerializer
+        from .services import log_audit_event, get_client_ip
         event = self.get_object(pk, request.user)
         serializer = EventItemSerializer(event, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
+            log_audit_event(
+                user=request.user,
+                action='UPDATE',
+                model_name='EventItem',
+                object_id=event.id,
+                object_repr=event.title,
+                changes=serializer.validated_data,
+                ip_address=get_client_ip(request)
+            )
             return Response(serializer.data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def delete(self, request, pk):
+        from django.utils import timezone
+        from .services import log_audit_event, get_client_ip
         event = self.get_object(pk, request.user)
-        event.delete()
+        event.is_deleted = True
+        event.deleted_at = timezone.now()
+        event.save(update_fields=['is_deleted', 'deleted_at', 'updated_at'])
+        log_audit_event(
+            user=request.user,
+            action='DELETE',
+            model_name='EventItem',
+            object_id=event.id,
+            object_repr=event.title,
+            changes={'is_deleted': True},
+            ip_address=get_client_ip(request)
+        )
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class EventRestoreAPI(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        from .models import EventItem
+        from .serializers import EventItemSerializer
+        from .services import log_audit_event, get_client_ip
+        try:
+            event = EventItem.objects.get(pk=pk, user=request.user, is_deleted=True)
+        except EventItem.DoesNotExist:
+            raise Http404
+
+        event.is_deleted = False
+        event.deleted_at = None
+        event.save(update_fields=['is_deleted', 'deleted_at', 'updated_at'])
+        log_audit_event(
+            user=request.user,
+            action='RESTORE',
+            model_name='EventItem',
+            object_id=event.id,
+            object_repr=event.title,
+            changes={'is_deleted': False},
+            ip_address=get_client_ip(request)
+        )
+        return Response(EventItemSerializer(event).data, status=status.HTTP_200_OK)
 
 
 class EventStatusAPI(APIView):
@@ -607,17 +829,45 @@ class EventStatusAPI(APIView):
     def patch(self, request, pk):
         from .models import EventItem
         from .serializers import EventItemSerializer
+        from .services import log_audit_event, get_client_ip
         new_status = request.data.get('status')
         if not new_status or new_status not in ['PROGRAMMED', 'COMPLETED', 'CANCELED']:
             return Response({'error': 'Invalid status. Must be PROGRAMMED, COMPLETED, or CANCELED.'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            event = EventItem.objects.get(pk=pk, user=request.user)
+            event = EventItem.objects.get(pk=pk, user=request.user, is_deleted=False)
+            old_status = event.status
             event.status = new_status
             event.save(update_fields=['status', 'updated_at'])
+            log_audit_event(
+                user=request.user,
+                action='UPDATE',
+                model_name='EventItem',
+                object_id=event.id,
+                object_repr=event.title,
+                changes={'status': [old_status, new_status]},
+                ip_address=get_client_ip(request)
+            )
             return Response(EventItemSerializer(event).data, status=status.HTTP_200_OK)
         except EventItem.DoesNotExist:
             raise Http404
+
+
+class AuditLogListAPI(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from .models import AuditLog
+        from .serializers import AuditLogSerializer
+        logs = AuditLog.objects.filter(user=request.user)
+        model_param = request.query_params.get('model')
+        if model_param:
+            logs = logs.filter(model_name__iexact=model_param)
+        action_param = request.query_params.get('action')
+        if action_param:
+            logs = logs.filter(action=action_param)
+        serializer = AuditLogSerializer(logs[:100], many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 # --- Authentication & Session APIs ---

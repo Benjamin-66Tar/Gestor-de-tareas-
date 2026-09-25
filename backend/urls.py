@@ -9,17 +9,21 @@ from .views import (
     NotificationMarkReadAPI,
     GoalListCreateAPI,
     GoalDetailAPI,
+    GoalRestoreAPI,
     GoalMilestoneToggleAPI,
     CalendarEventsAPI,
     ProjectListCreateAPI,
     ProjectDetailAPI,
+    ProjectRestoreAPI,
     ProjectTaskListCreateAPI,
     ProjectTaskDetailAPI,
     ProjectTaskStatusAPI,
     TaskSubtaskToggleAPI,
     EventListCreateAPI,
     EventDetailAPI,
+    EventRestoreAPI,
     EventStatusAPI,
+    AuditLogListAPI,
     VapidPublicKeyAPI,
     PushSubscribeAPI,
     PushUnsubscribeAPI,
@@ -56,11 +60,13 @@ urlpatterns = [
     # Goals
     path('api/v1/goals/', GoalListCreateAPI.as_view(), name='goals-list-create'),
     path('api/v1/goals/<uuid:pk>/', GoalDetailAPI.as_view(), name='goal-detail'),
+    path('api/v1/goals/<uuid:pk>/restore/', GoalRestoreAPI.as_view(), name='goal-restore'),
     path('api/v1/goals/<uuid:goal_id>/milestones/<uuid:milestone_id>/toggle/', GoalMilestoneToggleAPI.as_view(), name='milestone-toggle'),
     
     # Projects
     path('api/v1/projects/', ProjectListCreateAPI.as_view(), name='projects-list-create'),
     path('api/v1/projects/<uuid:pk>/', ProjectDetailAPI.as_view(), name='project-detail'),
+    path('api/v1/projects/<uuid:pk>/restore/', ProjectRestoreAPI.as_view(), name='project-restore'),
     path('api/v1/projects/<uuid:project_id>/tasks/', ProjectTaskListCreateAPI.as_view(), name='project-tasks-list-create'),
     path('api/v1/tasks/<uuid:pk>/', ProjectTaskDetailAPI.as_view(), name='task-detail'),
     path('api/v1/tasks/<uuid:pk>/status/', ProjectTaskStatusAPI.as_view(), name='task-status'),
@@ -69,7 +75,11 @@ urlpatterns = [
     # Events
     path('api/v1/events/', EventListCreateAPI.as_view(), name='events-list-create'),
     path('api/v1/events/<uuid:pk>/', EventDetailAPI.as_view(), name='event-detail'),
+    path('api/v1/events/<uuid:pk>/restore/', EventRestoreAPI.as_view(), name='event-restore'),
     path('api/v1/events/<uuid:pk>/status/', EventStatusAPI.as_view(), name='event-status'),
+
+    # Audit Trail
+    path('api/v1/audit/logs/', AuditLogListAPI.as_view(), name='audit-logs-list'),
 
     # Calendar Sync
     path('api/v1/calendar/events/', CalendarEventsAPI.as_view(), name='calendar-events-sync'),

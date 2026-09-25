@@ -75,6 +75,8 @@ class Goal(models.Model):
         validators=[MinValueValidator(0), MaxValueValidator(100)]
     )
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='ACTIVE')
+    is_deleted = models.BooleanField(default=False, db_index=True)
+    deleted_at = models.DateTimeField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -140,6 +142,8 @@ class Project(models.Model):
         default=0,
         validators=[MinValueValidator(0), MaxValueValidator(100)]
     )
+    is_deleted = models.BooleanField(default=False, db_index=True)
+    deleted_at = models.DateTimeField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -226,6 +230,8 @@ class EventItem(models.Model):
     color_hex = models.CharField(max_length=7, default='#3B82F6')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PROGRAMMED')
     reminder_minutes = models.PositiveIntegerField(default=15, null=True, blank=True)
+    is_deleted = models.BooleanField(default=False, db_index=True)
+    deleted_at = models.DateTimeField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -265,5 +271,35 @@ class PushSubscription(models.Model):
     def __str__(self):
         username = self.user.username if self.user else "Anonymous"
         return f"PushSubscription ({username}) - {self.endpoint[:30]}..."
+
+
+class AuditLog(models.Model):
+    ACTION_CHOICES = [
+        ('CREATE', 'Creación'),
+        ('UPDATE', 'Actualización'),
+        ('DELETE', 'Eliminación (Soft Delete)'),
+        ('RESTORE', 'Restauración'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='audit_logs')
+    action = models.CharField(max_length=20, choices=ACTION_CHOICES)
+    model_name = models.CharField(max_length=50, db_index=True)
+    object_id = models.CharField(max_length=100, db_index=True)
+    object_repr = models.CharField(max_length=255, blank=True, null=True)
+    changes = models.JSONField(default=dict, blank=True)
+    ip_address = models.GenericIPAddressField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['model_name', 'object_id'], name='audit_model_obj_idx'),
+            models.Index(fields=['user', '-created_at'], name='audit_user_created_idx'),
+        ]
+
+    def __str__(self):
+        username = self.user.username if self.user else "Anonymous"
+        return f"[{self.action}] {self.model_name}:{self.object_id} por {username}"
 
 

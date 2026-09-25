@@ -96,8 +96,8 @@ def sync_goals_to_calendar(user=None, start_date=None, end_date=None):
     events = []
 
     if user and user.is_authenticated:
-        goals_qs = Goal.objects.filter(user=user)
-        milestones_qs = GoalMilestone.objects.select_related('goal').filter(goal__user=user).exclude(target_date__isnull=True)
+        goals_qs = Goal.objects.filter(user=user, is_deleted=False)
+        milestones_qs = GoalMilestone.objects.select_related('goal').filter(goal__user=user, goal__is_deleted=False).exclude(target_date__isnull=True)
     else:
         return []
 
@@ -192,7 +192,7 @@ def sync_projects_to_calendar(user=None, start_date=None, end_date=None):
     if not (user and user.is_authenticated):
         return []
 
-    tasks_qs = ProjectTask.objects.select_related('project').filter(project__user=user).exclude(deadline__isnull=True)
+    tasks_qs = ProjectTask.objects.select_related('project').filter(project__user=user, project__is_deleted=False).exclude(deadline__isnull=True)
     if start_date:
         tasks_qs = tasks_qs.filter(deadline__gte=start_date)
     if end_date:
@@ -227,7 +227,7 @@ def sync_events_to_calendar(user=None, start_date=None, end_date=None):
     if not (user and user.is_authenticated):
         return []
 
-    events_qs = EventItem.objects.filter(user=user)
+    events_qs = EventItem.objects.filter(user=user, is_deleted=False)
     if start_date:
         events_qs = events_qs.filter(end_time__gte=start_date)
     if end_date:
@@ -274,7 +274,7 @@ def check_approaching_event_reminders(user=None):
     now = timezone.now()
     notifications_created = []
 
-    events_qs = EventItem.objects.filter(status='PROGRAMMED', start_time__gt=now)
+    events_qs = EventItem.objects.filter(status='PROGRAMMED', start_time__gt=now, is_deleted=False)
     if user and user.is_authenticated:
         events_qs = events_qs.filter(user=user)
 
@@ -497,6 +497,48 @@ def authenticate_user(identifier, password):
             identifier = user_by_email.username
 
     return authenticate(username=identifier, password=password)
+
+
+def get_client_ip(request):
+    """Safely extracts client IP address from request META headers."""
+    if not request:
+        return None
+    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+    if x_forwarded_for:
+        ip = x_forwarded_for.split(',')[0].strip()
+    else:
+        ip = request.META.get('REMOTE_ADDR')
+    return ip
+
+
+def log_audit_event(user, action: str, model_name: str, object_id, object_repr: str = None, changes: dict = None, ip_address: str = None):
+    """
+    Creates an immutable AuditLog entry tracking mutations (CREATE, UPDATE, DELETE, RESTORE).
+    """
+    from .models import AuditLog
+    import logging
+    try:
+        # Convert non-serializable changes to clean dict
+        safe_changes = {}
+        if changes and isinstance(changes, dict):
+            for k, v in changes.items():
+                if isinstance(v, (str, int, float, bool, type(None), list, dict)):
+                    safe_changes[k] = v
+                else:
+                    safe_changes[k] = str(v)
+        return AuditLog.objects.create(
+            user=user if user and user.is_authenticated else None,
+            action=action,
+            model_name=model_name,
+            object_id=str(object_id),
+            object_repr=str(object_repr)[:255] if object_repr else None,
+            changes=safe_changes,
+            ip_address=ip_address,
+        )
+    except Exception as e:
+        logging.getLogger(__name__).error(f"Failed to record audit log: {e}")
+        return None
+
 
 
 
