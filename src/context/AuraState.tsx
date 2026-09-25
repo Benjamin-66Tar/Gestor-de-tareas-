@@ -149,7 +149,7 @@ interface AuraContextProps {
 
 const AuraContext = createContext<AuraContextProps | undefined>(undefined);
 
-const API_ELEMENTOS_BASE = '/api/v1/elementos/';
+const API_ELEMENTOS_BASE = `${api.API_BASE}/elementos/`;
 
 export const AuraProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // 0. Welcome & Authentication state
@@ -392,7 +392,8 @@ export const AuraProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         const url = `${API_ELEMENTOS_BASE}?start_date=${encodeURIComponent(startStr)}&end_date=${encodeURIComponent(endStr)}`;
         const res = await fetch(url);
-        if (res.ok) {
+        const contentType = res.headers.get('content-type') || '';
+        if (res.ok && contentType.includes('application/json')) {
           nativeItems = await res.json();
         }
       } catch (e) {

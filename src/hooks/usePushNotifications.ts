@@ -128,15 +128,17 @@ export function usePushNotifications(): UsePushNotificationsResult {
 
       // 5. Send subscription endpoint & keys to backend
       const subJson = subscription.toJSON();
-      if (!subJson.keys?.p256dh || !subJson.keys?.auth) {
+      const p256dh = subJson.keys?.p256dh;
+      const auth = subJson.keys?.auth;
+      if (!p256dh || !auth) {
         throw new Error('La suscripción push no contiene las claves criptográficas necesarias.');
       }
 
       await subscribePushApi({
         endpoint: subscription.endpoint,
         keys: {
-          p256dh: subJson.keys.p256dh,
-          auth: subJson.keys.auth,
+          p256dh,
+          auth,
         },
         userAgent: navigator.userAgent,
       });

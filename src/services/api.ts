@@ -5,7 +5,7 @@ import {
   LoginCredentials, RegisterData, AuthResponse, AuthSessionUser
 } from '../domain/types';
 
-const API_BASE = `${(import.meta.env.VITE_API_URL || '').replace(/\/$/, '')}/api/v1`;
+export const API_BASE = `${(import.meta.env.VITE_API_URL || '').replace(/\/$/, '')}/api/v1`;
 
 function getStoredToken(): string | null {
   try {
@@ -23,35 +23,44 @@ async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promi
   const token = getStoredToken();
   const authHeaders: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
 
-  const response = await fetch(url, {
-    headers: {
-      'Content-Type': 'application/json',
-      ...authHeaders,
-      ...options.headers,
-    },
-    ...options,
-  });
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders,
+        ...options.headers,
+      },
+      ...options,
+    });
+  } catch {
+    throw new Error('No se pudo conectar con el servidor backend. Asegúrate de configurar la variable VITE_API_URL.');
+  }
+
+  const contentType = response.headers.get('content-type') || '';
 
   if (!response.ok) {
-    const errorBody = await response.text().catch(() => '');
     let errorMessage = '';
-    try {
-      const parsed = JSON.parse(errorBody);
-      errorMessage = parsed.error || parsed.detail || parsed.message;
-      if (!errorMessage && parsed.details && typeof parsed.details === 'object') {
-        const firstKey = Object.keys(parsed.details)[0];
-        const val = parsed.details[firstKey];
-        errorMessage = Array.isArray(val) ? val[0] : String(val);
+    if (contentType.includes('application/json')) {
+      const errorBody = await response.text().catch(() => '');
+      try {
+        const parsed = JSON.parse(errorBody);
+        errorMessage = parsed.error || parsed.detail || parsed.message;
+        if (!errorMessage && parsed.details && typeof parsed.details === 'object') {
+          const firstKey = Object.keys(parsed.details)[0];
+          const val = parsed.details[firstKey];
+          errorMessage = Array.isArray(val) ? val[0] : String(val);
+        }
+      } catch {
+        // not JSON
       }
-    } catch {
-      // not JSON
     }
 
     if (!errorMessage) {
-      if (response.status === 500 && !errorBody.trim()) {
-        errorMessage = 'No se pudo conectar con el servidor backend (puerto 6001). Asegúrate de que el servidor Django esté en ejecución.';
+      if (response.status === 500) {
+        errorMessage = 'Error en el servidor backend (500). Asegúrate de que el servicio Django esté en ejecución.';
       } else {
-        errorMessage = errorBody.trim() || `Error de servidor [${response.status}] en ${endpoint}`;
+        errorMessage = `Error de servidor [${response.status}] en ${endpoint}`;
       }
     }
 
@@ -60,6 +69,10 @@ async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promi
 
   if (response.status === 204) {
     return {} as T;
+  }
+
+  if (!contentType.includes('application/json')) {
+    throw new Error('El backend de Aura aún no está disponible o no responde JSON. Si estás en Vercel, configura la variable de entorno VITE_API_URL.');
   }
 
   return response.json();
