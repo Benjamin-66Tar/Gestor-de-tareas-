@@ -8,15 +8,24 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Cargar variables de entorno desde .env en la raíz del proyecto
 load_dotenv(BASE_DIR / '.env')
 
-SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-aura-secret-key-dev-only')
+DEBUG = os.environ.get('DEBUG', 'False') == 'True'
 
-DEBUG = os.environ.get('DEBUG', 'True') == 'True'
+SECRET_KEY = os.environ.get('SECRET_KEY')
+if not SECRET_KEY:
+    if DEBUG:
+        SECRET_KEY = 'django-insecure-aura-secret-key-dev-only'
+    else:
+        raise ValueError("La variable de entorno SECRET_KEY es obligatoria en producción.")
 
 _allowed_hosts_env = os.environ.get('ALLOWED_HOSTS')
 if _allowed_hosts_env:
     ALLOWED_HOSTS = [h.strip() for h in _allowed_hosts_env.split(',') if h.strip()]
 else:
-    ALLOWED_HOSTS = ['*'] if DEBUG else ['localhost', '127.0.0.1']
+    ALLOWED_HOSTS = ['localhost', '127.0.0.1', '.onrender.com'] if not DEBUG else ['*']
+
+render_external_hostname = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
+if render_external_hostname and render_external_hostname not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(render_external_hostname)
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -33,6 +42,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -64,13 +74,12 @@ WSGI_APPLICATION = 'backend.wsgi.application'
 DATABASE_URL = os.environ.get('DATABASE_URL')
 
 if DATABASE_URL:
-    db_config = dj_database_url.parse(DATABASE_URL, conn_max_age=600)
-    db_config.setdefault('OPTIONS', {})
-    db_config['OPTIONS'].update({
-        'connect_timeout': 10,
-    })
     DATABASES = {
-        'default': db_config
+        'default': dj_database_url.config(
+            default=DATABASE_URL,
+            conn_max_age=600,
+            conn_health_checks=True,
+        )
     }
 else:
     DATABASES = {
@@ -108,23 +117,30 @@ TIME_ZONE = 'UTC'
 USE_I18N = True
 USE_TZ = True
 
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+# CORS & CSRF Configuration
 _cors_origins_env = os.environ.get('CORS_ALLOWED_ORIGINS')
 if _cors_origins_env:
     CORS_ALLOWED_ORIGINS = [o.strip() for o in _cors_origins_env.split(',') if o.strip()]
-    CORS_ALLOW_ALL_ORIGINS = False
 else:
-    if DEBUG:
-        CORS_ALLOW_ALL_ORIGINS = True
-    else:
-        CORS_ALLOW_ALL_ORIGINS = False
-        CORS_ALLOWED_ORIGINS = [
-            'http://localhost:5173',
-            'http://127.0.0.1:5173',
-        ]
+    CORS_ALLOWED_ORIGINS = [
+        'http://localhost:5173',
+        'http://127.0.0.1:5173',
+    ]
+
+CORS_ALLOW_ALL_ORIGINS = False
+CORS_ALLOW_CREDENTIALS = True
+
+_csrf_origins_env = os.environ.get('CSRF_TRUSTED_ORIGINS')
+if _csrf_origins_env:
+    CSRF_TRUSTED_ORIGINS = [o.strip() for o in _csrf_origins_env.split(',') if o.strip()]
+else:
+    CSRF_TRUSTED_ORIGINS = list(CORS_ALLOWED_ORIGINS)
 
 # Security Headers & Hardening
 SECURE_CONTENT_TYPE_NOSNIFF = True
@@ -156,33 +172,41 @@ REST_FRAMEWORK = {
 }
 
 # VAPID Web Push Configuration (RFC 8291 / RFC 8292)
-VAPID_DIR = BASE_DIR / '.vapid'
-VAPID_PRIVATE_KEY_PATH = VAPID_DIR / 'private_key.pem'
-VAPID_PUBLIC_KEY_PATH = VAPID_DIR / 'public_key.txt'
+_env_vapid_pub = os.environ.get('VAPID_PUBLIC_KEY')
+_env_vapid_priv = os.environ.get('VAPID_PRIVATE_KEY')
 
-if not VAPID_PRIVATE_KEY_PATH.exists() or not VAPID_PUBLIC_KEY_PATH.exists():
-    try:
-        import base64
-        from py_vapid import Vapid
-        from cryptography.hazmat.primitives import serialization
-        VAPID_DIR.mkdir(parents=True, exist_ok=True)
-        _v = Vapid()
-        _v.generate_keys()
-        _pub_bytes = _v.public_key.public_bytes(serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint)
-        _pub_b64 = base64.urlsafe_b64encode(_pub_bytes).decode('utf-8').rstrip('=')
-        _priv_pem = _v.private_key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()).decode('utf-8')
-        VAPID_PUBLIC_KEY_PATH.write_text(_pub_b64, encoding='utf-8')
-        VAPID_PRIVATE_KEY_PATH.write_text(_priv_pem, encoding='utf-8')
-    except Exception as e:
-        # Fallback for environments where py_vapid might not be immediately available during migrations
-        pass
-
-if VAPID_PUBLIC_KEY_PATH.exists() and VAPID_PRIVATE_KEY_PATH.exists():
-    VAPID_PUBLIC_KEY = VAPID_PUBLIC_KEY_PATH.read_text(encoding='utf-8').strip()
-    VAPID_PRIVATE_KEY = str(VAPID_PRIVATE_KEY_PATH)
+if _env_vapid_pub and _env_vapid_priv:
+    # Producción o entorno con claves inyectadas por variables de entorno (sin tocar disco)
+    VAPID_PUBLIC_KEY = _env_vapid_pub.strip()
+    VAPID_PRIVATE_KEY = _env_vapid_priv.strip()
 else:
-    VAPID_PUBLIC_KEY = os.environ.get('VAPID_PUBLIC_KEY', 'mock-public-key')
-    VAPID_PRIVATE_KEY = os.environ.get('VAPID_PRIVATE_KEY', 'mock-private-key')
+    # Desarrollo local: generar/leer desde disco (.vapid/)
+    VAPID_DIR = BASE_DIR / '.vapid'
+    VAPID_PRIVATE_KEY_PATH = VAPID_DIR / 'private_key.pem'
+    VAPID_PUBLIC_KEY_PATH = VAPID_DIR / 'public_key.txt'
+
+    if not VAPID_PRIVATE_KEY_PATH.exists() or not VAPID_PUBLIC_KEY_PATH.exists():
+        try:
+            import base64
+            from py_vapid import Vapid
+            from cryptography.hazmat.primitives import serialization
+            VAPID_DIR.mkdir(parents=True, exist_ok=True)
+            _v = Vapid()
+            _v.generate_keys()
+            _pub_bytes = _v.public_key.public_bytes(serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint)
+            _pub_b64 = base64.urlsafe_b64encode(_pub_bytes).decode('utf-8').rstrip('=')
+            _priv_pem = _v.private_key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()).decode('utf-8')
+            VAPID_PUBLIC_KEY_PATH.write_text(_pub_b64, encoding='utf-8')
+            VAPID_PRIVATE_KEY_PATH.write_text(_priv_pem, encoding='utf-8')
+        except Exception:
+            pass
+
+    if VAPID_PUBLIC_KEY_PATH.exists() and VAPID_PRIVATE_KEY_PATH.exists():
+        VAPID_PUBLIC_KEY = VAPID_PUBLIC_KEY_PATH.read_text(encoding='utf-8').strip()
+        VAPID_PRIVATE_KEY = str(VAPID_PRIVATE_KEY_PATH)
+    else:
+        VAPID_PUBLIC_KEY = os.environ.get('VAPID_PUBLIC_KEY', 'mock-public-key')
+        VAPID_PRIVATE_KEY = os.environ.get('VAPID_PRIVATE_KEY', 'mock-private-key')
 
 VAPID_ADMIN_EMAIL = os.environ.get('VAPID_ADMIN_EMAIL', 'mailto:admin@aura.app')
 
