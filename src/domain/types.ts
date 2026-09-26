@@ -1,13 +1,18 @@
 export type ElementoTipo = 'CALENDARIO' | 'OBJETIVOS' | 'PROYECTOS' | 'EVENTOS';
 
 export interface PlanElemento {
-  id: number;
+  id: number | string;
   titulo: string;
   descripcion?: string;
   tipo: 'OBJETIVO' | 'PROYECTO' | 'EVENTO' | 'ACTIVIDAD';
   fecha_inicio?: string;
   fecha_limite?: string;
   color_hex: string;
+  source_id?: string;
+  is_goal_deadline?: boolean;
+  is_milestone?: boolean;
+  is_project_task?: boolean;
+  is_event_item?: boolean;
 }
 
 export interface CalendarDay {

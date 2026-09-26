@@ -49,7 +49,7 @@ export const ElementoModal: React.FC<ElementoModalProps> = ({
   // Synchronize modal state with editing item or creation defaults
   useEffect(() => {
     if (editingItem) {
-      setTitulo(editingItem.titulo);
+      setTitulo(editingItem.titulo.replace(/^[🎯📋📅📌]\s*/, ''));
       setDescripcion(editingItem.descripcion || '');
       setTipo(editingItem.tipo);
       setColorHex(editingItem.color_hex);
@@ -125,7 +125,7 @@ export const ElementoModal: React.FC<ElementoModalProps> = ({
 
     const itemPayload = {
       titulo: titulo.trim(),
-      descripcion: descripcion.trim() || undefined,
+      descripcion: descripcion.trim(),
       tipo,
       color_hex: colorHex,
       fecha_inicio: fechaInicioISO,

@@ -60,8 +60,8 @@ interface AuraContextProps {
   irSemanaSiguiente: () => void;
   fetchElementos: (start?: string, end?: string) => Promise<void>;
   crearElemento: (elemento: Omit<PlanElemento, 'id'>) => Promise<boolean>;
-  actualizarElemento: (id: number, elemento: Partial<PlanElemento>) => Promise<boolean>;
-  eliminarElemento: (id: number) => Promise<boolean>;
+  actualizarElemento: (id: number | string, elemento: Partial<PlanElemento>) => Promise<boolean>;
+  eliminarElemento: (id: number | string) => Promise<boolean>;
 
   // --- Objetivos Section ---
   goals: Goal[];
@@ -419,56 +419,6 @@ export const AuraProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setCargando(false);
     }
   }, [anioActivo, mesActivo]);
-
-  const crearElemento = async (newEl: Omit<PlanElemento, 'id'>): Promise<boolean> => {
-    try {
-      const res = await fetch(API_ELEMENTOS_BASE, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newEl),
-      });
-      if (res.ok) {
-        await fetchElementos();
-        return true;
-      }
-      return false;
-    } catch (err) {
-      console.error('Error al crear elemento:', err);
-      return false;
-    }
-  };
-
-  const actualizarElemento = async (id: number, updatedFields: Partial<PlanElemento>): Promise<boolean> => {
-    try {
-      const res = await fetch(`${API_ELEMENTOS_BASE}${id}/`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updatedFields),
-      });
-      if (res.ok) {
-        await fetchElementos();
-        return true;
-      }
-      return false;
-    } catch (err) {
-      console.error('Error al actualizar elemento:', err);
-      return false;
-    }
-  };
-
-  const eliminarElemento = async (id: number): Promise<boolean> => {
-    try {
-      const res = await fetch(`${API_ELEMENTOS_BASE}${id}/`, { method: 'DELETE' });
-      if (res.ok) {
-        await fetchElementos();
-        return true;
-      }
-      return false;
-    } catch (err) {
-      console.error('Error al eliminar elemento:', err);
-      return false;
-    }
-  };
 
   // 4. Objetivos (Goals) state & operations
   const [goals, setGoals] = useState<Goal[]>([]);
@@ -947,6 +897,197 @@ export const AuraProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     return blocks;
   }, [events, eventFilter]);
+
+  // Unified Calendar CRUD Operations (Seamlessly delegating between Goals, Projects, Events, and native items)
+  const crearElemento = async (newEl: Omit<PlanElemento, 'id'>): Promise<boolean> => {
+    try {
+      if (newEl.tipo === 'OBJETIVO') {
+        const success = await createGoal({
+          title: newEl.titulo,
+          description: newEl.descripcion || '',
+          colorHex: newEl.color_hex,
+          startDate: newEl.fecha_inicio || null,
+          deadline: newEl.fecha_limite || null,
+          progressMode: 'MILESTONES',
+          status: 'ACTIVE',
+        });
+        if (success) {
+          await fetchElementos();
+          return true;
+        }
+        return false;
+      }
+
+      if (newEl.tipo === 'EVENTO') {
+        const success = await createEvent({
+          title: newEl.titulo,
+          description: newEl.descripcion || '',
+          colorHex: newEl.color_hex,
+          startTime: newEl.fecha_inicio || newEl.fecha_limite || new Date().toISOString(),
+          endTime: newEl.fecha_limite || newEl.fecha_inicio || new Date().toISOString(),
+          status: 'PROGRAMMED',
+        });
+        if (success) {
+          await fetchElementos();
+          return true;
+        }
+        return false;
+      }
+
+      if (newEl.tipo === 'PROYECTO') {
+        const success = await createProject({
+          title: newEl.titulo,
+          description: newEl.descripcion || '',
+          colorHex: newEl.color_hex,
+          status: 'ACTIVE',
+        });
+        if (success) {
+          await fetchElementos();
+          return true;
+        }
+        return false;
+      }
+
+      // Native fallback (ACTIVIDAD)
+      const token = authToken || (typeof localStorage !== 'undefined' ? localStorage.getItem('aura_session_token') : null);
+      const authHeader: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+      const res = await fetch(API_ELEMENTOS_BASE, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeader },
+        body: JSON.stringify(newEl),
+      });
+      if (res.ok) {
+        await fetchElementos();
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.error('Error al crear elemento:', err);
+      return false;
+    }
+  };
+
+  const actualizarElemento = async (id: number | string, updatedFields: Partial<PlanElemento>): Promise<boolean> => {
+    try {
+      const idStr = String(id);
+      if (idStr.startsWith('goal-')) {
+        const goalId = idStr.replace('goal-', '');
+        const cleanTitle = updatedFields.titulo ? updatedFields.titulo.replace(/^[🎯📌]\s*/, '') : undefined;
+        const success = await updateGoal(goalId, {
+          title: cleanTitle,
+          description: updatedFields.descripcion,
+          colorHex: updatedFields.color_hex,
+          startDate: updatedFields.fecha_inicio || null,
+          deadline: updatedFields.fecha_limite || null,
+        });
+        if (success) {
+          await fetchElementos();
+          return true;
+        }
+        return false;
+      }
+
+      if (idStr.startsWith('task-')) {
+        const taskId = idStr.replace('task-', '');
+        const cleanTitle = updatedFields.titulo ? updatedFields.titulo.replace(/^[📋]\s*/, '') : undefined;
+        const success = await updateTask(taskId, {
+          title: cleanTitle,
+          description: updatedFields.descripcion,
+          deadline: updatedFields.fecha_limite || null,
+        });
+        if (success) {
+          await fetchElementos();
+          return true;
+        }
+        return false;
+      }
+
+      if (idStr.startsWith('event-')) {
+        const eventId = idStr.replace('event-', '');
+        const cleanTitle = updatedFields.titulo ? updatedFields.titulo.replace(/^[📅]\s*/, '') : undefined;
+        const success = await updateEvent(eventId, {
+          title: cleanTitle,
+          description: updatedFields.descripcion,
+          colorHex: updatedFields.color_hex,
+          startTime: updatedFields.fecha_inicio,
+          endTime: updatedFields.fecha_limite,
+        });
+        if (success) {
+          await fetchElementos();
+          return true;
+        }
+        return false;
+      }
+
+      // Native fallback
+      const token = authToken || (typeof localStorage !== 'undefined' ? localStorage.getItem('aura_session_token') : null);
+      const authHeader: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+      const res = await fetch(`${API_ELEMENTOS_BASE}${id}/`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...authHeader },
+        body: JSON.stringify(updatedFields),
+      });
+      if (res.ok) {
+        await fetchElementos();
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.error('Error al actualizar elemento:', err);
+      return false;
+    }
+  };
+
+  const eliminarElemento = async (id: number | string): Promise<boolean> => {
+    try {
+      const idStr = String(id);
+      if (idStr.startsWith('goal-')) {
+        const goalId = idStr.replace('goal-', '');
+        const success = await deleteGoal(goalId);
+        if (success) {
+          await fetchElementos();
+          return true;
+        }
+        return false;
+      }
+
+      if (idStr.startsWith('task-')) {
+        const taskId = idStr.replace('task-', '');
+        const success = await deleteTask(taskId);
+        if (success) {
+          await fetchElementos();
+          return true;
+        }
+        return false;
+      }
+
+      if (idStr.startsWith('event-')) {
+        const eventId = idStr.replace('event-', '');
+        const success = await deleteEvent(eventId);
+        if (success) {
+          await fetchElementos();
+          return true;
+        }
+        return false;
+      }
+
+      // Native fallback
+      const token = authToken || (typeof localStorage !== 'undefined' ? localStorage.getItem('aura_session_token') : null);
+      const authHeader: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+      const res = await fetch(`${API_ELEMENTOS_BASE}${id}/`, {
+        method: 'DELETE',
+        headers: { ...authHeader },
+      });
+      if (res.ok) {
+        await fetchElementos();
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.error('Error al eliminar elemento:', err);
+      return false;
+    }
+  };
 
   // Initial load effects
   useEffect(() => {

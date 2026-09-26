@@ -110,6 +110,7 @@ def sync_goals_to_calendar(user=None, start_date=None, end_date=None):
         events.append({
             'id': f"goal-{goal.id}",
             'titulo': f"🎯 {goal.title}",
+            'descripcion': goal.description or '',
             'tipo': 'OBJETIVO',
             'fecha_inicio': goal.start_date.isoformat() if goal.start_date else None,
             'fecha_limite': goal.deadline.isoformat(),
@@ -130,6 +131,7 @@ def sync_goals_to_calendar(user=None, start_date=None, end_date=None):
         events.append({
             'id': f"milestone-{m.id}",
             'titulo': f"📌 {m.title}",
+            'descripcion': f"Hito del objetivo: {m.goal.title}",
             'tipo': 'OBJETIVO',
             'fecha_limite': f"{m.target_date.isoformat()}T12:00:00Z",
             'color_hex': m.goal.color_hex,
@@ -202,6 +204,7 @@ def sync_projects_to_calendar(user=None, start_date=None, end_date=None):
         events.append({
             'id': f"task-{task.id}",
             'titulo': f"📋 {task.title}",
+            'descripcion': task.description or '',
             'tipo': 'PROYECTO',
             'fecha_limite': task.deadline.isoformat(),
             'color_hex': task.project.color_hex,
@@ -237,6 +240,7 @@ def sync_events_to_calendar(user=None, start_date=None, end_date=None):
         events.append({
             'id': f"event-{event.id}",
             'titulo': f"📅 {event.title}",
+            'descripcion': event.description or '',
             'tipo': 'EVENTO',
             'fecha_inicio': event.start_time.isoformat(),
             'fecha_limite': event.end_time.isoformat(),
