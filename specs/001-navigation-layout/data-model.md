@@ -43,7 +43,9 @@ Represents a user goal managed in the "Objetivos" section.
 | `description` | TextField | Blank, Nullable | Detailed description or context. |
 | `category` | CharField | Max Length: 50, Default: `'General'` | Thematic category (e.g., 'Trabajo', 'Salud'). |
 | `color_hex` | CharField | Max Length: 7, Default: `'#10B981'` | Hex color code for category badge and calendar marker. |
-| `deadline` | DateTimeField | Nullable, Blank, DB Index | Target completion date. |
+| `start_date` | DateTimeField | Nullable, Blank | Range start date for spanning multiple days. |
+| `deadline` | DateTimeField | Nullable, Blank, DB Index | Target completion date/time. |
+| `reminder_minutes` | PositiveIntegerField | Nullable, Blank, Default: 0 | Alert lead time in minutes (0=exact, 15, 60, 1440). |
 | `progress_mode` | CharField | Choices: `['MANUAL', 'MILESTONES']`, Default: `'MILESTONES'` | Calculation mode for progress. |
 | `progress_percentage` | PositiveSmallIntegerField | Default: 0, Min: 0, Max: 100 | Current calculated or manual progress (0-100%). |
 | `status` | CharField | Choices: `['ACTIVE', 'COMPLETED', 'PAUSED']`, Default: `'ACTIVE'` | Current status of the goal. |
@@ -96,7 +98,8 @@ Represents an actionable task belonging to a project's Kanban board.
 | `description` | TextField | Blank, Nullable | Detailed description or context. |
 | `status` | CharField | Choices: `['TODO', 'IN_PROGRESS', 'DONE']`, Default: `'TODO'` | Workflow Kanban column. |
 | `priority` | CharField | Choices: `['LOW', 'MEDIUM', 'HIGH']`, Default: `'MEDIUM'` | Color-coded priority level. |
-| `deadline` | DateTimeField | Nullable, Blank, DB Index | Optional target deadline date. |
+| `deadline` | DateTimeField | Nullable, Blank, DB Index | Target completion date and time (`datetime-local`). |
+| `reminder_minutes` | PositiveIntegerField | Nullable, Blank, Default: 0 | Alert lead time in minutes (0=exact, 15, 60, 1440). |
 | `order` | PositiveIntegerField | Default: 0 | Sorting position within the Kanban column. |
 | `created_at` | DateTimeField | Auto Now Add | Creation timestamp. |
 | `updated_at` | DateTimeField | Auto Now | Last update timestamp. |
@@ -232,7 +235,9 @@ export interface Goal {
   description?: string;
   category: string;
   colorHex: string;
+  startDate?: string | null;
   deadline?: string | null;
+  reminderMinutes?: number;
   progressMode: ProgressMode;
   progressPercentage: number; // 0 to 100
   status: GoalStatus;
@@ -269,6 +274,7 @@ export interface ProjectTask {
   status: TaskStatus;
   priority: TaskPriority;
   deadline?: string | null;
+  reminderMinutes?: number;
   order: number;
   subtasks: TaskSubtask[];
   createdAt: string;

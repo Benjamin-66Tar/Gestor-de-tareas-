@@ -85,7 +85,9 @@ All endpoints are served under the `/api/v1` namespace and expect/return `applic
     "description": "Dominar genéricos, decoradores y tipos condicionales.",
     "category": "Aprendizaje",
     "color_hex": "#10B981",
+    "start_date": "2026-10-01T08:00:00Z",
     "deadline": "2026-10-15T23:59:59Z",
+    "reminder_minutes": 15,
     "progress_mode": "MILESTONES",
     "progress_percentage": 60,
     "status": "ACTIVE",
@@ -302,6 +304,7 @@ All endpoints are served under the `/api/v1` namespace and expect/return `applic
   "status": "TODO",
   "priority": "HIGH",
   "deadline": "2026-09-12T23:59:59Z",
+  "reminder_minutes": 15,
   "subtasks": [
     { "title": "Crear Router", "order": 1 },
     { "title": "Añadir Guards", "order": 2 }

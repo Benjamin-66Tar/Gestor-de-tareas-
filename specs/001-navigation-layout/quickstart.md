@@ -220,6 +220,24 @@ The application is available at `http://localhost:5173`.
    - Interactive auth tabs/form or welcome button sit comfortably below without horizontal scroll.
 3. Test switching tabs and typing into fields on mobile viewport; verify no layout clipping occurs.
 
+### Scenario 20: Timezone Integrity & Goal/Task Deadline Reminders
+1. **Timezone Integrity (No UTC Drift)**:
+   - Navigate to the **"OBJETIVOS"** tab.
+   - Click to create or edit a Goal.
+   - In the date/time picker, select today at a specific local time (e.g., `11:21 a. m.`).
+   - Save the Goal.
+   - Reopen the Goal edit drawer; verify the date picker displays **exactly 11:21 a. m.** without shifting by timezone offset (e.g., no shift to 5:21 p. m. in UTC-6).
+   - In the **"PROYECTOS"** tab, open a Task in the project workspace; verify its deadline uses `datetime-local` and maintains local time when saved and reopened.
+2. **Configurable Reminder & Web Push Delivery**:
+   - In the Goal edit drawer, select a reminder lead time (e.g., "Al momento exacto (0 min)" or "15 minutos antes").
+   - Save the Goal.
+   - When the scheduled reminder threshold arrives, verify that:
+     * An in-app `Notification` record is created and appears in the Navbar dropdown with unread badge counter.
+     * An OS-level Web Push notification alert is dispatched to active registered subscriptions.
+3. **Alert Suppression on Completed / Paused Items**:
+   - Change the Goal status to `COMPLETED` or `PAUSED`, or move the Task to `DONE`.
+   - Verify that the background scheduler suppresses and does not emit duplicate or overdue notifications for finished items.
+
 ---
 
 ## 4. Automated Testing

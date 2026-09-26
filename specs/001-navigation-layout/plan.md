@@ -35,6 +35,10 @@ The Navigation Layout & Workspaces feature establishes the core visual shell and
    - **Frictionless Return Experience**: When a user already has an account created and active session, opening the application shows only the welcome section (hero illustration and 2 phrases) with a primary one-click entry button (*"Entrar a Aura"*) and secondary action to switch accounts or sign out.
    - **Session Lifecycle & Account Switching**: Signing out or choosing "Cambiar de cuenta" immediately clears the session and restores the full split screen with authentication tabs.
    - **Responsive Single-Column Stacking**: On mobile viewports (<768px), the layout automatically collapses from side-by-side columns into a single vertical stack, scaling the hero image and keeping input forms and buttons easily accessible.
+7. **Timezone Integrity & Goal/Task Reminders**:
+   - **Centralized Timezone Helper**: `formatToLocalInputDate` in `src/utils/dateUtils.ts` preventing UTC offset drift (+6h) when loading ISO dates into `datetime-local` inputs across `GoalDrawer.tsx`, `TaskDrawer.tsx`, and `ElementoModal.tsx`.
+   - **Configurable Reminder Offsets**: Adding `reminder_minutes` (0, 15, 60, 1440) to `Goal` and `ProjectTask` with interactive drawer selectors.
+   - **Proactive Notification & Push Dispatch**: In-process scheduler in Django (`check_and_dispatch_all_reminders`) evaluating goal deadlines and task deadlines every 60s, dispatching alerts via Web Push and in-app Notification with automatic suppression when items are `COMPLETED`, `PAUSED`, or `DONE`.
 
 The implementation strictly enforces a **Layered Architecture (Arquitectura de Capas)** across both backend and frontend to ensure high maintainability, testability, separation of concerns, and ultra-fast UI responsiveness.
 

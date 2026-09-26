@@ -251,3 +251,32 @@ Implement an integrated **Welcome & Authentication Screen** serving as the appli
 ### Alternatives Considered
 - **Separate dedicated route pages (`/login` and `/register`)**: Rejected because full-page navigation creates unnecessary routing overhead and disrupts the split-screen aesthetic.
 - **Modal Popup Login**: Rejected because authentication is the front door of the app; modal popups over an empty blurred background look unpolished and perform poorly on mobile viewports.
+
+---
+
+## 16. Timezone Handling & Unified Local Time Synchronization & Goal/Task Reminders
+
+### Decision
+1. **Centralized Timezone Conversion in Frontend**:
+   - Provide a shared helper `formatToLocalInputDate(dateOrIsoStr: Date | string): string` in `src/utils/dateUtils.ts` that converts any UTC ISO 8601 timestamp returned by Django into the browser's local time components (`getFullYear()`, `getMonth() + 1`, `getDate()`, `getHours()`, `getMinutes()`), returning `YYYY-MM-DDTHH:mm`.
+   - Replace manual `.slice(0, 16)` in `GoalDrawer.tsx` and `.substring(0, 10)` in `TaskDrawer.tsx` with this helper, ensuring that a goal or task set for e.g. 11:21 AM local time (UTC-6) always displays 11:21 AM when reopened, never shifting to 5:21 PM.
+   - For `ElementoModal.tsx` in Calendar, use `formatLocalDate` rather than `toISOString().split('T')[0]`, preventing date flips around midnight UTC.
+2. **Configurable Reminder Offsets (`reminder_minutes`)**:
+   - Add `reminder_minutes` (PositiveIntegerField, choices: 0, 5, 10, 15, 30, 60, 1440) to `Goal` and `ProjectTask` with default 0 (at deadline) or preset selection in the drawer UI, matching `EventDrawer.tsx`.
+3. **Backend Scheduler & Proactive Dispatch**:
+   - In `backend/services.py`, implement `check_approaching_goal_deadlines(user=None)` and enhance `check_approaching_task_deadlines(user=None)`.
+   - The scheduler thread (`_scheduler_loop` every 60s) checks:
+     * Active goals where `now <= deadline <= now + timedelta(minutes=reminder_minutes)` (or `now - timedelta(minutes=2) <= deadline <= now + timedelta(minutes=1)` when `reminder_minutes == 0`).
+     * Exclude goals with `status in ('COMPLETED', 'PAUSED')` or `is_deleted=True`.
+     * Exclude tasks with `status == 'DONE'` or `project__status == 'ARCHIVED'`.
+     * Dispatch in-app `Notification` and encrypted Web Push via `send_web_push`.
+     * Prevent duplicate alerts using title and message deduplication in `Notification.objects.filter(...)`.
+
+### Rationale
+- Completely eliminates timezone drift caused by mixing UTC string slicing with browser local input rendering.
+- Delivers unified notification parity across all Aura entities (Events, Goals, Tasks) using the existing VAPID Web Push infrastructure.
+- Zero external dependencies: works out-of-the-box in the in-process Django thread.
+
+### Alternatives Considered
+- **Store Local Time Strings in Database**: Rejected because storing dates with explicit timezones or UTC timestamps in Django with `USE_TZ=True` is the industry standard for cross-platform data integrity and calendar querying.
+- **Client-Side-Only `setTimeout` or Notification API**: Rejected because browser tabs can be closed, backgrounded, or on mobile devices where client timers are throttled or terminated by the OS.
