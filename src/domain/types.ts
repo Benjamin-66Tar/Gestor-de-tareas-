@@ -88,6 +88,7 @@ export interface Goal {
   colorHex: string;
   startDate?: string | null;
   deadline?: string | null;
+  reminderMinutes?: number;
   progressMode: ProgressMode;
   progressPercentage: number; // 0 to 100
   status: GoalStatus;
@@ -127,7 +128,9 @@ export interface ProjectTask {
   description?: string;
   status: TaskStatus;
   priority: TaskPriority;
+  startDate?: string | null;
   deadline?: string | null;
+  reminderMinutes?: number;
   order: number;
   subtasks: TaskSubtask[];
   createdAt?: string;

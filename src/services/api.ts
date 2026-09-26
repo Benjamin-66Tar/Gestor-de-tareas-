@@ -182,6 +182,7 @@ export function transformGoalFromApi(raw: any): Goal {
     colorHex: raw.color_hex ?? raw.colorHex ?? '#10B981',
     startDate: raw.start_date ?? raw.startDate ?? null,
     deadline: raw.deadline || null,
+    reminderMinutes: raw.reminder_minutes ?? raw.reminderMinutes ?? 0,
     progressMode: raw.progress_mode ?? raw.progressMode ?? 'MILESTONES',
     progressPercentage: typeof raw.progress_percentage === 'number'
       ? raw.progress_percentage
@@ -222,6 +223,9 @@ export async function createGoalApi(goalData: Partial<Goal>): Promise<Goal> {
     color_hex: goalData.colorHex || '#10B981',
     start_date: goalData.startDate || (goalData as any).start_date || null,
     deadline: goalData.deadline || null,
+    reminder_minutes: goalData.reminderMinutes !== undefined
+      ? goalData.reminderMinutes
+      : ((goalData as any).reminder_minutes !== undefined ? (goalData as any).reminder_minutes : 0),
     progress_mode: goalData.progressMode || 'MILESTONES',
     progress_percentage: goalData.progressPercentage || 0,
     status: goalData.status || 'ACTIVE',
@@ -250,6 +254,8 @@ export async function updateGoalApi(id: string, goalData: Partial<Goal>): Promis
   if (goalData.startDate !== undefined) payload.start_date = goalData.startDate;
   if ((goalData as any).start_date !== undefined) payload.start_date = (goalData as any).start_date;
   if (goalData.deadline !== undefined) payload.deadline = goalData.deadline;
+  if (goalData.reminderMinutes !== undefined) payload.reminder_minutes = goalData.reminderMinutes;
+  if ((goalData as any).reminder_minutes !== undefined) payload.reminder_minutes = (goalData as any).reminder_minutes;
   if (goalData.progressMode !== undefined) payload.progress_mode = goalData.progressMode;
   if (goalData.progressPercentage !== undefined) payload.progress_percentage = goalData.progressPercentage;
   if (goalData.status !== undefined) payload.status = goalData.status;
@@ -312,7 +318,9 @@ export function transformTaskFromApi(raw: any): ProjectTask {
     description: raw.description,
     status: raw.status,
     priority: raw.priority,
+    startDate: raw.start_date ?? raw.startDate ?? null,
     deadline: raw.deadline,
+    reminderMinutes: raw.reminder_minutes ?? raw.reminderMinutes ?? 0,
     order: raw.order ?? 0,
     subtasks: (raw.subtasks || []).map((s: any) => ({
       id: s.id,
@@ -418,7 +426,11 @@ export async function createProjectTaskApi(projectId: string, taskData: Partial<
     description: taskData.description || '',
     status: taskData.status || 'TODO',
     priority: taskData.priority || 'MEDIUM',
+    start_date: taskData.startDate || (taskData as any).start_date || null,
     deadline: taskData.deadline || null,
+    reminder_minutes: taskData.reminderMinutes !== undefined
+      ? taskData.reminderMinutes
+      : ((taskData as any).reminder_minutes !== undefined ? (taskData as any).reminder_minutes : 0),
     subtasks: (taskData.subtasks || []).map((s, idx) => ({
       title: s.title,
       is_completed: s.isCompleted,
@@ -439,7 +451,11 @@ export async function updateProjectTaskApi(taskId: string, taskData: Partial<Pro
   if (taskData.description !== undefined) payload.description = taskData.description;
   if (taskData.status !== undefined) payload.status = taskData.status;
   if (taskData.priority !== undefined) payload.priority = taskData.priority;
+  if (taskData.startDate !== undefined) payload.start_date = taskData.startDate;
+  if ((taskData as any).start_date !== undefined) payload.start_date = (taskData as any).start_date;
   if (taskData.deadline !== undefined) payload.deadline = taskData.deadline;
+  if (taskData.reminderMinutes !== undefined) payload.reminder_minutes = taskData.reminderMinutes;
+  if ((taskData as any).reminder_minutes !== undefined) payload.reminder_minutes = (taskData as any).reminder_minutes;
   if (taskData.subtasks !== undefined) {
     payload.subtasks = taskData.subtasks.map((s, idx) => ({
       id: s.id,

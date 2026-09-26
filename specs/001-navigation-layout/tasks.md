@@ -310,20 +310,20 @@ Task: "Implement typed API client service methods in src/services/api.ts"
 3. Wait or trigger reminder: verify in-app notification appears in the Navbar dropdown and an encrypted Web Push alert is dispatched.
 4. Mark Goal as COMPLETED or Task as DONE: verify reminder alerts are suppressed.
 
-- [ ] T108 [P] [US8] Implement formatToLocalInputDate helper function in src/utils/dateUtils.ts converting UTC ISO timestamps to local YYYY-MM-DDTHH:mm strings
-- [ ] T109 [P] [US8] Update Goal and ProjectTask TypeScript domain interfaces with reminderMinutes and startDate in src/domain/types.ts
-- [ ] T110 [P] [US8] Add reminder_minutes field to Goal and ProjectTask models in backend/models.py
-- [ ] T111 [US8] Generate and execute Django database migration for reminder_minutes in Goal and ProjectTask in backend/
-- [ ] T112 [P] [US8] Update GoalSerializer and ProjectTaskSerializer to serialize reminder_minutes in backend/serializers.py
-- [ ] T113 [US8] Implement check_approaching_goal_deadlines and enhance check_approaching_task_deadlines with configurable reminder lead times and status suppression (COMPLETED, PAUSED, DONE) in backend/services.py
-- [ ] T114 [US8] Update check_and_dispatch_all_reminders to include goal deadlines alongside events and tasks in backend/services.py
-- [ ] T115 [US8] Update GoalDrawer to use formatToLocalInputDate for deadline and startDate, preventing UTC drift, and add reminder selector dropdown in src/components/goals/GoalDrawer.tsx
-- [ ] T116 [US8] Update TaskDrawer to use datetime-local with formatToLocalInputDate and add reminder selector dropdown in src/components/projects/TaskDrawer.tsx
-- [ ] T117 [US8] Update ElementoModal to use formatLocalDate for default dates to avoid midnight UTC day shifts in src/components/ElementoModal.tsx
-- [ ] T118 [US8] Verify and wire reminderMinutes in API client methods and context state in src/services/api.ts and src/context/AuraState.tsx
-- [ ] T119 [P] [US8] Create automated unit tests for goal and task reminder evaluations and status suppression in backend/tests.py
-- [ ] T120 [US8] Run frontend build verification with npm run build to verify zero TypeScript errors
-- [ ] T121 [US8] Execute Scenario 20 verification in quickstart.md across Goal and Task date/time integrity and Web Push alert dispatch
+- [X] T108 [P] [US8] Implement formatToLocalInputDate helper function in src/utils/dateUtils.ts converting UTC ISO timestamps to local YYYY-MM-DDTHH:mm strings
+- [X] T109 [P] [US8] Update Goal and ProjectTask TypeScript domain interfaces with reminderMinutes and startDate in src/domain/types.ts
+- [X] T110 [P] [US8] Add reminder_minutes field to Goal and ProjectTask models in backend/models.py
+- [X] T111 [US8] Generate and execute Django database migration for reminder_minutes in Goal and ProjectTask in backend/
+- [X] T112 [P] [US8] Update GoalSerializer and ProjectTaskSerializer to serialize reminder_minutes in backend/serializers.py
+- [X] T113 [US8] Implement check_approaching_goal_deadlines and enhance check_approaching_task_deadlines with configurable reminder lead times and status suppression (COMPLETED, PAUSED, DONE) in backend/services.py
+- [X] T114 [US8] Update check_and_dispatch_all_reminders to include goal deadlines alongside events and tasks in backend/services.py
+- [X] T115 [US8] Update GoalDrawer to use formatToLocalInputDate for deadline and startDate, preventing UTC drift, and add reminder selector dropdown in src/components/goals/GoalDrawer.tsx
+- [X] T116 [US8] Update TaskDrawer to use datetime-local with formatToLocalInputDate and add reminder selector dropdown in src/components/projects/TaskDrawer.tsx
+- [X] T117 [US8] Update ElementoModal to use formatLocalDate for default dates to avoid midnight UTC day shifts in src/components/ElementoModal.tsx
+- [X] T118 [US8] Verify and wire reminderMinutes in API client methods and context state in src/services/api.ts and src/context/AuraState.tsx
+- [X] T119 [P] [US8] Create automated unit tests for goal and task reminder evaluations and status suppression in backend/tests.py
+- [X] T120 [US8] Run frontend build verification with npm run build to verify zero TypeScript errors
+- [X] T121 [US8] Execute Scenario 20 verification in quickstart.md across Goal and Task date/time integrity and Web Push alert dispatch
 
 ---
 
