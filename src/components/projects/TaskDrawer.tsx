@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ProjectTask, TaskPriority, TaskStatus } from '../../domain/types';
 import { useAuraState } from '../../context/AuraState';
+import { formatToLocalInputDate } from '../../utils/dateUtils';
 
 interface TaskDrawerProps {
   isOpen: boolean;
@@ -8,6 +9,16 @@ interface TaskDrawerProps {
   taskToEdit: ProjectTask | null;
   projectId: string;
 }
+
+const REMINDER_OPTIONS = [
+  { value: 0, label: 'Al momento exacto (0 min)' },
+  { value: 5, label: '5 minutos antes' },
+  { value: 10, label: '10 minutos antes' },
+  { value: 15, label: '15 minutos antes' },
+  { value: 30, label: '30 minutos antes' },
+  { value: 60, label: '1 hora antes' },
+  { value: 1440, label: '1 día antes' },
+];
 
 export const TaskDrawer: React.FC<TaskDrawerProps> = ({
   isOpen,
@@ -22,6 +33,7 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
   const [status, setStatus] = useState<TaskStatus>('TODO');
   const [priority, setPriority] = useState<TaskPriority>('MEDIUM');
   const [deadline, setDeadline] = useState('');
+  const [reminderMinutes, setReminderMinutes] = useState<number>(0);
   const [subtasks, setSubtasks] = useState<Array<{ id?: string; title: string; isCompleted: boolean }>>([]);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -33,7 +45,12 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
       setDescription(taskToEdit.description || '');
       setStatus(taskToEdit.status);
       setPriority(taskToEdit.priority);
-      setDeadline(taskToEdit.deadline ? taskToEdit.deadline.substring(0, 10) : '');
+      setDeadline(formatToLocalInputDate(taskToEdit.deadline));
+      setReminderMinutes(
+        typeof taskToEdit.reminderMinutes === 'number'
+          ? taskToEdit.reminderMinutes
+          : (typeof (taskToEdit as any).reminder_minutes === 'number' ? (taskToEdit as any).reminder_minutes : 0)
+      );
       setSubtasks(
         (taskToEdit.subtasks || []).map((s) => ({
           id: s.id,
@@ -47,6 +64,7 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
       setStatus('TODO');
       setPriority('MEDIUM');
       setDeadline('');
+      setReminderMinutes(0);
       setSubtasks([]);
     }
     setNewSubtaskTitle('');
@@ -100,12 +118,14 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
     setErrorMsg('');
 
     try {
-      const payload: Partial<ProjectTask> = {
+      const payload: Partial<ProjectTask> & { reminder_minutes?: number } = {
         title: title.trim(),
         description: description.trim(),
         status,
         priority,
-        deadline: deadline || null,
+        deadline: deadline ? new Date(deadline).toISOString() : null,
+        reminderMinutes,
+        reminder_minutes: reminderMinutes,
         subtasks: subtasks.map((s, idx) => ({
           id: s.id || '',
           taskId: taskToEdit?.id || '',
@@ -237,17 +257,36 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
                 </div>
               </div>
 
-              {/* Deadline */}
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-1.5">
-                  <span>🗓️</span> Fecha Límite (se proyectará en el Calendario)
-                </label>
-                <input
-                  type="date"
-                  value={deadline}
-                  onChange={(e) => setDeadline(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-800/90 border border-slate-700/80 hover:border-slate-600 focus:border-indigo-500 rounded-xl text-xs text-white outline-none cursor-pointer font-mono transition"
-                />
+              {/* Deadline & Reminder */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-1.5">
+                    <span>🗓️</span> Fecha y Hora Límite
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={deadline}
+                    onChange={(e) => setDeadline(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-800/90 border border-slate-700/80 hover:border-slate-600 focus:border-indigo-500 rounded-xl text-xs text-white outline-none cursor-pointer font-mono transition"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-1.5">
+                    <span>🔔</span> Recordatorio y Alerta Push
+                  </label>
+                  <select
+                    value={reminderMinutes}
+                    onChange={(e) => setReminderMinutes(parseInt(e.target.value) || 0)}
+                    className="w-full px-3 py-2 bg-slate-800/90 border border-slate-700/80 focus:border-indigo-500 rounded-xl text-xs text-white outline-none cursor-pointer"
+                  >
+                    {REMINDER_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
             </form>
 

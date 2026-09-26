@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Goal, GoalMilestone, ProgressMode, GoalStatus } from '../../domain/types';
 import { useAuraState } from '../../context/AuraState';
+import { formatToLocalInputDate } from '../../utils/dateUtils';
 
 interface GoalDrawerProps {
   isOpen: boolean;
@@ -20,6 +21,16 @@ const COLOR_PRESETS = [
 
 const CATEGORY_PRESETS = ['General', 'Trabajo', 'Aprendizaje', 'Salud', 'Finanzas', 'Proyectos'];
 
+const REMINDER_OPTIONS = [
+  { value: 0, label: 'Al momento exacto (0 min)' },
+  { value: 5, label: '5 minutos antes' },
+  { value: 10, label: '10 minutos antes' },
+  { value: 15, label: '15 minutos antes' },
+  { value: 30, label: '30 minutos antes' },
+  { value: 60, label: '1 hora antes' },
+  { value: 1440, label: '1 día antes' },
+];
+
 export const GoalDrawer: React.FC<GoalDrawerProps> = ({ isOpen, onClose, goalToEdit }) => {
   const { createGoal, updateGoal } = useAuraState();
 
@@ -28,6 +39,7 @@ export const GoalDrawer: React.FC<GoalDrawerProps> = ({ isOpen, onClose, goalToE
   const [category, setCategory] = useState('General');
   const [colorHex, setColorHex] = useState('#10B981');
   const [deadline, setDeadline] = useState('');
+  const [reminderMinutes, setReminderMinutes] = useState<number>(0);
   const [isRangeMode, setIsRangeMode] = useState(false);
   const [startDate, setStartDate] = useState('');
   const [progressMode, setProgressMode] = useState<ProgressMode>('MILESTONES');
@@ -49,12 +61,17 @@ export const GoalDrawer: React.FC<GoalDrawerProps> = ({ isOpen, onClose, goalToE
       const rawStart = goalToEdit.startDate || (goalToEdit as any).start_date;
       if (rawStart) {
         setIsRangeMode(true);
-        setStartDate(rawStart.slice(0, 16));
+        setStartDate(formatToLocalInputDate(rawStart));
       } else {
         setIsRangeMode(false);
         setStartDate('');
       }
-      setDeadline(goalToEdit.deadline ? goalToEdit.deadline.slice(0, 16) : '');
+      setDeadline(formatToLocalInputDate(goalToEdit.deadline));
+      setReminderMinutes(
+        typeof goalToEdit.reminderMinutes === 'number'
+          ? goalToEdit.reminderMinutes
+          : (typeof (goalToEdit as any).reminder_minutes === 'number' ? (goalToEdit as any).reminder_minutes : 0)
+      );
       setProgressMode(goalToEdit.progressMode || (goalToEdit as any).progress_mode || 'MILESTONES');
       setProgressPercentage(
         typeof goalToEdit.progressPercentage === 'number'
@@ -82,6 +99,7 @@ export const GoalDrawer: React.FC<GoalDrawerProps> = ({ isOpen, onClose, goalToE
       setIsRangeMode(false);
       setStartDate('');
       setDeadline('');
+      setReminderMinutes(0);
       setProgressMode('MILESTONES');
       setProgressPercentage(0);
       setStatus('ACTIVE');
@@ -153,13 +171,15 @@ export const GoalDrawer: React.FC<GoalDrawerProps> = ({ isOpen, onClose, goalToE
     }
 
     setIsSaving(true);
-    const payload: Partial<Goal> = {
+    const payload: Partial<Goal> & { reminder_minutes?: number } = {
       title: title.trim(),
       description: description.trim(),
       category,
       colorHex,
       startDate: isRangeMode && startDate ? new Date(startDate).toISOString() : null,
       deadline: deadline ? new Date(deadline).toISOString() : null,
+      reminderMinutes,
+      reminder_minutes: reminderMinutes,
       progressMode,
       progressPercentage: progressMode === 'MANUAL' ? progressPercentage : calculatedProgress,
       status,
@@ -300,12 +320,12 @@ export const GoalDrawer: React.FC<GoalDrawerProps> = ({ isOpen, onClose, goalToE
                     setIsRangeMode(true);
                     if (!startDate) {
                       const now = new Date();
-                      setStartDate(now.toISOString().slice(0, 16));
+                      setStartDate(formatToLocalInputDate(now));
                     }
                     if (!deadline) {
                       const end = new Date();
                       end.setDate(end.getDate() + 5);
-                      setDeadline(end.toISOString().slice(0, 16));
+                      setDeadline(formatToLocalInputDate(end));
                     }
                   }}
                   className={`px-2.5 py-1 text-[11px] font-bold rounded-md transition-all ${
@@ -344,6 +364,24 @@ export const GoalDrawer: React.FC<GoalDrawerProps> = ({ isOpen, onClose, goalToE
                   className="w-full px-3 py-2 bg-slate-800 border border-slate-700 hover:border-slate-600 focus:border-emerald-500 rounded-xl text-xs text-slate-100 focus:outline-none transition cursor-pointer font-mono"
                 />
               </div>
+            </div>
+
+            {/* Reminder & Web Push Selector */}
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-400 mb-1 flex items-center gap-1.5">
+                <span>🔔</span> Recordatorio y Alerta Push
+              </label>
+              <select
+                value={reminderMinutes}
+                onChange={(e) => setReminderMinutes(parseInt(e.target.value) || 0)}
+                className="w-full px-3 py-2 bg-slate-800 border border-slate-700 hover:border-slate-600 focus:border-emerald-500 rounded-xl text-xs text-slate-100 focus:outline-none transition cursor-pointer"
+              >
+                {REMINDER_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
             </div>
 
             {goalRangeText && (

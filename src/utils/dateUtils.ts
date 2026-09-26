@@ -11,6 +11,23 @@ export const formatLocalDate = (date: Date): string => {
 };
 
 /**
+ * Formats a Date object or ISO date string as a local YYYY-MM-DDTHH:mm string
+ * suitable for <input type="datetime-local"> without UTC timezone shift.
+ */
+export const formatToLocalInputDate = (dateOrStr: Date | string | null | undefined): string => {
+  if (!dateOrStr) return '';
+  const date = typeof dateOrStr === 'string' ? new Date(dateOrStr) : dateOrStr;
+  if (isNaN(date.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const y = date.getFullYear();
+  const m = pad(date.getMonth() + 1);
+  const d = pad(date.getDate());
+  const h = pad(date.getHours());
+  const min = pad(date.getMinutes());
+  return `${y}-${m}-${d}T${h}:${min}`;
+};
+
+/**
  * Maps items to date strings (YYYY-MM-DD), expanding items that have a date range
  * (fecha_inicio to fecha_limite) so they appear on all days within the range.
  */

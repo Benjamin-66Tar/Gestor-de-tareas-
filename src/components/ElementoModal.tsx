@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuraState } from '../context/AuraState';
 import { PlanElemento } from '../domain/types';
+import { formatLocalDate } from '../utils/dateUtils';
 
 interface ElementoModalProps {
   isOpen: boolean;
@@ -56,16 +57,16 @@ export const ElementoModal: React.FC<ElementoModalProps> = ({
 
       if (editingItem.fecha_inicio) {
         setIsRangeMode(true);
-        setFechaInicio(editingItem.fecha_inicio.split('T')[0]);
-        setFechaFin(editingItem.fecha_limite ? editingItem.fecha_limite.split('T')[0] : editingItem.fecha_inicio.split('T')[0]);
+        setFechaInicio(formatLocalDate(new Date(editingItem.fecha_inicio)));
+        setFechaFin(editingItem.fecha_limite ? formatLocalDate(new Date(editingItem.fecha_limite)) : formatLocalDate(new Date(editingItem.fecha_inicio)));
       } else if (editingItem.fecha_limite) {
         setIsRangeMode(false);
-        const f = editingItem.fecha_limite.split('T')[0];
+        const f = formatLocalDate(new Date(editingItem.fecha_limite));
         setFechaInicio(f);
         setFechaFin(f);
       } else {
         setIsRangeMode(false);
-        const hoy = new Date().toISOString().split('T')[0];
+        const hoy = formatLocalDate(new Date());
         setFechaInicio(hoy);
         setFechaFin(hoy);
       }
@@ -75,7 +76,7 @@ export const ElementoModal: React.FC<ElementoModalProps> = ({
       setTipo('ACTIVIDAD');
       setColorHex(PRESET_COLORS[0]);
 
-      const baseStart = selectedDateStr || new Date().toISOString().split('T')[0];
+      const baseStart = selectedDateStr || formatLocalDate(new Date());
       const baseEnd = selectedEndDateStr || baseStart;
 
       setFechaInicio(baseStart);
