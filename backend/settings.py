@@ -10,12 +10,7 @@ load_dotenv(BASE_DIR / '.env')
 
 DEBUG = os.environ.get('DEBUG', 'False') == 'True'
 
-SECRET_KEY = os.environ.get('SECRET_KEY')
-if not SECRET_KEY:
-    if DEBUG:
-        SECRET_KEY = 'django-insecure-aura-secret-key-dev-only'
-    else:
-        raise ValueError("La variable de entorno SECRET_KEY es obligatoria en producción.")
+SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-aura-secret-key-fallback-change-in-production')
 
 _allowed_hosts_env = os.environ.get('ALLOWED_HOSTS')
 if _allowed_hosts_env:
