@@ -45,6 +45,11 @@
 - Q: En pantallas de celulares o dispositivos móviles (pantallas estrechas), ¿cómo debe adaptarse la distribución de las dos partes de la pantalla? → A: Apilado vertical en una sola columna con el bloque visual (imagen y 2 frases) arriba en formato compacto y los formularios o botón de acceso debajo con desplazamiento suave.
 - Q: ¿Cómo debe comportarse la interfaz cuando el usuario pulsa "Cerrar sesión" (desde el menú de perfil de la Navbar) o "Cambiar de cuenta" (desde la pantalla de bienvenida)? → A: Invalida la sesión activa y restaura de inmediato la pantalla dividida completa, mostrando el panel visual (imagen y 2 frases) junto a las pestañas de Iniciar Sesión y Crear Cuenta.
 
+### Session 2026-09-26
+- Q: ¿Cómo deseas que se configure la anticipación de los recordatorios y alertas Web Push para las fechas límite de los Objetivos? → A: Selector configurable en el formulario (al momento exacto, 15 min, 1 hora o 1 día antes), con paridad a la sección de Eventos y campo `reminder_minutes` en Goal evaluado por el scheduler de Django.
+- Q: Respecto a 'Esa solución aplícalo en las otras secciones', ¿cómo deseas que se manejen las fechas y recordatorios en las Tareas de Proyectos? → A: Soportar Fecha y Hora exacta (`datetime-local`) con conversión local (vía helper centralizado en dateUtils) y selector de recordatorios configurables (`reminder_minutes`) también en Tareas de Proyectos, con alertas Web Push sincronizadas.
+- Q: ¿Cómo debe comportarse el despachador de notificaciones si un Objetivo o Tarea ya fue completado o está en pausa? → A: Suprimir automáticamente las notificaciones y alertas push si el Objetivo está en 'Completado' o 'En Pausa', o la Tarea está 'Completado' (DONE).
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Header Navigation Bar (Navbar) (Priority: P1)
@@ -181,17 +186,17 @@ As a visitor or returning user, I want a split screen showing an inspiring visua
 - **FR-017**: The "Objetivos" section MUST provide a slide-over drawer from the right edge for creating and editing goals without navigating away from the dashboard.
 - **FR-018**: The slide-over drawer MUST allow managing milestones (add, edit title, mark complete, remove) and assigning custom weights/values when in milestone progress mode.
 - **FR-019**: Goals and dated milestones MUST automatically project onto the "Calendario" section as deadline markers, styled using the goal's category theme color.
-- **FR-020**: The system MUST issue notification alerts when a goal or milestone deadline is approaching or overdue.
+- **FR-020**: The system MUST support configurable deadline reminders for Goals (at exact deadline, 15 min, 1 hour, or 1 day before via `reminder_minutes`), issuing in-app notifications and Web Push alerts. Reminders MUST be automatically suppressed if the Goal is in `COMPLETED` or `PAUSED` status.
 - **FR-021**: The "Proyectos" section MUST display a projects hub showing cards for each project with title, color identifier, status, and overall task completion progress.
 - **FR-022**: Selecting a project card MUST open a dedicated project workspace featuring an interactive Kanban board and a toggleable task list view.
 - **FR-023**: The project workspace MUST support returning to the projects hub via breadcrumb or back navigation.
 - **FR-024**: The project workspace Kanban board MUST provide three fixed workflow columns: "Por hacer", "En progreso", and "Completado".
-- **FR-025**: Tasks within a project MUST support title, description, color-coded priority level (Baja, Media, Alta), optional deadline date, and an embedded checklist of subtasks.
+- **FR-025**: Tasks within a project MUST support title, description, color-coded priority level (Baja, Media, Alta), optional deadline date and time (`datetime-local`) with local timezone formatting, configurable reminder offset (`reminder_minutes`), and an embedded checklist of subtasks.
 - **FR-026**: The system MUST automatically calculate each project's overall progress percentage as `(completed tasks / total tasks) * 100`, updating the progress bar in real time upon task status changes.
 - **FR-027**: When all tasks in a project are in the "Completado" column, the project's progress MUST display 100%. If a project has zero tasks, its progress MUST default to 0%.
 - **FR-028**: Projects MAY be optionally linked to an existing `Goal`, allowing users to connect project execution directly to overarching goals.
 - **FR-029**: Project tasks with assigned deadline dates MUST automatically project onto the "Calendario" section, styled using the parent project's theme color.
-- **FR-030**: The system MUST issue notification alerts when a project task deadline is approaching or overdue.
+- **FR-030**: The system MUST issue notification alerts and Web Push dispatches when a project task deadline is approaching (based on configured `reminder_minutes` or due threshold) or overdue. Reminders MUST be automatically suppressed if the Task is in `DONE` status.
 - **FR-031**: The projects hub and project workspace MUST support quick creation triggers for adding new projects and tasks with minimal input friction.
 - **FR-032**: Detailed inspection and editing of projects and project tasks MUST utilize a slide-over drawer panel emerging from the right viewport edge, preserving view context.
 - **FR-033**: The projects hub MUST provide quick-filter status pills for "Activos" (default), "Completados", and "Archivados" to control which project lifecycle state is currently displayed.
@@ -202,7 +207,7 @@ As a visitor or returning user, I want a split screen showing an inspiring visua
 - **FR-038**: The system MUST issue notification alerts when an event start time is approaching.
 - **FR-039**: The "Eventos" section MUST provide quick-creation triggers and a slide-over drawer panel emerging from the right edge for inspecting, creating, and editing full event details.
 - **FR-040**: Events MUST support three lifecycle states: "Programado" (default), "Completado", and "Cancelado", providing quick-action controls in the event card and slide-over drawer to transition states with instant visual feedback.
-- **FR-041**: The backend MUST execute a lightweight in-process background task scheduler (evaluating at intervals of 1 to 5 minutes) to detect upcoming event reminders and approaching/overdue task deadlines, generating notification records and dispatching encrypted Web Push payloads via `pywebpush` without requiring external queue brokers.
+- **FR-041**: The backend MUST execute a lightweight in-process background task scheduler (evaluating at intervals of 1 to 5 minutes) to detect upcoming event reminders, approaching goal deadlines (with configurable reminder offsets), and approaching/overdue task deadlines, generating notification records and dispatching encrypted Web Push payloads via `pywebpush` without requiring external queue brokers.
 - **FR-042**: The system MUST support multi-device push notifications per user (1:N relationship between User and PushSubscription), allowing concurrent registrations from laptops and mobile devices, and MUST automatically prune/delete expired or invalid subscription records upon receiving HTTP 410 (Gone) or 404 (Not Found) responses from push services.
 - **FR-043**: The frontend application MUST provide a Progressive Web App (PWA) manifest and a dedicated Service Worker configured primarily for PWA installation and Web Push event handling (`push`, `notificationclick`), utilizing a Network-First strategy for API communications to avoid stale data conflicts with real-time tasks and events.
 - **FR-044**: Upon user interaction with a Web Push notification (`notificationclick`), the Service Worker MUST detect whether an active application window or tab is already open, focusing the existing window if present or opening a new window if closed, and route directly to the relevant contextual item (event, task, or goal) indicated in the push notification payload.
@@ -220,10 +225,10 @@ As a visitor or returning user, I want a split screen showing an inspiring visua
 - **Notification**: Represents a single notification item, with properties for read/unread state and creation timestamp.
 - **PushSubscription**: Represents an active Web Push subscription device associated with a User (1:N), storing the endpoint URL, cryptographic keys (`p256dh`, `auth`), user agent metadata, and registration timestamp.
 - **NavigationSection**: Represents a valid section tab (Calendar, Goals, Projects, Events).
-- **Goal**: Represents an objective with title, target deadline, category tag, progress mode (`Manual` or `MilestoneBased`), progress percentage (0-100%), and status (Active, Completed, Paused).
+- **Goal**: Represents an objective with title, target deadline, reminder_minutes (configurable alert offset: 0, 15, 60, 1440 mins), category tag, progress mode (`Manual` or `MilestoneBased`), progress percentage (0-100%), and status (Active, Completed, Paused).
 - **GoalMilestone**: Represents a key checkable milestone or sub-target associated with a Goal, including title, completion state, and an optional weight value.
 - **Project**: Represents a project with title, description, color theme/tag, lifecycle status (`Active`, `Completed`, `Archived`), calculated overall task progress (0-100%), and an optional foreign link to a `Goal`.
-- **ProjectTask**: Represents a task within a project, belonging to one of three workflow columns (`ToDo`, `InProgress`, `Done`), with title, description, priority (`Low`, `Medium`, `High`), due date, and an ordered list of subtasks.
+- **ProjectTask**: Represents a task within a project, belonging to one of three workflow columns (`ToDo`, `InProgress`, `Done`), with title, description, priority (`Low`, `Medium`, `High`), deadline datetime, reminder_minutes (configurable alert offset: 0, 15, 60, 1440 mins), and an ordered list of subtasks.
 - **TaskSubtask**: Represents a checkable subtask item within a `ProjectTask`, with title and completion state.
 - **EventItem**: Represents an event with title, description/notes, start datetime, end datetime, location or virtual meeting URL, color category tag, and lifecycle status (`Programado`, `Completado`, `Cancelado`).
 
