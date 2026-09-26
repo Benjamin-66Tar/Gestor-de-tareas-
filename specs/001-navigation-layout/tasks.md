@@ -298,5 +298,42 @@ Task: "Implement typed API client service methods in src/services/api.ts"
 - [X] T106 [US7] Run frontend production build check with npm run build to verify zero TypeScript errors
 - [X] T107 [US7] Execute end-to-end verification Scenarios 16 through 19 in quickstart.md
 
+---
+
+## Phase 11: User Story 8 - Timezone Integrity & Goal/Task Reminders Synchronization (Priority: P1)
+
+**Goal**: Eliminate the 6-hour UTC timezone offset shift on datetime inputs across the application ([GoalDrawer.tsx](file:///d:/Sistemas/Proyectos/Gestor_tareas/src/components/goals/GoalDrawer.tsx), [TaskDrawer.tsx](file:///d:/Sistemas/Proyectos/Gestor_tareas/src/components/projects/TaskDrawer.tsx), [ElementoModal.tsx](file:///d:/Sistemas/Proyectos/Gestor_tareas/src/components/ElementoModal.tsx)) so local times (e.g., 11:21 a. m.) never drift when saved or reopened, and implement configurable deadline reminders (`reminder_minutes`) in Goals and Project Tasks with automatic in-app and Web Push alerts suppressed when items are completed or paused.
+
+**Independent Test**:
+1. Open GoalDrawer, set deadline to today at 11:21 a. m. and select reminder (0 min or 15 min). Save and reopen: verify the input still displays exactly 11:21 a. m. without shifting to 5:21 p. m.
+2. In Project Workspace, open TaskDrawer, configure exact deadline date/time (`datetime-local`) with reminder. Save and reopen: verify time is preserved.
+3. Wait or trigger reminder: verify in-app notification appears in the Navbar dropdown and an encrypted Web Push alert is dispatched.
+4. Mark Goal as COMPLETED or Task as DONE: verify reminder alerts are suppressed.
+
+- [ ] T108 [P] [US8] Implement formatToLocalInputDate helper function in src/utils/dateUtils.ts converting UTC ISO timestamps to local YYYY-MM-DDTHH:mm strings
+- [ ] T109 [P] [US8] Update Goal and ProjectTask TypeScript domain interfaces with reminderMinutes and startDate in src/domain/types.ts
+- [ ] T110 [P] [US8] Add reminder_minutes field to Goal and ProjectTask models in backend/models.py
+- [ ] T111 [US8] Generate and execute Django database migration for reminder_minutes in Goal and ProjectTask in backend/
+- [ ] T112 [P] [US8] Update GoalSerializer and ProjectTaskSerializer to serialize reminder_minutes in backend/serializers.py
+- [ ] T113 [US8] Implement check_approaching_goal_deadlines and enhance check_approaching_task_deadlines with configurable reminder lead times and status suppression (COMPLETED, PAUSED, DONE) in backend/services.py
+- [ ] T114 [US8] Update check_and_dispatch_all_reminders to include goal deadlines alongside events and tasks in backend/services.py
+- [ ] T115 [US8] Update GoalDrawer to use formatToLocalInputDate for deadline and startDate, preventing UTC drift, and add reminder selector dropdown in src/components/goals/GoalDrawer.tsx
+- [ ] T116 [US8] Update TaskDrawer to use datetime-local with formatToLocalInputDate and add reminder selector dropdown in src/components/projects/TaskDrawer.tsx
+- [ ] T117 [US8] Update ElementoModal to use formatLocalDate for default dates to avoid midnight UTC day shifts in src/components/ElementoModal.tsx
+- [ ] T118 [US8] Verify and wire reminderMinutes in API client methods and context state in src/services/api.ts and src/context/AuraState.tsx
+- [ ] T119 [P] [US8] Create automated unit tests for goal and task reminder evaluations and status suppression in backend/tests.py
+- [ ] T120 [US8] Run frontend build verification with npm run build to verify zero TypeScript errors
+- [ ] T121 [US8] Execute Scenario 20 verification in quickstart.md across Goal and Task date/time integrity and Web Push alert dispatch
+
+---
+
+## Dependencies & Execution Order (User Story 8)
+
+- **Foundation (T108 - T112)**: Helper in `dateUtils.ts`, domain types in `types.ts`, model fields in `models.py`, migrations, and serializers in `serializers.py` can be set up first.
+- **Backend Services (T113 - T114)**: Scheduler logic in `services.py` depends on updated models and serializers.
+- **Frontend Drawers (T115 - T117)**: Drawers depend on `dateUtils.ts` (T108) and domain types (T109).
+- **Wiring & Testing (T118 - T121)**: Validate end-to-end integration with pytest, npm build, and Scenario 20.
+
+
 
 
