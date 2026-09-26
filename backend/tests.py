@@ -1097,6 +1097,218 @@ class AuditTrailAPITests(APITestCase):
         self.assertEqual(len(logs_res.data), 0)
 
 
+class GoalAndTaskReminderTests(APITestCase):
+    """
+    Tests ensuring deadline checking, configurable reminder windows,
+    status-based suppression, and push notification dispatch for Goals and Tasks.
+    """
+    def setUp(self):
+        from datetime import timedelta
+        User.objects.filter(username__in=['reminder_tester']).delete()
+        self.user = User.objects.create_user(username='reminder_tester', password='Password123!')
+        self.client.force_authenticate(user=self.user)
+        self.now = timezone.now()
+
+    def test_approaching_goal_deadline_creates_notification_and_dispatches_push(self):
+        from datetime import timedelta
+        from .services import check_approaching_goal_deadlines
+
+        Goal.objects.create(
+            user=self.user,
+            title="Lanzar Campaña Q4",
+            deadline=self.now + timedelta(minutes=10),
+            reminder_minutes=15,
+            status="ACTIVE"
+        )
+
+        notifs = check_approaching_goal_deadlines(user=self.user)
+        self.assertTrue(any("Lanzar Campaña Q4" in n.title for n in notifs))
+        self.assertTrue(
+            Notification.objects.filter(user=self.user, title__contains="Lanzar Campaña Q4").exists()
+        )
+
+    def test_goal_deadline_reminder_suppressed_if_completed_or_paused(self):
+        from datetime import timedelta
+        from .services import check_approaching_goal_deadlines
+
+        # Completed goal
+        Goal.objects.create(
+            user=self.user,
+            title="Meta Completada",
+            deadline=self.now + timedelta(minutes=5),
+            reminder_minutes=15,
+            status="COMPLETED"
+        )
+        # Paused goal
+        Goal.objects.create(
+            user=self.user,
+            title="Meta Pausada",
+            deadline=self.now + timedelta(minutes=5),
+            reminder_minutes=15,
+            status="PAUSED"
+        )
+
+        notifs = check_approaching_goal_deadlines(user=self.user)
+        self.assertEqual(len(notifs), 0)
+        self.assertFalse(
+            Notification.objects.filter(user=self.user, title__contains="Meta Completada").exists()
+        )
+        self.assertFalse(
+            Notification.objects.filter(user=self.user, title__contains="Meta Pausada").exists()
+        )
+
+    def test_approaching_task_deadline_creates_notification(self):
+        from datetime import timedelta
+        from .services import check_approaching_task_deadlines
+
+        project = Project.objects.create(
+            user=self.user,
+            title="Proyecto Alfa",
+            status="ACTIVE"
+        )
+        ProjectTask.objects.create(
+            project=project,
+            title="Entregar Documentación",
+            deadline=self.now + timedelta(minutes=10),
+            reminder_minutes=15,
+            status="IN_PROGRESS"
+        )
+
+        notifs = check_approaching_task_deadlines(user=self.user)
+        self.assertTrue(any("Entregar Documentación" in n.title for n in notifs))
+        self.assertTrue(
+            Notification.objects.filter(user=self.user, title__contains="Entregar Documentación").exists()
+        )
+
+    def test_task_deadline_reminder_suppressed_if_done_or_project_archived(self):
+        from datetime import timedelta
+        from .services import check_approaching_task_deadlines
+
+        project_active = Project.objects.create(
+            user=self.user,
+            title="Proyecto Beta",
+            status="ACTIVE"
+        )
+        # Done task in active project
+        ProjectTask.objects.create(
+            project=project_active,
+            title="Tarea Terminada",
+            deadline=self.now + timedelta(minutes=5),
+            reminder_minutes=15,
+            status="DONE"
+        )
+
+        # Active task in archived project
+        project_archived = Project.objects.create(
+            user=self.user,
+            title="Proyecto Archivado",
+            status="ARCHIVED"
+        )
+        ProjectTask.objects.create(
+            project=project_archived,
+            title="Tarea en Proyecto Archivado",
+            deadline=self.now + timedelta(minutes=5),
+            reminder_minutes=15,
+            status="TODO"
+        )
+
+        notifs = check_approaching_task_deadlines(user=self.user)
+        self.assertEqual(len(notifs), 0)
+        self.assertFalse(
+            Notification.objects.filter(user=self.user, title__contains="Tarea Terminada").exists()
+        )
+        self.assertFalse(
+            Notification.objects.filter(user=self.user, title__contains="Tarea en Proyecto Archivado").exists()
+        )
+
+    def test_check_and_dispatch_all_reminders_aggregates_all_types(self):
+        from datetime import timedelta
+        from .services import check_and_dispatch_all_reminders
+
+        # 1. Event
+        EventItem.objects.create(
+            user=self.user,
+            title="Evento Reunión Global",
+            start_time=self.now + timedelta(minutes=10),
+            end_time=self.now + timedelta(minutes=40),
+            reminder_minutes=15,
+            status="PROGRAMMED"
+        )
+        # 2. Goal
+        Goal.objects.create(
+            user=self.user,
+            title="Meta Global Q4",
+            deadline=self.now + timedelta(minutes=10),
+            reminder_minutes=15,
+            status="ACTIVE"
+        )
+        # 3. Task
+        project = Project.objects.create(
+            user=self.user,
+            title="Proyecto Global",
+            status="ACTIVE"
+        )
+        ProjectTask.objects.create(
+            project=project,
+            title="Tarea Global 1",
+            deadline=self.now + timedelta(minutes=10),
+            reminder_minutes=15,
+            status="TODO"
+        )
+
+        result = check_and_dispatch_all_reminders(user=self.user)
+        self.assertEqual(len(result), 3)
+        titles = [n.title for n in result]
+        self.assertTrue(any("Evento Reunión Global" in t for t in titles))
+        self.assertTrue(any("Meta Global Q4" in t for t in titles))
+        self.assertTrue(any("Tarea Global 1" in t for t in titles))
+
+    def test_goal_api_reminder_minutes_crud(self):
+        # Create goal with reminder_minutes
+        res = self.client.post(reverse('goals-list-create'), {
+            'title': 'Objetivo con Recordatorio 30m',
+            'category': 'Desarrollo',
+            'color_hex': '#10B981',
+            'progress_mode': 'MANUAL',
+            'progress_percentage': 0,
+            'reminder_minutes': 30
+        }, format='json')
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(res.data['reminder_minutes'], 30)
+        goal_id = res.data['id']
+
+        # Update reminder_minutes
+        patch_res = self.client.patch(reverse('goal-detail', kwargs={'pk': goal_id}), {
+            'reminder_minutes': 60
+        }, format='json')
+        self.assertEqual(patch_res.status_code, status.HTTP_200_OK)
+        self.assertEqual(patch_res.data['reminder_minutes'], 60)
+
+    def test_task_api_reminder_minutes_crud(self):
+        project = Project.objects.create(
+            user=self.user,
+            title="Proyecto Tarea Reminder",
+            status="ACTIVE"
+        )
+        # Create task with reminder_minutes
+        res = self.client.post(reverse('project-tasks', kwargs={'project_id': project.id}), {
+            'title': 'Tarea con Recordatorio 15m',
+            'priority': 'HIGH',
+            'status': 'TODO',
+            'reminder_minutes': 15
+        }, format='json')
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(res.data['reminder_minutes'], 15)
+        task_id = res.data['id']
+
+        # Update reminder_minutes
+        patch_res = self.client.patch(reverse('task-detail', kwargs={'pk': task_id}), {
+            'reminder_minutes': 0
+        }, format='json')
+        self.assertEqual(patch_res.status_code, status.HTTP_200_OK)
+        self.assertEqual(patch_res.data['reminder_minutes'], 0)
+
+
 class InfrastructureAndHealthTests(APITestCase):
     def test_database_health_check_endpoint(self):
         """

@@ -69,6 +69,7 @@ class Goal(models.Model):
     color_hex = models.CharField(max_length=7, default='#10B981')
     start_date = models.DateTimeField(blank=True, null=True)
     deadline = models.DateTimeField(blank=True, null=True, db_index=True)
+    reminder_minutes = models.PositiveIntegerField(default=0, null=True, blank=True)
     progress_mode = models.CharField(max_length=20, choices=PROGRESS_MODES, default='MILESTONES')
     progress_percentage = models.PositiveSmallIntegerField(
         default=0,
@@ -183,6 +184,7 @@ class ProjectTask(models.Model):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='TODO')
     priority = models.CharField(max_length=20, choices=PRIORITY_CHOICES, default='MEDIUM')
     deadline = models.DateTimeField(blank=True, null=True, db_index=True)
+    reminder_minutes = models.PositiveIntegerField(default=0, null=True, blank=True)
     order = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

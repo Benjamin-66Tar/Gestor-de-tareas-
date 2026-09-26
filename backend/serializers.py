@@ -38,7 +38,7 @@ class GoalSerializer(serializers.ModelSerializer):
         model = Goal
         fields = [
             'id', 'title', 'description', 'category', 'color_hex',
-            'start_date', 'deadline', 'progress_mode', 'progress_percentage', 'status',
+            'start_date', 'deadline', 'reminder_minutes', 'progress_mode', 'progress_percentage', 'status',
             'milestones', 'is_deleted', 'deleted_at', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'is_deleted', 'deleted_at', 'created_at', 'updated_at']
@@ -101,7 +101,7 @@ class ProjectTaskSerializer(serializers.ModelSerializer):
         model = ProjectTask
         fields = [
             'id', 'project', 'project_id', 'title', 'description',
-            'status', 'priority', 'deadline', 'order', 'subtasks',
+            'status', 'priority', 'deadline', 'reminder_minutes', 'order', 'subtasks',
             'created_at', 'updated_at'
         ]
         extra_kwargs = {
