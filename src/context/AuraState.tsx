@@ -21,6 +21,8 @@ import {
   LoginCredentials,
   RegisterData,
   AuthSessionUser,
+  LearningItem,
+  LearningFilterCriteria,
 } from '../domain/types';
 import { getGridDateRange } from '../utils/dateUtils';
 import * as api from '../services/api';
@@ -145,6 +147,32 @@ interface AuraContextProps {
   logout: () => Promise<void>;
   enterApp: () => void;
   switchAccount: () => void;
+
+  // --- Aprendizaje (Learning & Knowledge Hub) ---
+  learningItems: LearningItem[];
+  learningLoading: boolean;
+  learningError: string | null;
+  learningFilter: LearningFilterCriteria;
+  setLearningFilter: React.Dispatch<React.SetStateAction<LearningFilterCriteria>>;
+  learningDrawerOpen: boolean;
+  setLearningDrawerOpen: (open: boolean) => void;
+  activeLearningItem: LearningItem | null;
+  setActiveLearningItem: (item: LearningItem | null) => void;
+  studyModalOpen: boolean;
+  setStudyModalOpen: (open: boolean) => void;
+  studyModalItem: LearningItem | null;
+  setStudyModalItem: (item: LearningItem | null) => void;
+  fetchLearningList: () => Promise<void>;
+  openLearningDrawer: (item?: LearningItem | null) => Promise<void>;
+  closeLearningDrawer: () => void;
+  createLearningItem: (data: Partial<LearningItem>) => Promise<boolean>;
+  updateLearningItem: (id: string, updates: Partial<LearningItem>) => Promise<boolean>;
+  deleteLearningItem: (id: string) => Promise<boolean>;
+  addLearningTopic: (learningId: string, title: string, sectionName?: string) => Promise<boolean>;
+  toggleLearningTopic: (learningId: string, topicId: string, isCompleted?: boolean) => Promise<boolean>;
+  deleteLearningTopic: (learningId: string, topicId: string) => Promise<boolean>;
+  quickIncrementLearning: (id: string, increment?: number, lastPoint?: string) => Promise<boolean>;
+  scheduleStudySession: (learningId: string, data: { startTime: string; endTime: string; notes?: string; reminderMinutes?: number }) => Promise<boolean>;
 }
 
 const AuraContext = createContext<AuraContextProps | undefined>(undefined);
@@ -898,6 +926,226 @@ export const AuraProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return blocks;
   }, [events, eventFilter]);
 
+  // 5. Aprendizaje (Learning & Knowledge Hub)
+  const [learningItems, setLearningItems] = useState<LearningItem[]>([]);
+  const [learningLoading, setLearningLoading] = useState<boolean>(false);
+  const [learningError, setLearningError] = useState<string | null>(null);
+  const [learningFilter, setLearningFilter] = useState<LearningFilterCriteria>({
+    status: 'ALL',
+    resourceType: 'ALL',
+    searchQuery: '',
+  });
+  const [learningDrawerOpen, setLearningDrawerOpen] = useState<boolean>(false);
+  const [activeLearningItem, setActiveLearningItem] = useState<LearningItem | null>(null);
+  const [studyModalOpen, setStudyModalOpen] = useState<boolean>(false);
+  const [studyModalItem, setStudyModalItem] = useState<LearningItem | null>(null);
+
+  const fetchLearningList = useCallback(async () => {
+    try {
+      setLearningLoading(true);
+      setLearningError(null);
+      const items = await api.fetchLearningItems(learningFilter);
+      setLearningItems(items);
+    } catch (err) {
+      console.warn('Error fetching learning items:', err);
+      setLearningError('No se pudieron cargar los recursos de aprendizaje.');
+    } finally {
+      setLearningLoading(false);
+    }
+  }, [learningFilter]);
+
+  const openLearningDrawer = useCallback(async (item?: LearningItem | null) => {
+    if (item && item.id) {
+      try {
+        const detail = await api.fetchLearningItemDetail(item.id);
+        setActiveLearningItem(detail);
+      } catch (err) {
+        console.warn('Failed to load item detail, using shallow item:', err);
+        setActiveLearningItem(item);
+      }
+    } else {
+      setActiveLearningItem(null);
+    }
+    setLearningDrawerOpen(true);
+  }, []);
+
+  const closeLearningDrawer = useCallback(() => {
+    setLearningDrawerOpen(false);
+    setActiveLearningItem(null);
+  }, []);
+
+  const createLearningItem = useCallback(async (data: Partial<LearningItem>): Promise<boolean> => {
+    try {
+      const created = await api.createLearningItemApi(data);
+      setLearningItems(prev => [created, ...prev]);
+      closeLearningDrawer();
+      return true;
+    } catch (err) {
+      console.error('Error creating learning item:', err);
+      return false;
+    }
+  }, [closeLearningDrawer]);
+
+  const updateLearningItem = useCallback(async (id: string, updates: Partial<LearningItem>): Promise<boolean> => {
+    try {
+      const updated = await api.updateLearningItemApi(id, updates);
+      setLearningItems(prev => prev.map(item => item.id === id ? { ...item, ...updated } : item));
+      if (activeLearningItem?.id === id) {
+        setActiveLearningItem(prev => prev ? { ...prev, ...updated } : null);
+      }
+      return true;
+    } catch (err) {
+      console.error('Error updating learning item:', err);
+      return false;
+    }
+  }, [activeLearningItem]);
+
+  const deleteLearningItem = useCallback(async (id: string): Promise<boolean> => {
+    try {
+      await api.deleteLearningItemApi(id);
+      setLearningItems(prev => prev.filter(item => item.id !== id));
+      if (activeLearningItem?.id === id) {
+        closeLearningDrawer();
+      }
+      return true;
+    } catch (err) {
+      console.error('Error deleting learning item:', err);
+      return false;
+    }
+  }, [activeLearningItem, closeLearningDrawer]);
+
+  const addLearningTopic = useCallback(async (learningId: string, title: string, sectionName?: string): Promise<boolean> => {
+    try {
+      const newTopic = await api.addLearningTopicApi(learningId, { title, sectionName });
+      setActiveLearningItem(prev => {
+        if (!prev || prev.id !== learningId) return prev;
+        const currentTopics = prev.topics || [];
+        return {
+          ...prev,
+          topics: [...currentTopics, newTopic],
+        };
+      });
+      const refreshed = await api.fetchLearningItemDetail(learningId);
+      setActiveLearningItem(refreshed);
+      setLearningItems(prev => prev.map(item => item.id === learningId ? refreshed : item));
+      return true;
+    } catch (err) {
+      console.error('Error adding learning topic:', err);
+      return false;
+    }
+  }, []);
+
+  const toggleLearningTopic = useCallback(async (learningId: string, topicId: string, isCompleted?: boolean): Promise<boolean> => {
+    try {
+      setActiveLearningItem(prev => {
+        if (!prev || prev.id !== learningId || !prev.topics) return prev;
+        const updatedTopics = prev.topics.map(t =>
+          t.id === topicId ? { ...t, isCompleted: isCompleted !== undefined ? isCompleted : !t.isCompleted } : t
+        );
+        return { ...prev, topics: updatedTopics };
+      });
+
+      const res = await api.toggleLearningTopicApi(learningId, topicId, isCompleted);
+      setActiveLearningItem(prev => {
+        if (!prev || prev.id !== learningId) return prev;
+        const updatedTopics = (prev.topics || []).map(t =>
+          t.id === topicId ? { ...t, isCompleted: res.isCompleted } : t
+        );
+        return {
+          ...prev,
+          topics: updatedTopics,
+          progressPercentage: res.parentProgressPercentage,
+          status: res.parentStatus,
+          isDormant: false,
+          dormancyDays: 0,
+        };
+      });
+
+      setLearningItems(prev => prev.map(item => {
+        if (item.id === learningId) {
+          return {
+            ...item,
+            progressPercentage: res.parentProgressPercentage,
+            status: res.parentStatus,
+            isDormant: false,
+            dormancyDays: 0,
+          };
+        }
+        return item;
+      }));
+      return true;
+    } catch (err) {
+      console.error('Error toggling learning topic:', err);
+      return false;
+    }
+  }, []);
+
+  const deleteLearningTopic = useCallback(async (learningId: string, topicId: string): Promise<boolean> => {
+    try {
+      await api.deleteLearningTopicApi(learningId, topicId);
+      const refreshed = await api.fetchLearningItemDetail(learningId);
+      setActiveLearningItem(refreshed);
+      setLearningItems(prev => prev.map(item => item.id === learningId ? refreshed : item));
+      return true;
+    } catch (err) {
+      console.error('Error deleting topic:', err);
+      return false;
+    }
+  }, []);
+
+  const quickIncrementLearning = useCallback(async (id: string, increment: number = 1, lastPoint?: string): Promise<boolean> => {
+    try {
+      const res = await api.logLearningActivityApi(id, { incrementUnits: increment, newLastPoint: lastPoint });
+      setLearningItems(prev => prev.map(item => {
+        if (item.id === id) {
+          return {
+            ...item,
+            currentUnit: res.currentUnit,
+            progressPercentage: res.progressPercentage,
+            lastActivityAt: res.lastActivityAt,
+            dormancyDays: 0,
+            isDormant: false,
+            lastPointReached: lastPoint || item.lastPointReached,
+          };
+        }
+        return item;
+      }));
+      if (activeLearningItem?.id === id) {
+        setActiveLearningItem(prev => prev ? {
+          ...prev,
+          currentUnit: res.currentUnit,
+          progressPercentage: res.progressPercentage,
+          lastActivityAt: res.lastActivityAt,
+          dormancyDays: 0,
+          isDormant: false,
+          lastPointReached: lastPoint || prev.lastPointReached,
+        } : null);
+      }
+      return true;
+    } catch (err) {
+      console.error('Error logging learning activity:', err);
+      return false;
+    }
+  }, [activeLearningItem]);
+
+  const scheduleStudySession = useCallback(async (
+    learningId: string,
+    data: { startTime: string; endTime: string; notes?: string; reminderMinutes?: number }
+  ): Promise<boolean> => {
+    try {
+      const newEvent = await api.scheduleStudySessionApi(learningId, data);
+      setEvents(prev => [newEvent, ...prev]);
+      setStudyModalOpen(false);
+      setStudyModalItem(null);
+      fetchElementos();
+      refreshNotifications();
+      return true;
+    } catch (err) {
+      console.error('Error scheduling study session:', err);
+      return false;
+    }
+  }, [fetchElementos, refreshNotifications]);
+
   // Unified Calendar CRUD Operations (Seamlessly delegating between Goals, Projects, Events, and native items)
   const crearElemento = async (newEl: Omit<PlanElemento, 'id'>): Promise<boolean> => {
     try {
@@ -1104,8 +1352,10 @@ export const AuraProvider: React.FC<{ children: React.ReactNode }> = ({ children
       fetchProjectsList();
     } else if (tabActiva === 'EVENTOS') {
       fetchEventsList();
+    } else if (tabActiva === 'APRENDIZAJE') {
+      fetchLearningList();
     }
-  }, [tabActiva, anioActivo, mesActivo, fetchElementos, fetchGoalsList, fetchProjectsList, fetchEventsList]);
+  }, [tabActiva, anioActivo, mesActivo, fetchElementos, fetchGoalsList, fetchProjectsList, fetchEventsList, fetchLearningList]);
 
   return (
     <AuraContext.Provider value={{
@@ -1224,6 +1474,32 @@ export const AuraProvider: React.FC<{ children: React.ReactNode }> = ({ children
       logout,
       enterApp,
       switchAccount,
+
+      // Aprendizaje
+      learningItems,
+      learningLoading,
+      learningError,
+      learningFilter,
+      setLearningFilter,
+      learningDrawerOpen,
+      setLearningDrawerOpen,
+      activeLearningItem,
+      setActiveLearningItem,
+      studyModalOpen,
+      setStudyModalOpen,
+      studyModalItem,
+      setStudyModalItem,
+      fetchLearningList,
+      openLearningDrawer,
+      closeLearningDrawer,
+      createLearningItem,
+      updateLearningItem,
+      deleteLearningItem,
+      addLearningTopic,
+      toggleLearningTopic,
+      deleteLearningTopic,
+      quickIncrementLearning,
+      scheduleStudySession,
     }}>
       {children}
     </AuraContext.Provider>

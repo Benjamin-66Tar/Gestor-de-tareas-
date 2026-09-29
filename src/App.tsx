@@ -7,6 +7,7 @@ import { CalendarGrid } from './components/CalendarGrid';
 import { GoalsView } from './components/goals/GoalsView';
 import { ProjectsView } from './components/projects/ProjectsView';
 import { EventsView } from './components/events/EventsView';
+import { LearningView } from './components/learning/LearningView';
 import { ElementoModal } from './components/ElementoModal';
 import { AuthView } from './components/auth/AuthView';
 
@@ -66,6 +67,13 @@ const ContenidoPrincipal: React.FC = () => {
       {tabActiva === 'EVENTOS' && (
         <section className="animate-fadeIn max-w-7xl mx-auto">
           <EventsView />
+        </section>
+      )}
+
+      {/* 5. Aprendizaje (Cursos, Libros, Artículos & Docs) */}
+      {tabActiva === 'APRENDIZAJE' && (
+        <section className="animate-fadeIn max-w-7xl mx-auto">
+          <LearningView />
         </section>
       )}
     </main>

@@ -66,9 +66,19 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'backend.wsgi.application'
 
-DATABASE_URL = os.environ.get('DATABASE_URL')
+import sys
 
-if DATABASE_URL:
+DATABASE_URL = os.environ.get('DATABASE_URL')
+IS_TESTING = 'test' in sys.argv or any('pytest' in a for a in sys.argv)
+
+if IS_TESTING:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'test_db.sqlite3',
+        }
+    }
+elif DATABASE_URL:
     is_neon = 'neon.tech' in DATABASE_URL
     DATABASES = {
         'default': dj_database_url.config(
@@ -145,10 +155,12 @@ X_FRAME_OPTIONS = 'DENY'
 SECURE_BROWSER_XSS_FILTER = True
 SESSION_COOKIE_HTTPONLY = True
 
-if not DEBUG:
+if not DEBUG and not IS_TESTING:
     CSRF_COOKIE_SECURE = True
     SESSION_COOKIE_SECURE = True
     SECURE_SSL_REDIRECT = os.environ.get('SECURE_SSL_REDIRECT', 'True') == 'True'
+else:
+    SECURE_SSL_REDIRECT = False
 
 OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY', 'mock-key-if-not-set')
 

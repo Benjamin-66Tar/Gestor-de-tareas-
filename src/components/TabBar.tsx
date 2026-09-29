@@ -10,6 +10,7 @@ export const TabBar: React.FC = () => {
     { type: 'OBJETIVOS', label: 'Objetivos', icon: '🎯', activeColor: 'bg-emerald-400 text-slate-950 shadow-emerald-400/25' },
     { type: 'PROYECTOS', label: 'Proyectos', icon: '💻', activeColor: 'bg-cyan-400 text-slate-950 shadow-cyan-400/25' },
     { type: 'EVENTOS', label: 'Eventos', icon: '🎉', activeColor: 'bg-rose-400 text-slate-950 shadow-rose-400/25' },
+    { type: 'APRENDIZAJE', label: 'Aprendizaje', icon: '📚', activeColor: 'bg-purple-500 text-slate-950 shadow-purple-500/25' },
   ];
 
   return (

@@ -1,6 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import User
 from django.core.validators import MinValueValidator, MaxValueValidator
+from django.utils import timezone
 import uuid
 
 class ElementoAura(models.Model):
@@ -303,5 +304,78 @@ class AuditLog(models.Model):
     def __str__(self):
         username = self.user.username if self.user else "Anonymous"
         return f"[{self.action}] {self.model_name}:{self.object_id} por {username}"
+
+
+class LearningItem(models.Model):
+    RESOURCE_TYPE_CHOICES = [
+        ('COURSE', 'Curso'),
+        ('BOOK', 'Libro'),
+        ('ARTICLE', 'Artículo'),
+        ('TECH_DOC', 'Documentación Técnica'),
+    ]
+    STATUS_CHOICES = [
+        ('BACKLOG', 'Por empezar'),
+        ('IN_PROGRESS', 'En curso'),
+        ('PAUSED', 'En pausa'),
+        ('COMPLETED', 'Completado'),
+    ]
+    PROGRESS_MODES = [
+        ('MANUAL', 'Manual'),
+        ('TOPICS', 'Por Temas / Módulos'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='aura_learning_items', null=True, blank=True)
+    title = models.CharField(max_length=200)
+    description = models.TextField(blank=True, null=True)
+    resource_type = models.CharField(max_length=20, choices=RESOURCE_TYPE_CHOICES, default='COURSE')
+    platform_name = models.CharField(max_length=100, blank=True, null=True)
+    platform_url = models.URLField(max_length=500, blank=True, null=True)
+    color_hex = models.CharField(max_length=7, default='#8B5CF6')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='BACKLOG')
+    progress_mode = models.CharField(max_length=20, choices=PROGRESS_MODES, default='TOPICS')
+    progress_percentage = models.PositiveSmallIntegerField(
+        default=0,
+        validators=[MinValueValidator(0), MaxValueValidator(100)]
+    )
+    current_unit = models.PositiveIntegerField(default=0)
+    total_units = models.PositiveIntegerField(default=0)
+    last_point_reached = models.CharField(max_length=250, blank=True, null=True)
+    takeaways_markdown = models.TextField(blank=True, null=True)
+    goal = models.ForeignKey(Goal, on_delete=models.SET_NULL, null=True, blank=True, related_name='learning_items')
+    project = models.ForeignKey(Project, on_delete=models.SET_NULL, null=True, blank=True, related_name='learning_items')
+    last_activity_at = models.DateTimeField(default=timezone.now, db_index=True)
+    dormancy_alert_days = models.PositiveSmallIntegerField(default=7)
+    is_deleted = models.BooleanField(default=False, db_index=True)
+    deleted_at = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-last_activity_at', '-created_at']
+        indexes = [
+            models.Index(fields=['user', 'status'], name='learning_user_status_idx'),
+            models.Index(fields=['user', 'resource_type'], name='learning_user_type_idx'),
+            models.Index(fields=['user', '-last_activity_at'], name='learning_user_act_idx'),
+        ]
+
+    def __str__(self):
+        return f"[{self.resource_type}:{self.status}] {self.title} ({self.progress_percentage}%)"
+
+
+class LearningTopic(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    learning_item = models.ForeignKey(LearningItem, on_delete=models.CASCADE, related_name='topics')
+    title = models.CharField(max_length=200)
+    is_completed = models.BooleanField(default=False)
+    order = models.PositiveIntegerField(default=0)
+    section_name = models.CharField(max_length=150, blank=True, null=True)
+
+    class Meta:
+        ordering = ['order', 'id']
+
+    def __str__(self):
+        return f"[{'X' if self.is_completed else ' '}] {self.title}"
+
 
 

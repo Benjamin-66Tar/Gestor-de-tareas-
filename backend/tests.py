@@ -7,7 +7,7 @@ from rest_framework.test import APITestCase
 from django.utils import timezone
 from datetime import datetime
 from django.contrib.auth.models import User
-from .models import ElementoAura, UserProfile, Notification, Goal, GoalMilestone, Project, ProjectTask, TaskSubtask, EventItem, PushSubscription, AuditLog
+from .models import ElementoAura, UserProfile, Notification, Goal, GoalMilestone, Project, ProjectTask, TaskSubtask, EventItem, PushSubscription, AuditLog, LearningItem, LearningTopic
 from .authentication import create_user_token
 
 
@@ -1291,7 +1291,7 @@ class GoalAndTaskReminderTests(APITestCase):
             status="ACTIVE"
         )
         # Create task with reminder_minutes
-        res = self.client.post(reverse('project-tasks', kwargs={'project_id': project.id}), {
+        res = self.client.post(reverse('project-tasks-list-create', kwargs={'project_id': project.id}), {
             'title': 'Tarea con Recordatorio 15m',
             'priority': 'HIGH',
             'status': 'TODO',
@@ -1350,6 +1350,260 @@ class InfrastructureAndHealthTests(APITestCase):
         from django.core.management import call_command
         # Should execute without raising any exceptions
         call_command('dispatch_reminders')
+
+
+# --- Learning Hub Unit & Integration Tests ---
+
+class LearningItemAPITests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='learner1', password='learnerpass123')
+        self.token = create_user_token(self.user)
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {self.token}')
+
+        self.course = LearningItem.objects.create(
+            user=self.user,
+            title="TypeScript Deep Dive",
+            description="Maestría en TypeScript avanzado",
+            resource_type="COURSE",
+            platform_name="FrontendMasters",
+            platform_url="https://frontendmasters.com/courses/typescript",
+            color_hex="#8B5CF6",
+            status="IN_PROGRESS",
+            progress_mode="TOPICS",
+            current_unit=0,
+            total_units=10,
+            dormancy_alert_days=5
+        )
+
+        self.book = LearningItem.objects.create(
+            user=self.user,
+            title="Clean Architecture",
+            description="Principios de arquitectura limpia",
+            resource_type="BOOK",
+            platform_name="Físico",
+            platform_url="",
+            color_hex="#3B82F6",
+            status="BACKLOG",
+            progress_mode="MANUAL",
+            current_unit=0,
+            total_units=300,
+            dormancy_alert_days=7
+        )
+
+    def test_list_learning_items(self):
+        url = reverse('learning-items-list-create')
+        res = self.client.get(url)
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(res.data), 2)
+
+    def test_filter_by_status_and_type(self):
+        url = reverse('learning-items-list-create')
+        # Filter by status
+        res = self.client.get(url, {'status': 'IN_PROGRESS'})
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(res.data), 1)
+        self.assertEqual(res.data[0]['title'], "TypeScript Deep Dive")
+
+        # Filter by resource_type
+        res2 = self.client.get(url, {'resource_type': 'BOOK'})
+        self.assertEqual(res2.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(res2.data), 1)
+        self.assertEqual(res2.data[0]['title'], "Clean Architecture")
+
+    def test_search_learning_items(self):
+        url = reverse('learning-items-list-create')
+        res = self.client.get(url, {'search': 'FrontendMasters'})
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(res.data), 1)
+        self.assertEqual(res.data[0]['title'], "TypeScript Deep Dive")
+
+    def test_create_learning_item(self):
+        url = reverse('learning-items-list-create')
+        payload = {
+            "title": "React Docs Official",
+            "description": "Documentación oficial de React 19",
+            "resource_type": "TECH_DOC",
+            "platform_name": "react.dev",
+            "platform_url": "https://react.dev",
+            "color_hex": "#8B5CF6",
+            "status": "IN_PROGRESS",
+            "progress_mode": "MANUAL",
+            "current_unit": 5,
+            "total_units": 20,
+            "last_point_reached": "Hooks de React",
+            "takeaways_markdown": "### Notas de hooks"
+        }
+        res = self.client.post(url, payload, format='json')
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(res.data['title'], "React Docs Official")
+        self.assertEqual(res.data['progress_percentage'], 25)
+
+    def test_retrieve_learning_item_detail(self):
+        url = reverse('learning-item-detail', kwargs={'pk': self.course.id})
+        res = self.client.get(url)
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data['title'], "TypeScript Deep Dive")
+        self.assertIn('topics', res.data)
+
+    def test_update_learning_item(self):
+        url = reverse('learning-item-detail', kwargs={'pk': self.course.id})
+        res = self.client.patch(url, {
+            'last_point_reached': 'Capítulo 3: Generics',
+            'takeaways_markdown': 'Uso intensivo de condicionales con generics.'
+        }, format='json')
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data['last_point_reached'], 'Capítulo 3: Generics')
+        self.assertIn('generics', res.data['takeaways_markdown'])
+
+    def test_soft_delete_and_restore(self):
+        detail_url = reverse('learning-item-detail', kwargs={'pk': self.course.id})
+        del_res = self.client.delete(detail_url)
+        self.assertEqual(del_res.status_code, status.HTTP_204_NO_CONTENT)
+
+        self.course.refresh_from_db()
+        self.assertTrue(self.course.is_deleted)
+        self.assertIsNotNone(self.course.deleted_at)
+
+        # Restore
+        restore_url = reverse('learning-item-restore', kwargs={'pk': self.course.id})
+        rest_res = self.client.post(restore_url)
+        self.assertEqual(rest_res.status_code, status.HTTP_200_OK)
+        self.course.refresh_from_db()
+        self.assertFalse(self.course.is_deleted)
+
+
+class LearningTopicsAndProgressTests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='topicsuser', password='password123')
+        self.token = create_user_token(self.user)
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {self.token}')
+
+        self.course = LearningItem.objects.create(
+            user=self.user,
+            title="FastAPI Masterclass",
+            resource_type="COURSE",
+            status="IN_PROGRESS",
+            progress_mode="TOPICS"
+        )
+
+    def test_add_and_toggle_topic(self):
+        # 1. Add Topic
+        url_add = reverse('learning-topics-list-create', kwargs={'learning_id': self.course.id})
+        res1 = self.client.post(url_add, {
+            'title': 'Lección 1: Routers y Pydantic',
+            'section_name': 'Módulo 1'
+        }, format='json')
+        self.assertEqual(res1.status_code, status.HTTP_201_CREATED)
+        topic1_id = res1.data['id']
+
+        res2 = self.client.post(url_add, {
+            'title': 'Lección 2: Inyección de Dependencias',
+            'section_name': 'Módulo 1'
+        }, format='json')
+        self.assertEqual(res2.status_code, status.HTTP_201_CREATED)
+        topic2_id = res2.data['id']
+
+        self.course.refresh_from_db()
+        self.assertEqual(self.course.progress_percentage, 0)
+
+        # 2. Toggle Topic 1
+        url_toggle1 = reverse('learning-topic-toggle', kwargs={'learning_id': self.course.id, 'topic_id': topic1_id})
+        res_toggle1 = self.client.patch(url_toggle1, {'is_completed': True}, format='json')
+        self.assertEqual(res_toggle1.status_code, status.HTTP_200_OK)
+        self.assertTrue(res_toggle1.data['is_completed'])
+        self.assertEqual(res_toggle1.data['parent_progress_percentage'], 50)
+
+        # 3. Toggle Topic 2 -> 100% and transitions to COMPLETED
+        url_toggle2 = reverse('learning-topic-toggle', kwargs={'learning_id': self.course.id, 'topic_id': topic2_id})
+        res_toggle2 = self.client.patch(url_toggle2, {'is_completed': True}, format='json')
+        self.assertEqual(res_toggle2.status_code, status.HTTP_200_OK)
+        self.assertEqual(res_toggle2.data['parent_progress_percentage'], 100)
+        self.assertEqual(res_toggle2.data['parent_status'], 'COMPLETED')
+
+        self.course.refresh_from_db()
+        self.assertEqual(self.course.status, 'COMPLETED')
+
+
+class LearningSessionAndLogTests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='sessionuser', password='password123')
+        self.token = create_user_token(self.user)
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {self.token}')
+
+        self.item = LearningItem.objects.create(
+            user=self.user,
+            title="Sistemas Distribuidos",
+            resource_type="BOOK",
+            platform_name="Libro",
+            platform_url="https://dist-sys.net",
+            status="IN_PROGRESS",
+            progress_mode="MANUAL",
+            current_unit=10,
+            total_units=100
+        )
+
+    def test_schedule_study_session(self):
+        url = reverse('learning-schedule-session', kwargs={'pk': self.item.id})
+        payload = {
+            "start_time": "2026-10-05T18:00:00Z",
+            "end_time": "2026-10-05T19:30:00Z",
+            "notes": "Lectura capítulo de Raft y Paxos",
+            "reminder_minutes": 15
+        }
+        res = self.client.post(url, payload, format='json')
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        self.assertIn("Estudiar: Sistemas Distribuidos", res.data['title'])
+        self.assertEqual(res.data['category'], "Estudio")
+        self.assertEqual(res.data['meeting_url'], "https://dist-sys.net")
+
+        # Verify EventItem exists in DB
+        event = EventItem.objects.get(pk=res.data['event_id'])
+        self.assertEqual(event.user, self.user)
+        self.assertEqual(event.category, "Estudio")
+
+    def test_log_activity_quick_increment(self):
+        url = reverse('learning-log-activity', kwargs={'pk': self.item.id})
+        res = self.client.post(url, {
+            'increment_units': 5,
+            'new_last_point': 'Capítulo 3 terminado'
+        }, format='json')
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data['current_unit'], 15)
+        self.assertEqual(res.data['progress_percentage'], 15)
+        self.assertFalse(res.data['is_dormant'])
+
+
+class LearningDormancyServiceTests(TestCase):
+    def setUp(self):
+        import datetime
+        self.user = User.objects.create_user(username='dormantuser', password='password123')
+        # Active item with last activity 8 days ago (threshold: 5 days)
+        self.dormant_item = LearningItem.objects.create(
+            user=self.user,
+            title="Dormant Python Course",
+            status="IN_PROGRESS",
+            dormancy_alert_days=5,
+            last_activity_at=timezone.now() - datetime.timedelta(days=8)
+        )
+        # Active fresh item with activity today
+        self.fresh_item = LearningItem.objects.create(
+            user=self.user,
+            title="Fresh React Course",
+            status="IN_PROGRESS",
+            dormancy_alert_days=5,
+            last_activity_at=timezone.now()
+        )
+
+    def test_check_learning_dormancy_creates_notification(self):
+        from .services import check_learning_dormancy
+        notifs = check_learning_dormancy(user=self.user)
+        self.assertEqual(len(notifs), 1)
+        self.assertIn("Dormant Python Course", notifs[0].title)
+
+        # Calling again within 48h should not duplicate
+        notifs2 = check_learning_dormancy(user=self.user)
+        self.assertEqual(len(notifs2), 0)
+
 
 
 

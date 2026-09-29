@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.db import transaction
-from .models import ElementoAura, UserProfile, Notification, Goal, GoalMilestone, Project, ProjectTask, TaskSubtask, EventItem, PushSubscription, AuditLog
+from .models import ElementoAura, UserProfile, Notification, Goal, GoalMilestone, Project, ProjectTask, TaskSubtask, EventItem, PushSubscription, AuditLog, LearningItem, LearningTopic
 
 class ElementoAuraSerializer(serializers.ModelSerializer):
     class Meta:
@@ -332,6 +332,56 @@ class AuditLogSerializer(serializers.ModelSerializer):
             'object_id', 'object_repr', 'changes', 'ip_address', 'created_at'
         ]
         read_only_fields = fields
+
+
+class LearningTopicSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LearningTopic
+        fields = ['id', 'learning_item', 'title', 'is_completed', 'order', 'section_name']
+        read_only_fields = ['id', 'learning_item']
+
+
+class LearningItemSerializer(serializers.ModelSerializer):
+    dormancy_days = serializers.SerializerMethodField()
+    is_dormant = serializers.SerializerMethodField()
+    topics_count = serializers.IntegerField(source='topics.count', read_only=True)
+    completed_topics_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = LearningItem
+        fields = [
+            'id', 'user', 'title', 'description', 'resource_type',
+            'platform_name', 'platform_url', 'color_hex', 'status',
+            'progress_mode', 'progress_percentage', 'current_unit',
+            'total_units', 'last_point_reached', 'takeaways_markdown',
+            'goal', 'project', 'last_activity_at', 'dormancy_alert_days',
+            'dormancy_days', 'is_dormant', 'topics_count', 'completed_topics_count',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'user', 'created_at', 'updated_at', 'last_activity_at']
+
+    def get_dormancy_days(self, obj):
+        from django.utils import timezone
+        if not obj.last_activity_at:
+            return 0
+        diff = timezone.now() - obj.last_activity_at
+        return max(0, diff.days)
+
+    def get_is_dormant(self, obj):
+        if obj.status != 'IN_PROGRESS':
+            return False
+        return self.get_dormancy_days(obj) >= obj.dormancy_alert_days
+
+    def get_completed_topics_count(self, obj):
+        return obj.topics.filter(is_completed=True).count()
+
+
+class LearningItemDetailSerializer(LearningItemSerializer):
+    topics = LearningTopicSerializer(many=True, read_only=True)
+
+    class Meta(LearningItemSerializer.Meta):
+        fields = LearningItemSerializer.Meta.fields + ['topics']
+
 
 
 

@@ -1,4 +1,4 @@
-# Tasks: Navigation Layout, Objetivos, Proyectos, Eventos & Web Push Notifications (PWA)
+# Tasks: Navigation Layout, Objetivos, Proyectos, Eventos, Web Push (PWA), Auth & Aprendizaje (Learning Hub)
 
 **Input**: Design documents from `/specs/001-navigation-layout/` (`spec.md`, `plan.md`, `research.md`, `data-model.md`, `contracts/api.md`, `quickstart.md`)
 
@@ -333,6 +333,92 @@ Task: "Implement typed API client service methods in src/services/api.ts"
 - **Backend Services (T113 - T114)**: Scheduler logic in `services.py` depends on updated models and serializers.
 - **Frontend Drawers (T115 - T117)**: Drawers depend on `dateUtils.ts` (T108) and domain types (T109).
 - **Wiring & Testing (T118 - T121)**: Validate end-to-end integration with pytest, npm build, and Scenario 20.
+
+---
+
+## Phase 12: User Story 9 - Learning & Knowledge Management Hub (Aprendizaje) (Priority: P2)
+
+**Goal**: Deliver a dedicated "Aprendizaje" tab to manage courses, books, technical articles, and official technology documentation with Electric Violet aesthetic (`#8B5CF6`). Support dual card/list views, learning lifecycle states (*Por empezar*, *En curso*, *En pausa*, *Completado*), real-time search, source type filtering, hybrid progress tracking (modular checklist vs direct numeric/units), dormancy engine with Web Push reminders for items inactive for $\ge 5$ days, slide-over continuity drawer with 1-click resource launcher, "Último punto alcanzado" bookmark, Markdown Key Takeaways notes, and direct "Agendar sesión de estudio" scheduling on the Calendar with 15-minute advance reminder.
+
+**Independent Test**:
+1. In the TabBar, click on "📚 Aprendizaje": verify main viewport switches instantly (<100ms) showing status columns, filters, and Electric Violet theme highlight.
+2. Click "+ Nuevo Recurso": verify `LearningDrawer` opens from the right edge. Create a course with 3 topics in `TOPICS` mode; verify it appears in the active column.
+3. Check off a topic: verify card and drawer recalculate progress automatically (e.g., 33%).
+4. In the drawer, enter Key Takeaways notes in Markdown and set "Último punto alcanzado"; save and verify persistence.
+5. Click "Agendar sesión de estudio": select time and save; switch to "Calendario" tab and verify the study block event is projected in `#8B5CF6` with the course URL link.
+6. Verify dormancy badge appears on items inactive $\ge 5$ days, and background scheduler emits a Web Push reminder.
+
+- [X] T122 [P] [US9] Define TypeScript domain models and interfaces for ResourceType, LearningStatus, LearningProgressMode, LearningTopic, LearningItem, and LearningFilterCriteria in src/domain/types.ts
+- [X] T123 [P] [US9] Implement database models LearningItem and LearningTopic in backend/models.py
+- [X] T124 [P] [US9] Create DRF serializers LearningTopicSerializer, LearningItemSerializer, and LearningItemDetailSerializer in backend/serializers.py
+- [X] T125 [US9] Implement domain service logic for hybrid learning progress calculation, dormancy evaluation, and calendar study session scheduling in backend/services.py
+- [X] T126 [US9] Generate and apply Django database migrations for LearningItem and LearningTopic models in backend/
+- [X] T127 [P] [US9] Implement REST API ViewSet LearningItemViewSet with custom actions for topics, schedule-session, and log-activity in backend/views.py and backend/urls.py
+- [X] T128 [P] [US9] Create automated unit tests for LearningItem CRUD, hybrid progress calculation, dormancy evaluation, and study session scheduling in backend/tests.py
+- [X] T129 [P] [US9] Implement typed API client service methods for learning items in src/services/api.ts
+- [X] T130 [US9] Extend application state context with learning items collection, active filter criteria, optimistic progress updates, and drawer state in src/context/AuraState.tsx
+- [X] T131 [P] [US9] Update TabBar component to include the 5th navigation tab APRENDIZAJE with Electric Violet theme color (#8B5CF6) and book icon (📚) in src/components/TabBar.tsx
+- [X] T132 [P] [US9] Build LearningCard component displaying type badge, title, platform link launcher, progress bar, dormancy warning tag, and quick +1 unit button in src/components/learning/LearningCard.tsx
+- [X] T133 [P] [US9] Build StudySessionModal component for scheduling a calendar study block with start/end time and reminder lead time in src/components/learning/StudySessionModal.tsx
+- [X] T134 [P] [US9] Build LearningDrawer slide-over panel with external URL launcher, last point reached field, Markdown Key Takeaways editor, modular checklist, and session scheduler trigger in src/components/learning/LearningDrawer.tsx
+- [X] T135 [US9] Build LearningView container component with search input, status grouping columns (Por empezar, En curso, En pausa, Completado), and type filter pills in src/components/learning/LearningView.tsx
+- [X] T136 [US9] Wire LearningView into the main application content router in src/App.tsx
+- [X] T137 [US9] Integrate background dormancy check into the periodic scheduler in backend/services.py to dispatch in-app notifications and Web Push alerts
+- [X] T138 [US9] Execute backend test suite for learning hub with pytest backend/tests.py
+- [X] T139 [US9] Run frontend build verification with npm run build to verify zero TypeScript errors
+- [X] T140 [US9] Execute Scenario 21 end-to-end verification in quickstart.md across learning item creation, progress tracking, dormancy alerts, and calendar sessions
+
+---
+
+## Dependencies & Execution Order (User Story 9)
+
+- **Foundation (T122 - T126)**: Domain interfaces in `types.ts`, ORM models in `models.py`, serializers in `serializers.py`, service calculation logic in `services.py`, and database migrations.
+- **Backend API & Testing (T127 - T128)**: REST API ViewSet and automated unit tests.
+- **Frontend Client & State (T129 - T130)**: Client methods in `api.ts` and context management in `AuraState.tsx`.
+- **UI Components (T131 - T135)**: TabBar tab, LearningCard, StudySessionModal, LearningDrawer, and LearningView.
+- **Integration & Scheduler (T136 - T137)**: Router wiring in `App.tsx` and background scheduler dormancy integration in `services.py`.
+- **Final Validation (T138 - T140)**: Backend tests, TypeScript compile check, and end-to-end quickstart validation.
+
+---
+
+## Parallel Opportunities: User Story 9
+
+```bash
+# Launch backend models and serializers together:
+Task: "Implement database models LearningItem and LearningTopic in backend/models.py"
+Task: "Create DRF serializers in backend/serializers.py"
+
+# Launch client types and API client together:
+Task: "Define TypeScript domain models in src/domain/types.ts"
+Task: "Implement typed API client service methods in src/services/api.ts"
+
+# Launch presentational components concurrently:
+Task: "Build LearningCard component in src/components/learning/LearningCard.tsx"
+Task: "Build StudySessionModal component in src/components/learning/StudySessionModal.tsx"
+Task: "Build LearningDrawer component in src/components/learning/LearningDrawer.tsx"
+```
+
+---
+
+## Implementation Strategy: User Story 9 (Aprendizaje)
+
+1. **Step 1: Persistence & Business Engine (T122 - T126)**:
+   - Create models `LearningItem` and `LearningTopic` with fields for resource type, platform URL, progress mode, current/total units, bookmarks, and dormancy threshold.
+   - Run migrations and verify table creation in SQLite.
+   - Implement progress calculation logic (topics vs units) in `backend/services.py`.
+2. **Step 2: REST Endpoints & Unit Tests (T127 - T128)**:
+   - Provide standard CRUD plus custom endpoints (`/topics/`, `/schedule-session/`, `/log-activity/`).
+   - Validate calculations, validations, and status transitions with automated unit tests in `pytest`.
+3. **Step 3: Frontend State & Client Infrastructure (T129 - T131)**:
+   - Implement `learningApi` in `src/services/api.ts`.
+   - Wire state, filters, and optimistic updates into `AuraState.tsx`.
+   - Add the 5th tab to `TabBar.tsx`.
+4. **Step 4: Interactive Views & Slide-Over Drawer (T132 - T136)**:
+   - Develop `LearningCard`, `LearningDrawer`, `StudySessionModal`, and `LearningView`.
+   - Wire into `App.tsx` navigation.
+5. **Step 5: Background Nudges & End-to-End Verification (T137 - T140)**:
+   - Connect dormancy evaluation to the background scheduler loop.
+   - Run pytest, build checks, and perform Quickstart Scenario 21.
 
 
 

@@ -1,4 +1,4 @@
-export type ElementoTipo = 'CALENDARIO' | 'OBJETIVOS' | 'PROYECTOS' | 'EVENTOS';
+export type ElementoTipo = 'CALENDARIO' | 'OBJETIVOS' | 'PROYECTOS' | 'EVENTOS' | 'APRENDIZAJE';
 
 export interface PlanElemento {
   id: number | string;
@@ -46,7 +46,7 @@ export interface SemanaRango {
 
 // --- Navigation & Objetivos Domain Models ---
 
-export type ActiveTab = 'CALENDARIO' | 'OBJETIVOS' | 'PROYECTOS' | 'EVENTOS';
+export type ActiveTab = 'CALENDARIO' | 'OBJETIVOS' | 'PROYECTOS' | 'EVENTOS' | 'APRENDIZAJE';
 
 export type GoalStatus = 'ACTIVE' | 'COMPLETED' | 'PAUSED';
 
@@ -247,4 +247,54 @@ export interface AuthState {
   isLoading: boolean;
   error: string | null;
 }
+
+// --- Aprendizaje (Learning & Knowledge) Domain Models ---
+
+export type ResourceType = 'COURSE' | 'BOOK' | 'ARTICLE' | 'TECH_DOC';
+
+export type LearningStatus = 'BACKLOG' | 'IN_PROGRESS' | 'PAUSED' | 'COMPLETED';
+
+export type LearningProgressMode = 'MANUAL' | 'TOPICS';
+
+export interface LearningTopic {
+  id: string;
+  learningItemId?: string;
+  title: string;
+  isCompleted: boolean;
+  order: number;
+  sectionName?: string | null;
+}
+
+export interface LearningItem {
+  id: string;
+  title: string;
+  description?: string;
+  resourceType: ResourceType;
+  platformName?: string;
+  platformUrl?: string;
+  colorHex: string;
+  status: LearningStatus;
+  progressMode: LearningProgressMode;
+  progressPercentage: number; // 0 to 100
+  currentUnit: number;
+  totalUnits: number;
+  lastPointReached?: string;
+  takeawaysMarkdown?: string;
+  goalId?: string | null;
+  projectId?: string | null;
+  lastActivityAt: string;
+  dormancyDays?: number;
+  isDormant?: boolean;
+  dormancyAlertDays?: number;
+  topics?: LearningTopic[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface LearningFilterCriteria {
+  status: 'ALL' | LearningStatus;
+  resourceType: 'ALL' | ResourceType;
+  searchQuery: string;
+}
+
 

@@ -2,7 +2,8 @@ import {
   Goal, GoalMilestone, NotificationItem, UserProfile, PlanElemento,
   Project, ProjectTask, TaskSubtask, TaskStatus, EventItem, EventStatus,
   PushSubscriptionDTO, PushSubscriptionKeys,
-  LoginCredentials, RegisterData, AuthResponse, AuthSessionUser
+  LoginCredentials, RegisterData, AuthResponse, AuthSessionUser,
+  LearningItem, LearningTopic, LearningStatus, LearningFilterCriteria
 } from '../domain/types';
 
 export const API_BASE = `${(import.meta.env.VITE_API_URL || '').replace(/\/$/, '')}/api/v1`;
@@ -725,6 +726,207 @@ export async function getSessionApi(): Promise<{ isAuthenticated: boolean; user:
   } catch (err) {
     return { isAuthenticated: false, user: null };
   }
+}
+
+// --- Aprendizaje (Learning & Knowledge Hub) Services ---
+
+export function transformLearningTopicFromApi(raw: any): LearningTopic {
+  return {
+    id: raw.id,
+    learningItemId: raw.learning_item ?? raw.learningItemId,
+    title: raw.title,
+    isCompleted: Boolean(raw.is_completed ?? raw.isCompleted),
+    order: raw.order ?? 0,
+    sectionName: raw.section_name ?? raw.sectionName ?? null,
+  };
+}
+
+export function transformLearningItemFromApi(raw: any): LearningItem {
+  return {
+    id: raw.id,
+    title: raw.title,
+    description: raw.description ?? '',
+    resourceType: raw.resource_type ?? raw.resourceType ?? 'COURSE',
+    platformName: raw.platform_name ?? raw.platformName ?? '',
+    platformUrl: raw.platform_url ?? raw.platformUrl ?? '',
+    colorHex: raw.color_hex ?? raw.colorHex ?? '#8B5CF6',
+    status: raw.status ?? 'BACKLOG',
+    progressMode: raw.progress_mode ?? raw.progressMode ?? 'TOPICS',
+    progressPercentage: raw.progress_percentage ?? raw.progressPercentage ?? 0,
+    currentUnit: raw.current_unit ?? raw.currentUnit ?? 0,
+    totalUnits: raw.total_units ?? raw.totalUnits ?? 0,
+    lastPointReached: raw.last_point_reached ?? raw.lastPointReached ?? '',
+    takeawaysMarkdown: raw.takeaways_markdown ?? raw.takeawaysMarkdown ?? '',
+    goalId: raw.goal ?? raw.goal_id ?? raw.goalId ?? null,
+    projectId: raw.project ?? raw.project_id ?? raw.projectId ?? null,
+    lastActivityAt: raw.last_activity_at ?? raw.lastActivityAt ?? new Date().toISOString(),
+    dormancyDays: raw.dormancy_days ?? raw.dormancyDays ?? 0,
+    isDormant: Boolean(raw.is_dormant ?? raw.isDormant),
+    dormancyAlertDays: raw.dormancy_alert_days ?? raw.dormancyAlertDays ?? 7,
+    topics: Array.isArray(raw.topics) ? raw.topics.map(transformLearningTopicFromApi) : undefined,
+    createdAt: raw.created_at ?? raw.createdAt,
+    updatedAt: raw.updated_at ?? raw.updatedAt,
+  };
+}
+
+export async function fetchLearningItems(filters?: Partial<LearningFilterCriteria>): Promise<LearningItem[]> {
+  const queryParts: string[] = [];
+  if (filters?.status && filters.status !== 'ALL') {
+    queryParts.push(`status=${encodeURIComponent(filters.status)}`);
+  }
+  if (filters?.resourceType && filters.resourceType !== 'ALL') {
+    queryParts.push(`resource_type=${encodeURIComponent(filters.resourceType)}`);
+  }
+  if (filters?.searchQuery) {
+    queryParts.push(`search=${encodeURIComponent(filters.searchQuery)}`);
+  }
+  const queryString = queryParts.length > 0 ? `?${queryParts.join('&')}` : '';
+  try {
+    const rawList = await apiRequest<any[]>(`/learning-items/${queryString}`);
+    return rawList.map(transformLearningItemFromApi);
+  } catch (err) {
+    console.warn('Failed to fetch learning items:', err);
+    return [];
+  }
+}
+
+export async function fetchLearningItemDetail(id: string): Promise<LearningItem> {
+  const raw = await apiRequest<any>(`/learning-items/${id}/`);
+  return transformLearningItemFromApi(raw);
+}
+
+export async function createLearningItemApi(itemData: Partial<LearningItem>): Promise<LearningItem> {
+  const payload = {
+    title: itemData.title,
+    description: itemData.description || '',
+    resource_type: itemData.resourceType || 'COURSE',
+    platform_name: itemData.platformName || '',
+    platform_url: itemData.platformUrl || '',
+    color_hex: itemData.colorHex || '#8B5CF6',
+    status: itemData.status || 'BACKLOG',
+    progress_mode: itemData.progressMode || 'TOPICS',
+    current_unit: itemData.currentUnit || 0,
+    total_units: itemData.totalUnits || 0,
+    last_point_reached: itemData.lastPointReached || '',
+    takeaways_markdown: itemData.takeawaysMarkdown || '',
+    dormancy_alert_days: itemData.dormancyAlertDays || 7,
+    goal: itemData.goalId || null,
+    project: itemData.projectId || null,
+  };
+  const raw = await apiRequest<any>('/learning-items/', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  return transformLearningItemFromApi(raw);
+}
+
+export async function updateLearningItemApi(id: string, updates: Partial<LearningItem>): Promise<LearningItem> {
+  const payload: Record<string, any> = {};
+  if (updates.title !== undefined) payload.title = updates.title;
+  if (updates.description !== undefined) payload.description = updates.description;
+  if (updates.resourceType !== undefined) payload.resource_type = updates.resourceType;
+  if (updates.platformName !== undefined) payload.platform_name = updates.platformName;
+  if (updates.platformUrl !== undefined) payload.platform_url = updates.platformUrl;
+  if (updates.colorHex !== undefined) payload.color_hex = updates.colorHex;
+  if (updates.status !== undefined) payload.status = updates.status;
+  if (updates.progressMode !== undefined) payload.progress_mode = updates.progressMode;
+  if (updates.currentUnit !== undefined) payload.current_unit = updates.currentUnit;
+  if (updates.totalUnits !== undefined) payload.total_units = updates.totalUnits;
+  if (updates.lastPointReached !== undefined) payload.last_point_reached = updates.lastPointReached;
+  if (updates.takeawaysMarkdown !== undefined) payload.takeaways_markdown = updates.takeawaysMarkdown;
+  if (updates.dormancyAlertDays !== undefined) payload.dormancy_alert_days = updates.dormancyAlertDays;
+  if (updates.goalId !== undefined) payload.goal = updates.goalId;
+  if (updates.projectId !== undefined) payload.project = updates.projectId;
+
+  const raw = await apiRequest<any>(`/learning-items/${id}/`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+  return transformLearningItemFromApi(raw);
+}
+
+export async function deleteLearningItemApi(id: string): Promise<void> {
+  await apiRequest(`/learning-items/${id}/`, { method: 'DELETE' });
+}
+
+export async function addLearningTopicApi(learningId: string, topicData: { title: string; sectionName?: string; order?: number }): Promise<LearningTopic> {
+  const payload = {
+    title: topicData.title,
+    section_name: topicData.sectionName || null,
+    order: topicData.order,
+  };
+  const raw = await apiRequest<any>(`/learning-items/${learningId}/topics/`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  return transformLearningTopicFromApi(raw);
+}
+
+export async function toggleLearningTopicApi(learningId: string, topicId: string, isCompleted?: boolean): Promise<{
+  id: string;
+  title: string;
+  isCompleted: boolean;
+  parentProgressPercentage: number;
+  parentStatus: LearningStatus;
+}> {
+  const payload = isCompleted !== undefined ? { is_completed: isCompleted } : {};
+  const raw = await apiRequest<any>(`/learning-items/${learningId}/topics/${topicId}/toggle/`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+  return {
+    id: raw.id,
+    title: raw.title,
+    isCompleted: raw.is_completed,
+    parentProgressPercentage: raw.parent_progress_percentage,
+    parentStatus: raw.parent_status,
+  };
+}
+
+export async function deleteLearningTopicApi(learningId: string, topicId: string): Promise<void> {
+  await apiRequest(`/learning-items/${learningId}/topics/${topicId}/`, {
+    method: 'DELETE',
+  });
+}
+
+export async function scheduleStudySessionApi(learningId: string, sessionData: { startTime: string; endTime: string; notes?: string; reminderMinutes?: number }): Promise<EventItem> {
+  const payload = {
+    start_time: sessionData.startTime,
+    end_time: sessionData.endTime,
+    notes: sessionData.notes || '',
+    reminder_minutes: sessionData.reminderMinutes ?? 15,
+  };
+  const raw = await apiRequest<any>(`/learning-items/${learningId}/schedule-session/`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  return transformEventFromApi(raw);
+}
+
+export async function logLearningActivityApi(learningId: string, logData: { incrementUnits?: number; newLastPoint?: string }): Promise<{
+  id: string;
+  currentUnit: number;
+  progressPercentage: number;
+  lastActivityAt: string;
+  dormancyDays: number;
+  isDormant: boolean;
+}> {
+  const payload = {
+    increment_units: logData.incrementUnits ?? 1,
+    new_last_point: logData.newLastPoint || '',
+  };
+  const raw = await apiRequest<any>(`/learning-items/${learningId}/log-activity/`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  return {
+    id: raw.id,
+    currentUnit: raw.current_unit,
+    progressPercentage: raw.progress_percentage,
+    lastActivityAt: raw.last_activity_at,
+    dormancyDays: raw.dormancy_days,
+    isDormant: raw.is_dormant,
+  };
 }
 
 

@@ -501,9 +501,109 @@ def check_approaching_task_deadlines(user=None):
     return notifications_created
 
 
+def calculate_learning_progress(learning_item):
+    """
+    Computes and updates progress_percentage for a LearningItem based on its progress_mode:
+    - 'TOPICS': (completed_topics / total_topics) * 100
+    - 'MANUAL': (current_unit / total_units) * 100 if total_units > 0 else progress_percentage
+    Automatically sets status to 'COMPLETED' if 100% is reached.
+    """
+    if learning_item.status == 'COMPLETED':
+        learning_item.progress_percentage = 100
+    elif learning_item.progress_mode == 'TOPICS':
+        total = learning_item.topics.count()
+        if total == 0:
+            learning_item.progress_percentage = 0
+        else:
+            completed = learning_item.topics.filter(is_completed=True).count()
+            learning_item.progress_percentage = min(100, max(0, int(round((completed / total) * 100))))
+            if completed == total and total > 0:
+                learning_item.status = 'COMPLETED'
+    else:  # MANUAL
+        if learning_item.total_units > 0:
+            learning_item.progress_percentage = min(100, max(0, int(round((learning_item.current_unit / learning_item.total_units) * 100))))
+            if learning_item.current_unit >= learning_item.total_units:
+                learning_item.status = 'COMPLETED'
+                learning_item.progress_percentage = 100
+
+    learning_item.save(update_fields=['progress_percentage', 'status', 'updated_at'])
+    return learning_item.progress_percentage
+
+
+def schedule_learning_study_session(learning_item, start_time, end_time, notes=None, reminder_minutes=15):
+    """
+    Creates an EventItem in the calendar linked to a learning resource session.
+    """
+    from .models import EventItem
+    event = EventItem.objects.create(
+        user=learning_item.user,
+        title=f"Estudiar: {learning_item.title}",
+        description=notes or (f"Sesión de estudio para {learning_item.title}." + (f" Enlace: {learning_item.platform_url}" if learning_item.platform_url else "")),
+        start_time=start_time,
+        end_time=end_time,
+        location=learning_item.platform_name or "Online",
+        meeting_url=learning_item.platform_url,
+        category="Estudio",
+        color_hex=learning_item.color_hex or "#8B5CF6",
+        status="PROGRAMMED",
+        reminder_minutes=reminder_minutes
+    )
+    return event
+
+
+def check_learning_dormancy(user=None):
+    """
+    Identifies active learning resources in IN_PROGRESS state that have had no
+    activity for >= dormancy_alert_days (default 7, or 5+ days) and dispatches gentle
+    in-app Notification and Web Push reminders (suppressed if an alert was sent in the last 48 hours).
+    """
+    from .models import LearningItem, Notification
+    from django.utils import timezone
+    import datetime
+
+    now = timezone.now()
+    items = LearningItem.objects.filter(is_deleted=False, status='IN_PROGRESS')
+    if user:
+        items = items.filter(user=user)
+
+    notifications_created = []
+    cutoff_48h = now - datetime.timedelta(hours=48)
+
+    for item in items:
+        if not item.last_activity_at:
+            continue
+        dormancy_days = (now - item.last_activity_at).days
+        threshold = item.dormancy_alert_days or 5
+        if dormancy_days >= threshold:
+            already_notified = Notification.objects.filter(
+                user=item.user,
+                title__contains=item.title,
+                created_at__gte=cutoff_48h
+            ).exists()
+
+            if not already_notified and item.user:
+                notif_title = f"Momento de retomar: {item.title}"
+                notif_message = f"💡 Llevas {dormancy_days} días sin registrar avance en tu curso '{item.title}'. ¡Dedícale 15 minutos hoy para no perder el ritmo!"
+                notif = Notification.objects.create(
+                    user=item.user,
+                    title=notif_title,
+                    message=notif_message,
+                    is_read=False
+                )
+                send_web_push(
+                    user=item.user,
+                    title=notif_title,
+                    message=notif_message,
+                    url="/#aprendizaje"
+                )
+                notifications_created.append(notif)
+
+    return notifications_created
+
+
 def check_and_dispatch_all_reminders(user=None):
     """
-    Aggregates approaching event reminders, goal deadlines, and task deadlines,
+    Aggregates approaching event reminders, goal deadlines, task deadlines, and learning dormancy,
     ensuring notifications and Web Push alerts are dispatched.
     """
     event_notifs = check_approaching_event_reminders(user=user)
@@ -517,7 +617,8 @@ def check_and_dispatch_all_reminders(user=None):
 
     goal_notifs = check_approaching_goal_deadlines(user=user)
     task_notifs = check_approaching_task_deadlines(user=user)
-    return event_notifs + goal_notifs + task_notifs
+    learning_notifs = check_learning_dormancy(user=user)
+    return event_notifs + goal_notifs + task_notifs + learning_notifs
 
 
 # --- Lightweight In-Process Background Scheduler ---

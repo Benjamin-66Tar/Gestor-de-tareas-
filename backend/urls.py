@@ -33,6 +33,13 @@ from .views import (
     LogoutAPI,
     SessionAPI,
     DatabaseHealthCheckAPI,
+    LearningItemListCreateAPI,
+    LearningItemDetailAPI,
+    LearningItemRestoreAPI,
+    LearningTopicListCreateAPI,
+    LearningTopicToggleAPI,
+    LearningScheduleSessionAPI,
+    LearningLogActivityAPI,
 )
 
 urlpatterns = [
@@ -87,5 +94,15 @@ urlpatterns = [
 
     # Calendar Sync
     path('api/v1/calendar/events/', CalendarEventsAPI.as_view(), name='calendar-events-sync'),
+
+    # Learning Hub
+    path('api/v1/learning-items/', LearningItemListCreateAPI.as_view(), name='learning-items-list-create'),
+    path('api/v1/learning-items/<uuid:pk>/', LearningItemDetailAPI.as_view(), name='learning-item-detail'),
+    path('api/v1/learning-items/<uuid:pk>/restore/', LearningItemRestoreAPI.as_view(), name='learning-item-restore'),
+    path('api/v1/learning-items/<uuid:learning_id>/topics/', LearningTopicListCreateAPI.as_view(), name='learning-topics-list-create'),
+    path('api/v1/learning-items/<uuid:learning_id>/topics/<uuid:topic_id>/', LearningTopicToggleAPI.as_view(), name='learning-topic-detail'),
+    path('api/v1/learning-items/<uuid:learning_id>/topics/<uuid:topic_id>/toggle/', LearningTopicToggleAPI.as_view(), name='learning-topic-toggle'),
+    path('api/v1/learning-items/<uuid:pk>/schedule-session/', LearningScheduleSessionAPI.as_view(), name='learning-schedule-session'),
+    path('api/v1/learning-items/<uuid:pk>/log-activity/', LearningLogActivityAPI.as_view(), name='learning-log-activity'),
 ]
 

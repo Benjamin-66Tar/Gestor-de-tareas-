@@ -989,3 +989,329 @@ class DatabaseHealthCheckAPI(APIView):
                 "timestamp": timezone.now().isoformat(),
             }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
+
+# --- Learning Hub APIs ---
+
+class LearningItemListCreateAPI(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from .models import LearningItem
+        from .serializers import LearningItemSerializer
+
+        is_deleted_param = request.query_params.get('is_deleted')
+        if is_deleted_param == 'true':
+            qs = LearningItem.objects.filter(user=request.user, is_deleted=True).prefetch_related('topics')
+        else:
+            qs = LearningItem.objects.filter(user=request.user, is_deleted=False).prefetch_related('topics')
+
+        status_param = request.query_params.get('status')
+        if status_param and status_param != 'ALL':
+            qs = qs.filter(status=status_param)
+
+        resource_type_param = request.query_params.get('resource_type')
+        if resource_type_param and resource_type_param != 'ALL':
+            qs = qs.filter(resource_type=resource_type_param)
+
+        search_param = request.query_params.get('search')
+        if search_param:
+            qs = qs.filter(
+                Q(title__icontains=search_param) |
+                Q(platform_name__icontains=search_param) |
+                Q(description__icontains=search_param)
+            )
+
+        serializer = LearningItemSerializer(qs, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def post(self, request):
+        from .serializers import LearningItemSerializer
+        from .services import calculate_learning_progress, log_audit_event, get_client_ip
+
+        serializer = LearningItemSerializer(data=request.data)
+        if serializer.is_valid():
+            item = serializer.save(user=request.user)
+            calculate_learning_progress(item)
+            log_audit_event(
+                user=request.user,
+                action='CREATE',
+                model_name='LearningItem',
+                object_id=item.id,
+                object_repr=item.title,
+                changes={'status': item.status, 'progress_percentage': item.progress_percentage},
+                ip_address=get_client_ip(request)
+            )
+            return Response(LearningItemSerializer(item).data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class LearningItemDetailAPI(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self, pk, user):
+        from .models import LearningItem
+        try:
+            return LearningItem.objects.prefetch_related('topics').get(pk=pk, user=user, is_deleted=False)
+        except LearningItem.DoesNotExist:
+            raise Http404
+
+    def get(self, request, pk):
+        from .serializers import LearningItemDetailSerializer
+        item = self.get_object(pk, request.user)
+        return Response(LearningItemDetailSerializer(item).data, status=status.HTTP_200_OK)
+
+    def put(self, request, pk):
+        return self.patch(request, pk)
+
+    def patch(self, request, pk):
+        from .serializers import LearningItemDetailSerializer, LearningItemSerializer
+        from .services import calculate_learning_progress, log_audit_event, get_client_ip
+
+        item = self.get_object(pk, request.user)
+        serializer = LearningItemSerializer(item, data=request.data, partial=True)
+        if serializer.is_valid():
+            updated_item = serializer.save()
+            calculate_learning_progress(updated_item)
+            log_audit_event(
+                user=request.user,
+                action='UPDATE',
+                model_name='LearningItem',
+                object_id=updated_item.id,
+                object_repr=updated_item.title,
+                changes=serializer.validated_data,
+                ip_address=get_client_ip(request)
+            )
+            return Response(LearningItemDetailSerializer(updated_item).data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, pk):
+        from django.utils import timezone
+        from .services import log_audit_event, get_client_ip
+
+        item = self.get_object(pk, request.user)
+        item.is_deleted = True
+        item.deleted_at = timezone.now()
+        item.save(update_fields=['is_deleted', 'deleted_at', 'updated_at'])
+        log_audit_event(
+            user=request.user,
+            action='DELETE',
+            model_name='LearningItem',
+            object_id=item.id,
+            object_repr=item.title,
+            changes={'is_deleted': True},
+            ip_address=get_client_ip(request)
+        )
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class LearningItemRestoreAPI(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        from .models import LearningItem
+        from .serializers import LearningItemSerializer
+        from .services import log_audit_event, get_client_ip
+
+        try:
+            item = LearningItem.objects.prefetch_related('topics').get(pk=pk, user=request.user, is_deleted=True)
+        except LearningItem.DoesNotExist:
+            raise Http404
+
+        item.is_deleted = False
+        item.deleted_at = None
+        item.save(update_fields=['is_deleted', 'deleted_at', 'updated_at'])
+        log_audit_event(
+            user=request.user,
+            action='RESTORE',
+            model_name='LearningItem',
+            object_id=item.id,
+            object_repr=item.title,
+            changes={'is_deleted': False},
+            ip_address=get_client_ip(request)
+        )
+        return Response(LearningItemSerializer(item).data, status=status.HTTP_200_OK)
+
+
+class LearningTopicListCreateAPI(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, learning_id):
+        from .models import LearningItem, LearningTopic
+        from .serializers import LearningTopicSerializer
+        from .services import calculate_learning_progress
+        from django.db.models import Max
+
+        try:
+            item = LearningItem.objects.get(pk=learning_id, user=request.user, is_deleted=False)
+        except LearningItem.DoesNotExist:
+            raise Http404
+
+        data = request.data.copy()
+        if 'order' not in data or data.get('order') is None:
+            max_order = item.topics.aggregate(m=Max('order'))['m']
+            data['order'] = (max_order + 1) if max_order is not None else 0
+
+        serializer = LearningTopicSerializer(data=data)
+        if serializer.is_valid():
+            topic = serializer.save(learning_item=item)
+            calculate_learning_progress(item)
+            return Response(LearningTopicSerializer(topic).data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class LearningTopicToggleAPI(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, learning_id, topic_id):
+        from .models import LearningItem, LearningTopic
+        from .services import calculate_learning_progress
+        from django.utils import timezone
+
+        try:
+            item = LearningItem.objects.get(pk=learning_id, user=request.user, is_deleted=False)
+            topic = LearningTopic.objects.get(pk=topic_id, learning_item=item)
+        except (LearningItem.DoesNotExist, LearningTopic.DoesNotExist):
+            raise Http404
+
+        is_completed = request.data.get('is_completed')
+        if is_completed is None:
+            topic.is_completed = not topic.is_completed
+        else:
+            topic.is_completed = bool(is_completed)
+
+        topic.save(update_fields=['is_completed'])
+
+        item.last_activity_at = timezone.now()
+        item.save(update_fields=['last_activity_at', 'updated_at'])
+        calculate_learning_progress(item)
+        item.refresh_from_db()
+
+        return Response({
+            "id": str(topic.id),
+            "title": topic.title,
+            "is_completed": topic.is_completed,
+            "parent_progress_percentage": item.progress_percentage,
+            "parent_status": item.status,
+        }, status=status.HTTP_200_OK)
+
+    def delete(self, request, learning_id, topic_id):
+        from .models import LearningItem, LearningTopic
+        from .services import calculate_learning_progress
+
+        try:
+            item = LearningItem.objects.get(pk=learning_id, user=request.user, is_deleted=False)
+            topic = LearningTopic.objects.get(pk=topic_id, learning_item=item)
+        except (LearningItem.DoesNotExist, LearningTopic.DoesNotExist):
+            raise Http404
+
+        topic.delete()
+        calculate_learning_progress(item)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class LearningScheduleSessionAPI(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        from .models import LearningItem
+        from .services import schedule_learning_study_session, log_audit_event, get_client_ip
+        from django.utils.dateparse import parse_datetime
+
+        try:
+            item = LearningItem.objects.get(pk=pk, user=request.user, is_deleted=False)
+        except LearningItem.DoesNotExist:
+            raise Http404
+
+        start_time_raw = request.data.get('start_time')
+        end_time_raw = request.data.get('end_time')
+        if not start_time_raw or not end_time_raw:
+            return Response(
+                {"error": "start_time y end_time son obligatorios."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        start_time = parse_datetime(start_time_raw) if isinstance(start_time_raw, str) else start_time_raw
+        end_time = parse_datetime(end_time_raw) if isinstance(end_time_raw, str) else end_time_raw
+
+        if not start_time or not end_time:
+            return Response(
+                {"error": "Formato de fecha inválido para start_time o end_time."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        notes = request.data.get('notes')
+        reminder_minutes = request.data.get('reminder_minutes', 15)
+        try:
+            reminder_minutes = int(reminder_minutes)
+        except (ValueError, TypeError):
+            reminder_minutes = 15
+
+        event = schedule_learning_study_session(
+            learning_item=item,
+            start_time=start_time,
+            end_time=end_time,
+            notes=notes,
+            reminder_minutes=reminder_minutes
+        )
+
+        log_audit_event(
+            user=request.user,
+            action='CREATE',
+            model_name='EventItem',
+            object_id=event.id,
+            object_repr=event.title,
+            changes={'category': event.category, 'learning_item_id': str(item.id)},
+            ip_address=get_client_ip(request)
+        )
+
+        return Response({
+            "event_id": str(event.id),
+            "title": event.title,
+            "start_time": event.start_time.isoformat() if hasattr(event.start_time, 'isoformat') else str(event.start_time),
+            "end_time": event.end_time.isoformat() if hasattr(event.end_time, 'isoformat') else str(event.end_time),
+            "category": event.category,
+            "color_hex": event.color_hex,
+            "meeting_url": event.meeting_url,
+            "reminder_minutes": event.reminder_minutes,
+            "status": event.status,
+        }, status=status.HTTP_201_CREATED)
+
+
+class LearningLogActivityAPI(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        from .models import LearningItem
+        from .services import calculate_learning_progress
+        from django.utils import timezone
+
+        try:
+            item = LearningItem.objects.get(pk=pk, user=request.user, is_deleted=False)
+        except LearningItem.DoesNotExist:
+            raise Http404
+
+        increment = request.data.get('increment_units', 1)
+        try:
+            increment = int(increment)
+        except (ValueError, TypeError):
+            increment = 1
+
+        new_last_point = request.data.get('new_last_point')
+        item.current_unit += increment
+        if new_last_point:
+            item.last_point_reached = new_last_point
+
+        item.last_activity_at = timezone.now()
+        item.save(update_fields=['current_unit', 'last_point_reached', 'last_activity_at', 'updated_at'])
+        calculate_learning_progress(item)
+        item.refresh_from_db()
+
+        return Response({
+            "id": str(item.id),
+            "current_unit": item.current_unit,
+            "progress_percentage": item.progress_percentage,
+            "last_activity_at": item.last_activity_at.isoformat() if item.last_activity_at else None,
+            "dormancy_days": 0,
+            "is_dormant": False,
+        }, status=status.HTTP_200_OK)
+
