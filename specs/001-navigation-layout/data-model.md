@@ -153,6 +153,51 @@ Represents an active client device (laptop or mobile) registered for native Web 
 
 ---
 
+### 9. `LearningItem` (Ítem de Aprendizaje)
+Represents a learning resource (course, book, article, tech documentation) managed in the "Aprendizaje" section.
+
+| Field Name | Type | Constraints | Description |
+|---|---|---|---|
+| `id` | UUIDField | Primary Key, default=uuid4 | Unique learning item identifier. |
+| `user` | ForeignKey (User) | On Delete: Cascade, related_name='aura_learning_items' | Owner of the learning resource. |
+| `title` | CharField | Max Length: 200 | Title of the course, book, article, or documentation. |
+| `description` | TextField | Blank, Nullable | Overview, syllabus description, or notes. |
+| `resource_type` | CharField | Choices: `['COURSE', 'BOOK', 'ARTICLE', 'TECH_DOC']`, Default: `'COURSE'` | Format/type of the learning material. |
+| `platform_name` | CharField | Max Length: 100, Blank, Nullable | Platform name (e.g. 'Udemy', 'YouTube', 'Libro Físico', 'Doc Oficial'). |
+| `platform_url` | URLField | Max Length: 500, Blank, Nullable | Direct web link to open the course or reading material. |
+| `color_hex` | CharField | Max Length: 7, Default: `'#8B5CF6'` | Vibrant theme color (Electric Violet by default). |
+| `status` | CharField | Choices: `['BACKLOG', 'IN_PROGRESS', 'PAUSED', 'COMPLETED']`, Default: `'BACKLOG'` | Learning lifecycle stage. |
+| `progress_mode` | CharField | Choices: `['MANUAL', 'TOPICS']`, Default: `'TOPICS'` | Calculation mode (modular checklist vs manual % / units). |
+| `progress_percentage` | PositiveSmallIntegerField | Default: 0, Min: 0, Max: 100 | Current calculated or manual progress (0-100%). |
+| `current_unit` | PositiveIntegerField | Default: 0 | Current page or completed lesson count. |
+| `total_units` | PositiveIntegerField | Default: 0 | Total page count or total lesson count. |
+| `last_point_reached` | CharField | Max Length: 250, Blank, Nullable | Bookmark notes (e.g., "Módulo 4: Hooks personalizados" o "Página 142"). |
+| `takeaways_markdown` | TextField | Blank, Nullable | Key takeaways, summary points, and notes in Markdown. |
+| `goal` | ForeignKey (Goal) | Nullable, Blank, On Delete: SET_NULL, related_name='learning_items' | Optional linked strategic goal. |
+| `project` | ForeignKey (Project) | Nullable, Blank, On Delete: SET_NULL, related_name='learning_items' | Optional linked project. |
+| `last_activity_at` | DateTimeField | Auto Now Add, DB Index | Timestamp of last user study session or progress update. |
+| `dormancy_alert_days` | PositiveSmallIntegerField | Default: 7 | Inactivity days threshold before triggering dormancy notifications. |
+| `is_deleted` | BooleanField | Default: False, DB Index | Soft delete indicator. |
+| `deleted_at` | DateTimeField | Blank, Nullable | Soft deletion timestamp. |
+| `created_at` | DateTimeField | Auto Now Add | Creation timestamp. |
+| `updated_at` | DateTimeField | Auto Now | Last update timestamp. |
+
+---
+
+### 10. `LearningTopic` (Tema / Módulo de Aprendizaje)
+Represents a checkable topic, chapter, or module within a `LearningItem`.
+
+| Field Name | Type | Constraints | Description |
+|---|---|---|---|
+| `id` | UUIDField | Primary Key, default=uuid4 | Unique topic identifier. |
+| `learning_item` | ForeignKey (LearningItem) | Related Name: `'topics'`, On Delete: Cascade | Parent learning item reference. |
+| `title` | CharField | Max Length: 200 | Title of the chapter, lesson, or documentation section. |
+| `is_completed` | BooleanField | Default: False | Completion status of the module/topic. |
+| `order` | PositiveIntegerField | Default: 0 | Display sequence order. |
+| `section_name` | CharField | Max Length: 150, Blank, Nullable | Optional grouping (e.g. "Capítulo 1", "Módulo Avanzado"). |
+
+---
+
 ## Validation & Business Rules
 
 1. **Progress Range**: `progress_percentage` must always be between 0 and 100 inclusive.
@@ -187,6 +232,17 @@ Represents an active client device (laptop or mobile) registered for native Web 
     - Client persists auth token and user profile in browser storage.
     - Returning to the app with active session automatically displays the welcome hero interface with direct one-click entry ("Entrar a Aura") without re-prompting for passwords.
     - Logout explicitly purges the local session and restores unauthenticated login/signup tabs.
+14. **Learning Progress Calculation**:
+    - `TOPICS` mode: $\text{Progress} = (\text{completed topics} / \text{total topics}) \times 100$. If 0 topics, defaults to `0%`. All completed $\rightarrow 100\%$.
+    - `MANUAL` mode: If `total_units > 0`, $\text{Progress} = (\text{current_unit} / \text{total_units}) \times 100$. Otherwise user enters raw percentage.
+15. **Learning Status Transitions**:
+    - Setting status to `COMPLETED` automatically sets `progress_percentage = 100`.
+    - If in `TOPICS` mode and all topics are completed, status transitions to `COMPLETED`.
+16. **Dormancy Evaluation**:
+    - An item is dormant when `status == 'IN_PROGRESS'` and `(now - last_activity_at).days >= dormancy_alert_days`.
+    - Dormant items trigger an in-app notification and Web Push alert once per 48h cycle.
+17. **Calendar Study Block Projection**:
+    - Scheduling a study session creates an `EventItem` with `category='Estudio'`, start/end time, meeting URL pointing to `platform_url`, and `reminder_minutes=15`.
 
 ---
 
@@ -195,7 +251,7 @@ Represents an active client device (laptop or mobile) registered for native Web 
 ```typescript
 // src/domain/types.ts
 
-export type ActiveTab = 'CALENDARIO' | 'OBJETIVOS' | 'PROYECTOS' | 'EVENTOS';
+export type ActiveTab = 'CALENDARIO' | 'OBJETIVOS' | 'PROYECTOS' | 'EVENTOS' | 'APRENDIZAJE';
 
 export type GoalStatus = 'ACTIVE' | 'COMPLETED' | 'PAUSED';
 
@@ -381,5 +437,54 @@ export interface AuthState {
   activeTab: AuthMode;
   isLoading: boolean;
   error: string | null;
+}
+
+// --- Aprendizaje (Learning & Knowledge) Domain Models ---
+
+export type ResourceType = 'COURSE' | 'BOOK' | 'ARTICLE' | 'TECH_DOC';
+
+export type LearningStatus = 'BACKLOG' | 'IN_PROGRESS' | 'PAUSED' | 'COMPLETED';
+
+export type LearningProgressMode = 'MANUAL' | 'TOPICS';
+
+export interface LearningTopic {
+  id: string;
+  learningItemId?: string;
+  title: string;
+  isCompleted: boolean;
+  order: number;
+  sectionName?: string | null;
+}
+
+export interface LearningItem {
+  id: string;
+  title: string;
+  description?: string;
+  resourceType: ResourceType;
+  platformName?: string;
+  platformUrl?: string;
+  colorHex: string;
+  status: LearningStatus;
+  progressMode: LearningProgressMode;
+  progressPercentage: number; // 0 to 100
+  currentUnit: number;
+  totalUnits: number;
+  lastPointReached?: string;
+  takeawaysMarkdown?: string;
+  goalId?: string | null;
+  projectId?: string | null;
+  lastActivityAt: string;
+  dormancyDays?: number;
+  isDormant?: boolean;
+  dormancyAlertDays?: number;
+  topics?: LearningTopic[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface LearningFilterCriteria {
+  status: 'ALL' | LearningStatus;
+  resourceType: 'ALL' | ResourceType;
+  searchQuery: string;
 }
 ```

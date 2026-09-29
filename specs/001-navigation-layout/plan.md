@@ -39,6 +39,14 @@ The Navigation Layout & Workspaces feature establishes the core visual shell and
    - **Centralized Timezone Helper**: `formatToLocalInputDate` in `src/utils/dateUtils.ts` preventing UTC offset drift (+6h) when loading ISO dates into `datetime-local` inputs across `GoalDrawer.tsx`, `TaskDrawer.tsx`, and `ElementoModal.tsx`.
    - **Configurable Reminder Offsets**: Adding `reminder_minutes` (0, 15, 60, 1440) to `Goal` and `ProjectTask` with interactive drawer selectors.
    - **Proactive Notification & Push Dispatch**: In-process scheduler in Django (`check_and_dispatch_all_reminders`) evaluating goal deadlines and task deadlines every 60s, dispatching alerts via Web Push and in-app Notification with automatic suppression when items are `COMPLETED`, `PAUSED`, or `DONE`.
+8. **Aprendizaje Section (Learning & Knowledge Hub)**:
+   - **Unified Learning Hub**: Standalone top-level tab in TabBar for managing Courses, Books, Technical Articles, and Official Tech Documentation with Electric Violet aesthetic (`#8B5CF6`).
+   - **Learning Lifecycle Management**: Grouping by states (*"Por empezar / En cola"*, *"En curso"*, *"En pausa"*, *"Completado"*), with dual view modes (cards grid vs list), real-time search, and filter pills by resource type.
+   - **Hybrid Progress Engine**: Configurable per item, supporting automatic calculation via completed modular topics/chapters or direct percentage and page units input.
+   - **Anti-Abandonment & Dormancy Engine**: Tracks `last_activity_at`, displays visual dormancy warning tags on cards inactive for $\ge 5$ days, and dispatches periodic Web Push reminders.
+   - **Continuity Slide-over Drawer**: Right-edge panel with direct 1-click external URL link, "Último punto alcanzado" bookmark, Markdown Key Takeaways notes, and interactive topic checklist.
+   - **Calendar Study Sessions**: Action "Agendar sesión de estudio" generating a calendar `EventItem` with resource color, platform link, and 15-minute advance Web Push reminder.
+   - **Flexible Goal & Project Linking**: Optional association with existing Goals or Projects.
 
 The implementation strictly enforces a **Layered Architecture (Arquitectura de Capas)** across both backend and frontend to ensure high maintainability, testability, separation of concerns, and ultra-fast UI responsiveness.
 
@@ -87,10 +95,10 @@ The implementation strictly enforces a **Layered Architecture (Arquitectura de C
 ```mermaid
 graph TD
     subgraph Frontend["Frontend Layered Architecture (React + Vite + TypeScript)"]
-        UI["Presentation Layer: Components & Views<br/>(Navbar, TabBar, GoalsView, ProjectsView, EventsView, Drawers, NotificationDropdown)"]
-        STATE["State / Application Layer: Hooks & Context<br/>(AuraState, useGoals, useProjects, useEvents, useNotifications, usePushNotifications)"]
-        SERVICE_FE["Service / API Client Layer<br/>(goalsApi, projectsApi, eventsApi, notificationApi, pushApi)"]
-        DOMAIN_FE["Domain Model Layer<br/>(types.ts: Goal, Project, EventItem, ProjectTask, PushSubscription)"]
+        UI["Presentation Layer: Components & Views<br/>(Navbar, TabBar, GoalsView, ProjectsView, EventsView, LearningView, Drawers, NotificationDropdown)"]
+        STATE["State / Application Layer: Hooks & Context<br/>(AuraState, useGoals, useProjects, useEvents, useLearning, useNotifications, usePushNotifications)"]
+        SERVICE_FE["Service / API Client Layer<br/>(goalsApi, projectsApi, eventsApi, learningApi, notificationApi, pushApi)"]
+        DOMAIN_FE["Domain Model Layer<br/>(types.ts: Goal, Project, EventItem, LearningItem, LearningTopic, PushSubscription)"]
         SW["PWA Infrastructure<br/>(public/sw.js, public/manifest.json)"]
         UI --> STATE
         STATE --> SERVICE_FE
@@ -101,9 +109,9 @@ graph TD
 
     subgraph Backend["Backend Layered Architecture (Django + DRF)"]
         API["Presentation / Controller Layer<br/>(views.py, urls.py - REST Endpoints, Push APIs)"]
-        SERVICE_BE["Service / Business Logic Layer<br/>(services.py - Progress, Calendar Sync, WebPushService, PushScheduler)"]
+        SERVICE_BE["Service / Business Logic Layer<br/>(services.py - Progress, Calendar Sync, LearningDormancy, WebPushService, PushScheduler)"]
         SERIALIZER["Serialization / DTO Layer<br/>(serializers.py - Schema Validation & Mapping)"]
-        PERSISTENCE["Persistence / Data Layer<br/>(models.py, Django ORM: Goal, Project, Event, PushSubscription)"]
+        PERSISTENCE["Persistence / Data Layer<br/>(models.py, Django ORM: Goal, Project, Event, LearningItem, LearningTopic, PushSubscription)"]
         API --> SERVICE_BE
         SERVICE_BE --> SERIALIZER
         SERVICE_BE --> PERSISTENCE
@@ -249,14 +257,25 @@ src/
   - `UserLoginSerializer` for validating username/email and password credentials.
   - `UserSessionSerializer` for returning authenticated session user details.
 
+#### [MODIFY] [models.py](file:///d:/Sistemas/Proyectos/Gestor_tareas/backend/models.py)
+- Add `LearningItem`: learning resource with `resource_type`, `platform_url`, `status`, `progress_mode`, `progress_percentage`, `current_unit`, `total_units`, `last_point_reached`, `takeaways_markdown`, `last_activity_at`, `dormancy_alert_days`, and optional links to `Goal` and `Project`.
+- Add `LearningTopic`: checkable modular topics/chapters within a `LearningItem`.
+
+#### [MODIFY] [serializers.py](file:///d:/Sistemas/Proyectos/Gestor_tareas/backend/serializers.py)
+- Add `LearningTopicSerializer`.
+- Add `LearningItemSerializer` (list and card metrics) & `LearningItemDetailSerializer` (nested topics, dormancy days calculation).
+
 #### [MODIFY] [services.py](file:///d:/Sistemas/Proyectos/Gestor_tareas/backend/services.py)
 - `calculate_goal_progress(goal)`
 - `calculate_project_progress(project)`: Computes `(completed_tasks / total_tasks) * 100`.
+- `calculate_learning_progress(item)`: Computes percentage based on topics completed or units/pages read.
+- `check_learning_dormancy(user)`: Evaluates inactive resources in `IN_PROGRESS` state ($\ge 5$ days) and triggers Web Push alert.
+- `schedule_learning_study_session(item, start_time, end_time, notes)`: Creates an `EventItem` on the Calendar with category 'Estudio' and 15-min reminder.
 - `sync_all_to_calendar(user)`: Derives calendar deadline markers and scheduled time spans from goals, milestones, project tasks, and event items.
 - `check_approaching_deadlines(user)`: Evaluates approaching deadlines for goals and project tasks.
 - `check_approaching_event_reminders(user)`: Generates real-time notifications for events approaching their scheduled start time within `reminder_minutes`.
 - `send_web_push(user, title, message, url)`: Delivers encrypted push payload to all registered user devices via `pywebpush`, with automatic pruning of dead endpoints (HTTP 410/404).
-- `start_notification_scheduler()`: Lightweight in-process background worker checking approaching deadlines and event reminders on periodic intervals.
+- `start_notification_scheduler()`: Lightweight in-process background worker checking approaching deadlines, event reminders, and learning dormancy.
 - `authenticate_user(username_or_email, password)`: Flexible authentication helper supporting login via username or email address.
 
 #### [MODIFY] [views.py](file:///d:/Sistemas/Proyectos/Gestor_tareas/backend/views.py)
@@ -265,6 +284,9 @@ src/
   - `GET/POST /api/v1/projects/{id}/tasks/`, `PUT/PATCH/DELETE /api/v1/tasks/{id}/`, `PATCH /api/v1/tasks/{id}/status/`
   - `PATCH /api/v1/subtasks/{id}/toggle/`
   - `GET/POST /api/v1/events/`, `GET/PUT/PATCH/DELETE /api/v1/events/{id}/`, `PATCH /api/v1/events/{id}/status/`
+  - `GET/POST /api/v1/learning-items/`, `GET/PUT/PATCH/DELETE /api/v1/learning-items/{id}/`
+  - `POST /api/v1/learning-items/{id}/topics/`, `PATCH /api/v1/learning-items/{id}/topics/{topic_id}/`
+  - `POST /api/v1/learning-items/{id}/schedule-session/`, `POST /api/v1/learning-items/{id}/log-activity/`
   - `GET /api/v1/calendar/events/` (including projected task deadlines and scheduled event slots)
   - `GET /api/v1/notifications/push/public-key/` (`VapidPublicKeyAPI`)
   - `POST /api/v1/notifications/push/subscribe/` (`PushSubscribeAPI`)
@@ -276,6 +298,7 @@ src/
   - `GET /api/v1/auth/session/` (`SessionAPI`: check persistent session validity)
 
 #### [MODIFY] [urls.py](file:///d:/Sistemas/Proyectos/Gestor_tareas/backend/urls.py)
+- Register Learning endpoints under `/api/v1/learning-items/`.
 - Register Web Push endpoints under `/api/v1/notifications/push/`.
 - Register Authentication endpoints under `/api/v1/auth/`.
 
@@ -284,18 +307,36 @@ src/
 #### [MODIFY] [types.ts](file:///d:/Sistemas/Proyectos/Gestor_tareas/src/domain/types.ts)
 - Add domain types: `Project`, `ProjectTask`, `TaskSubtask`, `ProjectStatus`, `TaskStatus`, `TaskPriority`, `ProjectFilterCriteria`.
 - Add event domain types: `EventItem`, `EventStatus`, `TimeBlock`, `EventFilterCriteria`.
+- Add learning domain types: `ResourceType`, `LearningStatus`, `LearningProgressMode`, `LearningTopic`, `LearningItem`, `LearningFilterCriteria`.
 - Add Web Push domain types: `PushSubscriptionKeys`, `PushSubscriptionDTO`, `WebPushStatus`.
 - Add Auth domain types: `AuthMode` (*'LOGIN'* | *'REGISTER'*), `AuthState` (*user, isAuthenticated, hasExistingAccount, isWelcomeOnly*), `LoginCredentials`, `RegisterData`.
 
 #### [MODIFY] [AuraState.tsx](file:///d:/Sistemas/Proyectos/Gestor_tareas/src/context/AuraState.tsx)
 - Expose state and handlers for projects collection, active project workspace, project filtering, task creation, task status movement (Kanban), subtask toggling, and project/task drawer toggles.
 - Expose state and handlers for events collection, time-block classification ("Hoy", "Esta semana", "Próximos", "Pasados"), category filters, quick status toggling (Completado/Cancelado), and event drawer visibility.
+- Expose state and handlers for learning items: `learningItems`, `learningFilter`, `setLearningFilter`, `createLearningItem`, `updateLearningItem`, `deleteLearningItem`, `toggleLearningTopic`, `scheduleStudySession`.
 - Expose state and handlers for authentication: `currentUser`, `isAuthenticated`, `isWelcomeOnly`, `login(creds)`, `register(data)`, `enterApp()`, `logout()`, `switchAccount()`.
 
 #### [MODIFY] [api.ts](file:///d:/Sistemas/Proyectos/Gestor_tareas/src/services/api.ts)
 - Add API client methods for Projects, Tasks, Subtasks, and Events (`getEvents`, `createEvent`, `updateEvent`, `updateEventStatus`, `deleteEvent`).
+- Add Learning API client methods: `getLearningItems`, `createLearningItem`, `updateLearningItem`, `deleteLearningItem`, `toggleLearningTopic`, `scheduleStudySession`, `logLearningActivity`.
 - Add Web Push client methods: `getVapidPublicKey()`, `subscribePush(sub)`, `unsubscribePush(endpoint)`, `testPushNotification(payload)`.
 - Add Auth client methods: `login(creds)`, `register(data)`, `logout()`, `getSession()`.
+
+#### [MODIFY] [TabBar.tsx](file:///d:/Sistemas/Proyectos/Gestor_tareas/src/components/TabBar.tsx)
+- Add 5th navigation tab: `APRENDIZAJE` ("Aprendizaje", icon: `📚`, activeColor: `bg-purple-500 text-slate-950 shadow-purple-500/25`).
+
+#### [NEW] [LearningView.tsx](file:///d:/Sistemas/Proyectos/Gestor_tareas/src/components/learning/LearningView.tsx)
+- Top-level container for the Aprendizaje tab featuring header metrics, "+ Nuevo Recurso" button, status grouping ("Por empezar", "En curso", "En pausa", "Completado"), type filter pills, and search bar.
+
+#### [NEW] [LearningCard.tsx](file:///d:/Sistemas/Proyectos/Gestor_tareas/src/components/learning/LearningCard.tsx)
+- Visual card for learning resources showing Electric Violet theme color, progress bar, last activity marker, dormancy badge ("Inactivo hace X días"), quick +1 unit button, and direct external link.
+
+#### [NEW] [LearningDrawer.tsx](file:///d:/Sistemas/Proyectos/Gestor_tareas/src/components/learning/LearningDrawer.tsx)
+- Slide-over drawer for inspecting and editing resource details: platform URL with 1-click launcher, last reached point, Markdown Key Takeaways notes, interactive modular checklist, and study session scheduler.
+
+#### [NEW] [StudySessionModal.tsx](file:///d:/Sistemas/Proyectos/Gestor_tareas/src/components/learning/StudySessionModal.tsx)
+- Modal to schedule a study block in the Calendar with start/end time and automatic Web Push alert.
 
 #### [NEW] [usePushNotifications.ts](file:///d:/Sistemas/Proyectos/Gestor_tareas/src/hooks/usePushNotifications.ts)
 - React hook encapsulating permission checking, VAPID key conversion (`urlBase64ToUint8Array`), Service Worker registration, and backend device subscription synchronization.
@@ -368,7 +409,7 @@ src/
 
 #### [MODIFY] [App.tsx](file:///d:/Sistemas/Proyectos/Gestor_tareas/src/App.tsx)
 - If user is not authenticated or in welcome screen mode, render `AuthView`.
-- Once authenticated and in app mode, render main application shell (`Navbar`, `TabBar`, and active section view: `GoalsView`, `ProjectsView`, `EventsView`, `CalendarGrid`).
+- Once authenticated and in app mode, render main application shell (`Navbar`, `TabBar`, and active section view: `GoalsView`, `ProjectsView`, `EventsView`, `LearningView`, `CalendarGrid`).
 
 ---
 

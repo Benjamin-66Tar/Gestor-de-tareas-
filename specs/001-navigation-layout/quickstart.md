@@ -238,6 +238,28 @@ The application is available at `http://localhost:5173`.
    - Change the Goal status to `COMPLETED` or `PAUSED`, or move the Task to `DONE`.
    - Verify that the background scheduler suppresses and does not emit duplicate or overdue notifications for finished items.
 
+### Scenario 21: Aprendizaje (Learning & Knowledge Hub) End-to-End Validation
+1. **Navigation & Tab Switching**:
+   - In the TabBar, click on **"📚 Aprendizaje"**.
+   - Verify the main viewport switches in $<100$ms to the Learning Hub with Electric Violet active state.
+2. **Resource Creation & Progress Tracking**:
+   - Click **"+ Nuevo Recurso"** to open `LearningDrawer`.
+   - Create a course: Title "Django & React Architecture", Type `COURSE`, Platform "Udemy", Platform URL `https://udemy.com/...`, Mode `Por Temas / Módulos`.
+   - Add 3 topics: "Setup", "Serializers & Models", "WebSockets".
+   - Save resource; verify it appears under the "En curso" or "Por empezar" column.
+   - Check off "Setup"; verify the card calculates $33\%$ progress.
+3. **Continuity & Key Takeaways**:
+   - Open the card drawer; verify the direct button **"Abrir recurso"** launches the external platform in a new tab.
+   - Enter notes in the Markdown Key Takeaways editor and set "Último punto alcanzado" to "Módulo 2, Video 4".
+   - Save and verify the notes and bookmark persist upon closing and reopening.
+4. **Calendar Study Session**:
+   - In the card or drawer, click **"Agendar sesión de estudio"**.
+   - Select tomorrow from 18:00 to 19:30 with 15-min reminder.
+   - Navigate to the **"CALENDARIO"** tab; verify an event titled *"Estudiar: Django & React Architecture"* appears in Electric Violet (`#8B5CF6`) with direct URL link.
+5. **Dormancy & Anti-Abandonment Alert**:
+   - For an active resource with no activity for $\ge 5$ days, verify the card displays a dormancy tag (*"Inactivo hace 5 días"*).
+   - Verify the scheduler dispatches a friendly Web Push notification reminding the user to resume learning.
+
 ---
 
 ## 4. Automated Testing

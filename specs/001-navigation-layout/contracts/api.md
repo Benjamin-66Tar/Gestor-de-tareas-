@@ -609,5 +609,202 @@ All endpoints are served under the `/api/v1` namespace and expect/return `applic
 }
 ```
 
+---
+
+## 7. Learning & Knowledge Items (Aprendizaje)
+
+### List Learning Items
+- **Method**: `GET`
+- **URL**: `/api/v1/learning-items/`
+- **Headers**: `Authorization: Bearer <token>`
+- **Query Params**:
+  - `status`: `BACKLOG`, `IN_PROGRESS`, `PAUSED`, `COMPLETED` (optional)
+  - `resource_type`: `COURSE`, `BOOK`, `ARTICLE`, `TECH_DOC` (optional)
+  - `search`: Text query searching title, platform, or description (optional)
+- **Response (200 OK)**:
+```json
+[
+  {
+    "id": "l1-1111-2222-3333-444455556666",
+    "title": "Django & React FullStack Masterclass",
+    "description": "Curso completo de arquitectura y despliegue.",
+    "resource_type": "COURSE",
+    "platform_name": "Udemy",
+    "platform_url": "https://www.udemy.com/course/django-react/",
+    "color_hex": "#8B5CF6",
+    "status": "IN_PROGRESS",
+    "progress_mode": "TOPICS",
+    "progress_percentage": 40,
+    "current_unit": 8,
+    "total_units": 20,
+    "last_point_reached": "Módulo 4: Django Rest Framework Serializers",
+    "takeaways_markdown": "### Notas Clave\n- Usar ViewSets para operaciones CRUD estándar.",
+    "goal_id": "b1c2d3e4-1111-2222-3333-444455556666",
+    "project_id": null,
+    "last_activity_at": "2026-09-28T14:30:00Z",
+    "dormancy_days": 1,
+    "is_dormant": false,
+    "dormancy_alert_days": 7,
+    "topics_count": 20,
+    "completed_topics_count": 8,
+    "created_at": "2026-09-20T10:00:00Z",
+    "updated_at": "2026-09-28T14:30:00Z"
+  }
+]
+```
+
+### Create Learning Item
+- **Method**: `POST`
+- **URL**: `/api/v1/learning-items/`
+- **Headers**: `Authorization: Bearer <token>`, `Content-Type: application/json`
+- **Request Body**:
+```json
+{
+  "title": "Designing Data-Intensive Applications",
+  "description": "Libro de fundamentos de sistemas distribuidos.",
+  "resource_type": "BOOK",
+  "platform_name": "Libro Físico / O'Reilly",
+  "platform_url": "https://dataintensive.net/",
+  "color_hex": "#8B5CF6",
+  "status": "IN_PROGRESS",
+  "progress_mode": "MANUAL",
+  "current_unit": 120,
+  "total_units": 550,
+  "last_point_reached": "Capítulo 4: Formatos de codificación",
+  "takeaways_markdown": "Protocol Buffers y Avro para compatibilidad hacia atrás.",
+  "goal_id": null,
+  "project_id": null
+}
+```
+- **Response (201 Created)**: Returns the newly created `LearningItem` object.
+
+### Retrieve Learning Item Detail (with Topics)
+- **Method**: `GET`
+- **URL**: `/api/v1/learning-items/{id}/`
+- **Headers**: `Authorization: Bearer <token>`
+- **Response (200 OK)**:
+```json
+{
+  "id": "l1-1111-2222-3333-444455556666",
+  "title": "Django & React FullStack Masterclass",
+  "resource_type": "COURSE",
+  "platform_name": "Udemy",
+  "platform_url": "https://www.udemy.com/course/django-react/",
+  "color_hex": "#8B5CF6",
+  "status": "IN_PROGRESS",
+  "progress_mode": "TOPICS",
+  "progress_percentage": 50,
+  "current_unit": 1,
+  "total_units": 2,
+  "last_point_reached": "Sección 2",
+  "takeaways_markdown": "Resumen de arquitectura.",
+  "last_activity_at": "2026-09-29T10:00:00Z",
+  "dormancy_days": 0,
+  "is_dormant": false,
+  "topics": [
+    {
+      "id": "t1-1111-2222",
+      "title": "Introducción y Setup",
+      "is_completed": true,
+      "order": 0,
+      "section_name": "Sección 1"
+    },
+    {
+      "id": "t2-1111-2222",
+      "title": "Serializers y Modelos",
+      "is_completed": false,
+      "order": 1,
+      "section_name": "Sección 2"
+    }
+  ]
+}
+```
+
+### Update Learning Item
+- **Method**: `PATCH`
+- **URL**: `/api/v1/learning-items/{id}/`
+- **Headers**: `Authorization: Bearer <token>`, `Content-Type: application/json`
+- **Request Body**:
+```json
+{
+  "last_point_reached": "Sección 2 completada",
+  "takeaways_markdown": "Notas actualizadas sobre serializers."
+}
+```
+- **Response (200 OK)**: Returns updated `LearningItem` object.
+
+### Toggle Topic Completion
+- **Method**: `PATCH`
+- **URL**: `/api/v1/learning-items/{id}/topics/{topic_id}/`
+- **Headers**: `Authorization: Bearer <token>`, `Content-Type: application/json`
+- **Request Body**:
+```json
+{
+  "is_completed": true
+}
+```
+- **Response (200 OK)**:
+```json
+{
+  "id": "t2-1111-2222",
+  "title": "Serializers y Modelos",
+  "is_completed": true,
+  "parent_progress_percentage": 100,
+  "parent_status": "COMPLETED"
+}
+```
+
+### Schedule Study Session on Calendar
+- **Method**: `POST`
+- **URL**: `/api/v1/learning-items/{id}/schedule-session/`
+- **Headers**: `Authorization: Bearer <token>`, `Content-Type: application/json`
+- **Request Body**:
+```json
+{
+  "start_time": "2026-10-02T18:00:00Z",
+  "end_time": "2026-10-02T19:30:00Z",
+  "notes": "Revisar capítulo 5 de sistemas distribuidos",
+  "reminder_minutes": 15
+}
+```
+- **Response (201 Created)**:
+```json
+{
+  "event_id": "e9-1111-2222-3333",
+  "title": "Estudiar: Designing Data-Intensive Applications",
+  "start_time": "2026-10-02T18:00:00Z",
+  "end_time": "2026-10-02T19:30:00Z",
+  "category": "Estudio",
+  "color_hex": "#8B5CF6",
+  "meeting_url": "https://dataintensive.net/",
+  "reminder_minutes": 15,
+  "status": "PROGRAMMED"
+}
+```
+
+### Log Activity & Quick Increment
+- **Method**: `POST`
+- **URL**: `/api/v1/learning-items/{id}/log-activity/`
+- **Headers**: `Authorization: Bearer <token>`, `Content-Type: application/json`
+- **Request Body**:
+```json
+{
+  "increment_units": 1,
+  "new_last_point": "Leída clase 15"
+}
+```
+- **Response (200 OK)**:
+```json
+{
+  "id": "l1-1111-2222-3333-444455556666",
+  "current_unit": 9,
+  "progress_percentage": 45,
+  "last_activity_at": "2026-09-29T08:30:00Z",
+  "dormancy_days": 0,
+  "is_dormant": false
+}
+```
+
+
 
 

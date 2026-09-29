@@ -280,3 +280,40 @@ Implement an integrated **Welcome & Authentication Screen** serving as the appli
 ### Alternatives Considered
 - **Store Local Time Strings in Database**: Rejected because storing dates with explicit timezones or UTC timestamps in Django with `USE_TZ=True` is the industry standard for cross-platform data integrity and calendar querying.
 - **Client-Side-Only `setTimeout` or Notification API**: Rejected because browser tabs can be closed, backgrounded, or on mobile devices where client timers are throttled or terminated by the OS.
+
+---
+
+## 17. Learning & Knowledge Hub (Aprendizaje): Architecture & Anti-Abandonment Strategy
+
+### Decision
+1. **Dormancy Engine & Anti-Abandonment Nudges**:
+   - Track `last_activity_at` (DateTimeField) on `LearningItem`. Whenever the user completes a topic, updates pages/percentage, or logs a study session, `last_activity_at` is bumped to `now()`.
+   - Calculate dormancy dynamically: `dormancy_days = (now() - last_activity_at).days`.
+   - If `status == 'IN_PROGRESS'` and `dormancy_days >= dormancy_alert_days` (default 5 or 7 days), flag the item as dormant (`is_dormant = True`).
+   - The in-process Django scheduler runs a daily check: for active learning items dormant for $\ge 5$ days with no reminder sent in the last 48 hours, generate an in-app `Notification` and dispatch an encrypted Web Push alert:
+     > *"💡 ¿Retomamos tu curso '{title}'? Llevas {dormancy_days} días sin avanzar. ¡Dedícale 15 minutos hoy!"*
+2. **Hybrid Progress & Modular Syllabus**:
+   - Two progress calculation modes in `backend/services.py`:
+     * `TOPICS`: Progress percentage computed automatically as `(completed_topics / total_topics) * 100`.
+     * `MANUAL`: Direct user input via slider or unit progress: `(current_unit / total_units) * 100` (e.g. page 120 of 340).
+3. **Calendar Study Sessions via `EventItem` Integration**:
+   - Reuses Aura's native calendar infrastructure: calling `/api/v1/learning-items/{id}/schedule-session/` creates an `EventItem` with:
+     * `title`: `f"Estudiar: {learning_item.title}"`
+     * `category`: `'Estudio'` (color `#8B5CF6`)
+     * `meeting_url`: `learning_item.platform_url`
+     * `reminder_minutes`: 15 (dispatches Web Push 15 min before session starts)
+4. **Continuity Drawer**:
+   - Slide-over drawer on the right edge (`LearningDrawer.tsx`) featuring:
+     * 1-click external link button ("Abrir recurso")
+     * "Último punto alcanzado" editable field
+     * Key Takeaways Markdown editor/viewer
+     * Interactive checklist of topics with quick check toggle
+     * "Agendar sesión de estudio" quick modal
+
+### Rationale
+- Solves course and book abandonment directly through gentle, non-spammy nudges and visual dormancy badges.
+- Avoids reinventing calendar and notification code by leveraging the battle-tested `EventItem` and Web Push schedulers.
+- Meets Constitution Principle I (Colorido y Altamente Visual - Electric Violet `#8B5CF6`) and Principle II (Rendimiento Ultra Rápido - local optimistic updates in React Context).
+
+### Alternatives Considered
+- **Separate Third-Party Integration (e.g. Udemy/Coursera APIs)**: Rejected due to API paywalls, lack of uniform APIs for physical books and tech docs, and privacy considerations. A platform-agnostic URL + syllabus model works universally for all learning types.
