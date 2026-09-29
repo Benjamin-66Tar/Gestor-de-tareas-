@@ -50,6 +50,15 @@
 - Q: Respecto a 'Esa solución aplícalo en las otras secciones', ¿cómo deseas que se manejen las fechas y recordatorios en las Tareas de Proyectos? → A: Soportar Fecha y Hora exacta (`datetime-local`) con conversión local (vía helper centralizado en dateUtils) y selector de recordatorios configurables (`reminder_minutes`) también en Tareas de Proyectos, con alertas Web Push sincronizadas.
 - Q: ¿Cómo debe comportarse el despachador de notificaciones si un Objetivo o Tarea ya fue completado o está en pausa? → A: Suprimir automáticamente las notificaciones y alertas push si el Objetivo está en 'Completado' o 'En Pausa', o la Tarea está 'Completado' (DONE).
 
+### Session 2026-09-29
+- Q: ¿Cómo debe integrarse la gestión de cursos, libros y fuentes de aprendizaje dentro de la navegación principal de Aura? → A: Pestaña independiente y dedicada en el TabBar (ej. "Aprendizaje" / "Conocimiento"), con paridad de navegación respecto a Calendario, Objetivos, Proyectos y Eventos.
+- Q: ¿Cómo debe gestionarse y medirse el progreso de los cursos y materiales de aprendizaje? → A: Modo híbrido configurable por ítem: permite tanto un desglose detallado de módulos/capítulos o checklist interactivo como un ajuste ágil de porcentaje global o páginas leídas.
+- Q: ¿Cuál debe ser el mecanismo principal para combatir el olvido y reactivar los cursos y lecturas en pausa o inactivos? → A: Híbrido de reactivación: alertas periódicas Web Push automáticas tras inactividad prolongada (5-7 días sin registrar avance en recursos activos) combinadas con la capacidad de agendar bloques de tiempo de estudio proyectados en el Calendario de Aura.
+- Q: ¿Cómo deben organizarse y visualizarse los cursos, libros y artículos dentro de la pantalla principal de la pestaña de Aprendizaje? → A: Organización por estados de aprendizaje (agrupación visual por 'Por empezar / En cola', 'En curso', 'En pausa', 'Completado'), con vista dual conmutable (Tarjetas visuales con barra de progreso e indicadores de inactividad / Lista compacta), barra de búsqueda instantánea y píldoras de filtrado rápido por tipo de fuente (Cursos, Libros, Artículos, Podcasts).
+- Q: ¿Qué información y herramientas de acceso rápido debe contener la ficha de cada recurso de aprendizaje en su panel lateral deslizable (drawer)? → A: Ficha de continuidad completa aplicable a cursos, libros, artículos y documentación de tecnología oficial: botón directo 'Abrir recurso' (URL externa), campo de 'Último punto alcanzado' (módulo, página o sección leída), área de notas/conclusiones clave (Key Takeaways en Markdown) y lista o checklist interactivo de módulos/temas.
+- Q: ¿Cómo debe relacionarse la sección de Aprendizaje con los demás pilares de Aura (Objetivos y Proyectos)? → A: Vinculación opcional flexible: cada recurso de aprendizaje puede asociarse opcionalmente a un Objetivo estratégico o a un Proyecto de Aura (o mantenerse como aprendizaje libre/independiente), permitiendo que el progreso del curso/libro alimente opcionalmente los hitos de la meta vinculada.
+- Q: ¿Cómo debe crearse y comportarse una sesión de estudio cuando el usuario decide apartar tiempo para avanzar en un curso o libro? → A: Sesión de estudio como evento de agenda integrado con EventItem: acción 'Agendar sesión de estudio' en la ficha del recurso que crea un evento en el Calendario de Aura tipificado con el color del recurso, enlace directo al contenido y recordatorio Web Push configurable (15 min antes).
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Header Navigation Bar (Navbar) (Priority: P1)
@@ -157,6 +166,23 @@ As a visitor or returning user, I want a split screen showing an inspiring visua
 
 ---
 
+### User Story 6 - Learning & Knowledge Management Hub (Aprendizaje) (Priority: P2)
+As a user managing multiple courses, books, technical articles, and technology documentation, I want a dedicated "Aprendizaje" tab to track all my learning activities with modular and direct progress, continuity details, inactivity alerts, and calendar study sessions, so that I never forget or abandon what I set out to learn.
+
+**Why this priority**: Solves the core user problem of course abandonment, fragmented learning sources, and lost progress context across platforms.
+
+**Independent Test**: Can navigate to the "Aprendizaje" tab, create a learning resource (course, book, article, or tech documentation), update progress, view dormancy/inactivity warning badges, open its slide-over drawer to view notes/topics, schedule a study session on the Calendar, and receive Web Push alerts upon inactivity.
+
+**Acceptance Scenarios**:
+1. **Given** the user is viewing the application navigation, **When** they click the "Aprendizaje" tab in the TabBar, **Then** the main viewport MUST switch to the Learning Hub displaying learning state groups ("Por empezar", "En curso", "En pausa", "Completado"), resource type filters (Cursos, Libros, Artículos, Documentación), and a real-time search input.
+2. **Given** a learning item in "En curso" has had no recorded progress for 5 or more days, **When** the learning hub renders, **Then** the card MUST display a visual dormancy warning badge indicating days of inactivity, and the background scheduler MUST issue a Web Push notification to prompt the user.
+3. **Given** the user is inspecting a learning item, **When** they click on the card, **Then** a slide-over drawer MUST open from the right edge showing the direct platform link, last reached point (module/page), markdown key takeaways notes, and an interactive module checklist.
+4. **Given** a user is configuring a learning item, **When** they click "Agendar sesión de estudio", **Then** the system MUST create an event in the Calendar styled with the resource's theme color, scheduled start/end times, and a 15-minute advance Web Push reminder.
+5. **Given** a user updates an item's progress (either by ticking off modular topics or entering a direct percentage/page count), **When** saved, **Then** the item's progress bar and last activity timestamp MUST update immediately in the UI.
+6. **Given** a learning item is optionally linked to a Goal, **When** progress on the learning item is updated, **Then** it MUST reflect on the associated Goal's progress tracking.
+
+---
+
 ## Edge Cases
 
 - **Mobile Viewports**: On narrow screens, the TabBar horizontal text might overflow. The system MUST render it cleanly (e.g. using horizontal swipe or compact icons with text).
@@ -171,7 +197,7 @@ As a visitor or returning user, I want a split screen showing an inspiring visua
 - **FR-002**: The Navbar MUST display the branding logo "Aura" on the left with a colorful, high-visual-contrast design.
 - **FR-003**: The Navbar MUST display a notification icon on the right, which shows a numeric badge of unread notifications.
 - **FR-004**: The Navbar MUST display a user avatar on the right representing the logged-in user.
-- **FR-005**: The TabBar MUST be displayed directly below the Navbar, containing exactly four tabs: "Calendario", "Objetivos", "Proyectos", and "Eventos".
+- **FR-005**: The TabBar MUST be displayed directly below the Navbar, containing five distinct navigation tabs: "Calendario", "Objetivos", "Proyectos", "Eventos", and "Aprendizaje".
 - **FR-006**: Clicking any tab MUST dynamically switch the content in the main viewport to the corresponding section without full page reloads.
 - **FR-007**: The active tab MUST be visually highlighted using a distinct color state to indicate the current section to the user.
 - **FR-008**: The system MUST persist the active tab state locally to maintain the user's location upon page refresh.
@@ -219,18 +245,29 @@ As a visitor or returning user, I want a split screen showing an inspiring visua
 - **FR-050**: The login form MUST allow authentication using either the registered username or email address along with the password.
 - **FR-051**: The system MUST render the welcome and authentication layout using a responsive two-column grid on desktop/tablet viewports and automatically collapse into a stacked single-column layout on mobile viewports.
 - **FR-052**: Triggering a logout action from the profile dropdown or clicking "Cambiar de cuenta" from the welcome screen MUST clear local session credentials and transition the view back to the complete split screen displaying the hero banner alongside the authentication form tabs.
+- **FR-053**: The system MUST provide an "Aprendizaje" section accessible via the TabBar to manage courses, books, technical articles, and technology documentation.
+- **FR-054**: The "Aprendizaje" section MUST categorize resources by learning states: "Por empezar / En cola", "En curso", "En pausa", and "Completado".
+- **FR-055**: The "Aprendizaje" section MUST support dual view modes: a visual card grid and a compact list view, complemented by an instant search input and quick-filter pills by source type (Cursos, Libros, Artículos, Documentación de Tecnología).
+- **FR-056**: Each learning resource MUST support hybrid progress tracking configurable per item: either automatic calculation based on modular checklist topics completed, or direct input of numeric/percentage progress and pages read.
+- **FR-057**: The system MUST detect inactivity on active learning resources ("En curso"), displaying a visual dormancy badge on cards with 5+ days without recorded progress, and dispatching Web Push notifications prompting the user to resume learning.
+- **FR-058**: The "Aprendizaje" section MUST provide a slide-over drawer emerging from the right edge for inspecting and editing resource details, including direct resource URL ("Abrir recurso"), "Último punto alcanzado" (module, page, or section), Key Takeaways notes in Markdown, and an interactive checklist of modular topics.
+- **FR-059**: The slide-over drawer and item card MUST provide an "Agendar sesión de estudio" action that creates an `EventItem` in the "Calendario" section styled with the resource's theme color, scheduled start/end times, direct URL link, and a 15-minute advance Web Push reminder.
+- **FR-060**: Learning resources MAY be optionally linked to an existing `Goal` or `Project`, allowing progress on the learning resource to automatically feed into the associated Goal's progress or Project execution.
+- **FR-061**: The background scheduler MUST evaluate dormancy on learning items alongside existing task and goal reminders, suppressing inactivity alerts if the resource is in "En pausa" or "Completado" status.
 
 ### Key Entities
 - **UserSession**: Represents the currently logged-in user, exposing username, email, avatar image URL, auth state, and session persistence status.
 - **Notification**: Represents a single notification item, with properties for read/unread state and creation timestamp.
 - **PushSubscription**: Represents an active Web Push subscription device associated with a User (1:N), storing the endpoint URL, cryptographic keys (`p256dh`, `auth`), user agent metadata, and registration timestamp.
-- **NavigationSection**: Represents a valid section tab (Calendar, Goals, Projects, Events).
+- **NavigationSection**: Represents a valid section tab (Calendar, Goals, Projects, Events, Learning).
 - **Goal**: Represents an objective with title, target deadline, reminder_minutes (configurable alert offset: 0, 15, 60, 1440 mins), category tag, progress mode (`Manual` or `MilestoneBased`), progress percentage (0-100%), and status (Active, Completed, Paused).
 - **GoalMilestone**: Represents a key checkable milestone or sub-target associated with a Goal, including title, completion state, and an optional weight value.
 - **Project**: Represents a project with title, description, color theme/tag, lifecycle status (`Active`, `Completed`, `Archived`), calculated overall task progress (0-100%), and an optional foreign link to a `Goal`.
 - **ProjectTask**: Represents a task within a project, belonging to one of three workflow columns (`ToDo`, `InProgress`, `Done`), with title, description, priority (`Low`, `Medium`, `High`), deadline datetime, reminder_minutes (configurable alert offset: 0, 15, 60, 1440 mins), and an ordered list of subtasks.
 - **TaskSubtask**: Represents a checkable subtask item within a `ProjectTask`, with title and completion state.
 - **EventItem**: Represents an event with title, description/notes, start datetime, end datetime, location or virtual meeting URL, color category tag, and lifecycle status (`Programado`, `Completado`, `Cancelado`).
+- **LearningItem**: Represents a learning resource (course, book, article, technology documentation) with title, resource_type (`COURSE`, `BOOK`, `ARTICLE`, `TECH_DOC`), platform_url, status (`BACKLOG`, `IN_PROGRESS`, `PAUSED`, `COMPLETED`), progress_mode (`MANUAL`, `TOPICS`), progress_percentage (0-100), current_unit, total_units, last_point_reached, takeaways_markdown, last_activity_at, optional link to `Goal`, and optional link to `Project`.
+- **LearningTopic**: Represents a checkable modular topic or chapter within a `LearningItem`, with title, completion state, order, and optional section grouping.
 
 ## Success Criteria *(mandatory)*
 
@@ -238,8 +275,9 @@ As a visitor or returning user, I want a split screen showing an inspiring visua
 - **SC-001**: Users can switch between sections via the TabBar with no visible delay, updating the view in under 100 milliseconds.
 - **SC-002**: The layout is responsive, displaying correctly on mobile, tablet, and desktop viewports without horizontal scrolling or overlapping text.
 - **SC-003**: The color coding for the active tab and notification badge is accessible, maintaining a minimum color contrast ratio of 4.5:1.
-- **SC-004**: 100% of users can successfully find and access the primary views (Calendario, Objetivos, Proyectos, Eventos) within their first 5 seconds of interaction.
+- **SC-004**: 100% of users can successfully find and access the primary views (Calendario, Objetivos, Proyectos, Eventos, Aprendizaje) within their first 5 seconds of interaction.
 - **SC-005**: Returning users with an active session can access the main dashboard from the welcome screen in under 1 second with a single click on "Entrar a Aura" without re-entering credentials.
+- **SC-006**: Users can access their active course platform or document in 1 click from the learning card or drawer, and schedule a study session event on the Calendar in under 3 clicks.
 
 ## Assumptions
 
