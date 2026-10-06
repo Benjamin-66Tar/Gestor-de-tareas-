@@ -97,6 +97,9 @@ class GoalSerializer(serializers.ModelSerializer):
             'courses_avg': courses_avg,
             'milestones_avg': milestones_avg,
             'present_count': len(present_components),
+            'projects': projects_avg,
+            'learning': courses_avg,
+            'milestones': milestones_avg,
         }
 
     def get_is_achieved_100(self, obj):

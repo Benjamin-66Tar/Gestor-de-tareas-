@@ -80,6 +80,9 @@ export interface GoalProgressBreakdown {
   coursesAvg?: number | null;
   milestonesAvg?: number | null;
   presentCount: number;
+  projects?: number | null;
+  learning?: number | null;
+  milestones?: number | null;
 }
 
 export interface UserProfile {

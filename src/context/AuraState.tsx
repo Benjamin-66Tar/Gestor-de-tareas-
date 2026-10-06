@@ -23,10 +23,8 @@ import {
   AuthSessionUser,
   LearningItem,
   LearningFilterCriteria,
-  ActivityCheckIn,
   ProgressMatrixRow,
   GoalFilterHorizon,
-  TimeHorizon,
 } from '../domain/types';
 import { getGridDateRange } from '../utils/dateUtils';
 import * as api from '../services/api';

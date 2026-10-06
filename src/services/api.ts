@@ -4,7 +4,7 @@ import {
   PushSubscriptionDTO, PushSubscriptionKeys,
   LoginCredentials, RegisterData, AuthResponse, AuthSessionUser,
   LearningItem, LearningTopic, LearningStatus, LearningFilterCriteria,
-  ActivityCheckIn, ProgressMatrixRow, LinkedProjectSummary, LinkedLearningSummary, GoalProgressBreakdown
+  ProgressMatrixRow
 } from '../domain/types';
 
 export const API_BASE = `${(import.meta.env.VITE_API_URL || '').replace(/\/$/, '')}/api/v1`;
@@ -190,7 +190,15 @@ export function transformGoalFromApi(raw: any): Goal {
     parentGoalTitle: raw.parent_goal_title ?? raw.parentGoalTitle ?? null,
     linkedProjects: raw.linked_projects ?? raw.linkedProjects ?? [],
     linkedCourses: raw.linked_courses ?? raw.linkedCourses ?? [],
-    breakdown: raw.breakdown ?? null,
+    breakdown: raw.breakdown ? {
+      projectsAvg: raw.breakdown.projects_avg ?? raw.breakdown.projectsAvg ?? null,
+      coursesAvg: raw.breakdown.courses_avg ?? raw.breakdown.coursesAvg ?? null,
+      milestonesAvg: raw.breakdown.milestones_avg ?? raw.breakdown.milestonesAvg ?? null,
+      presentCount: raw.breakdown.present_count ?? raw.breakdown.presentCount ?? 0,
+      projects: raw.breakdown.projects_avg ?? raw.breakdown.projects ?? null,
+      learning: raw.breakdown.courses_avg ?? raw.breakdown.learning ?? null,
+      milestones: raw.breakdown.milestones_avg ?? raw.breakdown.milestones ?? null,
+    } : null,
     isAchieved100: Boolean(raw.is_achieved_100 ?? raw.isAchieved100 ?? (raw.progress_percentage >= 100)),
     progressMode: raw.progress_mode ?? raw.progressMode ?? 'MILESTONES',
     progressPercentage: typeof raw.progress_percentage === 'number'

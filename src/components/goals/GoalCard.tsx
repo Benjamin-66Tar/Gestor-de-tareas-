@@ -246,17 +246,17 @@ export const GoalCard: React.FC<GoalCardProps> = ({ goal, onEdit }) => {
         {/* Multi-factor Breakdown Chips (Fase 4 - US13) */}
         {goal.breakdown && (
           <div className="flex items-center gap-1.5 flex-wrap my-2 text-[10px] font-bold">
-            {goal.breakdown.projects !== undefined && (
+            {goal.breakdown.projects != null && (
               <span className="px-2 py-0.5 rounded-lg bg-blue-500/10 text-blue-300 border border-blue-500/20">
                 🚀 Proyectos: {goal.breakdown.projects}%
               </span>
             )}
-            {goal.breakdown.learning !== undefined && (
+            {goal.breakdown.learning != null && (
               <span className="px-2 py-0.5 rounded-lg bg-purple-500/10 text-purple-300 border border-purple-500/20">
                 📚 Aprendizaje: {goal.breakdown.learning}%
               </span>
             )}
-            {goal.breakdown.milestones !== undefined && (
+            {goal.breakdown.milestones != null && (
               <span className="px-2 py-0.5 rounded-lg bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">
                 📌 Hitos: {goal.breakdown.milestones}%
               </span>
