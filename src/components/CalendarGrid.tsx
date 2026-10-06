@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuraState } from '../context/AuraState';
-import { generateCalendarGrid, getWeeksFromGrid } from '../utils/dateUtils';
+import { generateCalendarGrid, getWeeksFromGrid, toLocalDateString } from '../utils/dateUtils';
 import { PlanElemento } from '../domain/types';
 import { AgendaView } from './AgendaView';
 import { WeekExpandedView } from './WeekExpandedView';
@@ -439,18 +439,18 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({ onDayClick, onItemCl
                       {/* Elementos en la celda mensual (con soporte visual de rango) */}
                       <div className="flex flex-col gap-1 overflow-y-auto max-h-[80px] scrollbar-none">
                         {day.items.map((item) => {
+                          const startStr = toLocalDateString(item.fecha_inicio);
+                          const endStr = toLocalDateString(item.fecha_limite);
                           const isRange = Boolean(
-                            item.fecha_inicio &&
-                            item.fecha_limite &&
-                            item.fecha_inicio.split('T')[0] !== item.fecha_limite.split('T')[0]
+                            startStr &&
+                            endStr &&
+                            startStr !== endStr
                           );
-                          const startStr = item.fecha_inicio ? item.fecha_inicio.split('T')[0] : '';
-                          const endStr = item.fecha_limite ? item.fecha_limite.split('T')[0] : '';
                           const isStart = isRange && day.formattedDate === startStr;
                           const isEnd = isRange && day.formattedDate === endStr;
 
-                          const timeStr = item.fecha_inicio && item.fecha_inicio.includes('T')
-                            ? item.fecha_inicio.split('T')[1].slice(0, 5)
+                          const timeStr = item.fecha_inicio
+                            ? new Date(item.fecha_inicio).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
                             : null;
 
                           return (

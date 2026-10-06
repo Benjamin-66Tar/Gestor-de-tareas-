@@ -28,6 +28,21 @@ export const formatToLocalInputDate = (dateOrStr: Date | string | null | undefin
 };
 
 /**
+ * Converts an ISO string, Date, or date string into a local YYYY-MM-DD string.
+ * This guarantees strict alignment between the user's local timezone (e.g. UTC-6)
+ * and the calendar grid cells, avoiding the "+1 day" shift caused by raw .split('T')[0].
+ */
+export const toLocalDateString = (dateOrStr: Date | string | null | undefined): string => {
+  if (!dateOrStr) return '';
+  if (typeof dateOrStr === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateOrStr)) {
+    return dateOrStr;
+  }
+  const date = typeof dateOrStr === 'string' ? new Date(dateOrStr) : dateOrStr;
+  if (isNaN(date.getTime())) return '';
+  return formatLocalDate(date);
+};
+
+/**
  * Maps items to date strings (YYYY-MM-DD), expanding items that have a date range
  * (fecha_inicio to fecha_limite) so they appear on all days within the range.
  */
@@ -35,8 +50,8 @@ export const mapItemsToDates = (items: PlanElemento[]): Record<string, PlanEleme
   const itemsMap: Record<string, PlanElemento[]> = {};
 
   items.forEach(item => {
-    const startPart = item.fecha_inicio ? item.fecha_inicio.split('T')[0] : null;
-    const endPart = item.fecha_limite ? item.fecha_limite.split('T')[0] : null;
+    const startPart = toLocalDateString(item.fecha_inicio);
+    const endPart = toLocalDateString(item.fecha_limite);
 
     if (startPart && endPart) {
       let dStart = new Date(`${startPart}T00:00:00`);

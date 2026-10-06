@@ -1414,6 +1414,10 @@ class GoalLinkComponentsAPI(APIView):
         from .serializers import GoalSerializer
         project_ids = request.data.get('project_ids')
         learning_item_ids = request.data.get('learning_item_ids')
+        if isinstance(project_ids, str):
+            project_ids = [project_ids]
+        if isinstance(learning_item_ids, str):
+            learning_item_ids = [learning_item_ids]
         try:
             goal = link_goal_components(goal_id=pk, project_ids=project_ids, learning_item_ids=learning_item_ids)
             return Response(GoalSerializer(goal).data, status=status.HTTP_200_OK)

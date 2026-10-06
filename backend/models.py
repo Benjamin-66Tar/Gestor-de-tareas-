@@ -331,6 +331,7 @@ class LearningItem(models.Model):
         ('IN_PROGRESS', 'En curso'),
         ('PAUSED', 'En pausa'),
         ('COMPLETED', 'Completado'),
+        ('DROPPED', 'Descartado'),
     ]
     PROGRESS_MODES = [
         ('MANUAL', 'Manual'),
@@ -355,6 +356,9 @@ class LearningItem(models.Model):
     total_units = models.PositiveIntegerField(default=0)
     last_point_reached = models.CharField(max_length=250, blank=True, null=True)
     takeaways_markdown = models.TextField(blank=True, null=True)
+    is_focus = models.BooleanField(default=False, db_index=True)
+    dropped_reason = models.CharField(max_length=250, blank=True, null=True)
+    dropped_at = models.DateTimeField(blank=True, null=True)
     goal = models.ForeignKey(Goal, on_delete=models.SET_NULL, null=True, blank=True, related_name='learning_items')
     project = models.ForeignKey(Project, on_delete=models.SET_NULL, null=True, blank=True, related_name='learning_items')
     last_activity_at = models.DateTimeField(default=timezone.now, db_index=True)
@@ -370,6 +374,7 @@ class LearningItem(models.Model):
             models.Index(fields=['user', 'status'], name='learning_user_status_idx'),
             models.Index(fields=['user', 'resource_type'], name='learning_user_type_idx'),
             models.Index(fields=['user', '-last_activity_at'], name='learning_user_act_idx'),
+            models.Index(fields=['user', 'is_focus'], name='learning_user_focus_idx'),
         ]
 
     def __str__(self):

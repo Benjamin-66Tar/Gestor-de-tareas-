@@ -50,7 +50,7 @@ def calculate_goal_progress(goal) -> int:
 
     if goal.progress_mode == 'CONNECTED':
         proj_list = list(goal.projects.filter(is_deleted=False))
-        course_list = list(goal.learning_items.filter(is_deleted=False))
+        course_list = list(goal.learning_items.filter(is_deleted=False).exclude(status='DROPPED'))
         milestones = list(goal.milestones.all())
 
         components = []

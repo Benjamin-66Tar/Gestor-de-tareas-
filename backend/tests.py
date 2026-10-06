@@ -1901,7 +1901,7 @@ class ConnectedGoalAPITests(APITestCase):
         response = self.client.post(link_url, {
             'project_ids': [str(self.proj.id)],
             'learning_item_ids': [str(self.course.id)]
-        })
+        }, format='json')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn('breakdown', response.data)
         self.assertEqual(response.data['breakdown']['present_count'], 3)

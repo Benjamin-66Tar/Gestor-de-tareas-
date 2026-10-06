@@ -1,5 +1,6 @@
 import React from 'react';
 import { PlanElemento } from '../domain/types';
+import { toLocalDateString } from '../utils/dateUtils';
 
 interface AgendaViewProps {
   elementos: PlanElemento[];
@@ -29,7 +30,8 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
   // Group items by local date string for visual grouping
   const agrupadosPorDia: Record<string, PlanElemento[]> = {};
   itemsFiltrados.forEach(item => {
-    const localDateStr = item.fecha_limite!.split('T')[0];
+    const localDateStr = toLocalDateString(item.fecha_limite);
+    if (!localDateStr) return;
     if (!agrupadosPorDia[localDateStr]) {
       agrupadosPorDia[localDateStr] = [];
     }
