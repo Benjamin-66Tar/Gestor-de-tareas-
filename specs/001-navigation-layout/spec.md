@@ -59,6 +59,31 @@
 - Q: ¿Cómo debe relacionarse la sección de Aprendizaje con los demás pilares de Aura (Objetivos y Proyectos)? → A: Vinculación opcional flexible: cada recurso de aprendizaje puede asociarse opcionalmente a un Objetivo estratégico o a un Proyecto de Aura (o mantenerse como aprendizaje libre/independiente), permitiendo que el progreso del curso/libro alimente opcionalmente los hitos de la meta vinculada.
 - Q: ¿Cómo debe crearse y comportarse una sesión de estudio cuando el usuario decide apartar tiempo para avanzar en un curso o libro? → A: Sesión de estudio como evento de agenda integrado con EventItem: acción 'Agendar sesión de estudio' en la ficha del recurso que crea un evento en el Calendario de Aura tipificado con el color del recurso, enlace directo al contenido y recordatorio Web Push configurable (15 min antes).
 
+### Session 2026-10-05
+- Q: ¿Cómo debe comportarse el evento o actividad en la interfaz al presionar "Listo hoy", y qué efecto exacto debe tener sobre el evento general? → A: Check-in diario no destructivo (Marca la sesión cumplida únicamente para la fecha actual con badge "✓ Realizado hoy" y suma a la racha de constancia, manteniendo el evento activo en el calendario para las fechas siguientes del rango).
+- Q: ¿Cómo debe calcularse y medirse la racha de constancia (Streak 🔥) cuando estudias diferentes materias o actividades? → A: Modo dual configurable por el usuario (Permite elegir entre racha individual de días consecutivos por cada curso/actividad independiente, o meta de frecuencia semanal de días cumplidos, con opción de alternar entre ambos modos de medición).
+- Q: ¿En qué puntos de la aplicación debe estar visible y accesible la acción "✓ Listo hoy" para registrar la constancia sin fricción? → A: Enfoque en planificación temporal (Disponible en las tarjetas de eventos del bloque "Hoy" en la sección de Eventos y como botón de un clic en las columnas diarias del modo agrandador del Calendario Semanal).
+- Q: ¿Cómo debe funcionar la interacción al pulsar "✓ Listo hoy" y qué sucede si lo marcas por error (reversibilidad)? → A: Toggle directo de un solo clic reversible (Al pulsar registra de inmediato el check-in diario con feedback visual verde y suma a la racha; pulsar nuevamente sobre el control desmarca la sesión y restaura el estado previo sin diálogos ni bloqueos).
+- Q: ¿Cómo deben coexistir en la tarjeta la acción diaria de constancia ("✓ Listo hoy") y la finalización definitiva de todo el curso ("Completar")? → A: Jerarquía diferenciada (El botón principal y destacado de cada día es "✓ Listo hoy" para registrar el hábito diario; la acción de dar por concluido el curso completo queda como una opción secundaria explícita "Concluir evento definitivamente" en el menú o detalles para evitar cierres prematuros o accidentales).
+- Q: ¿Dónde debe ubicarse y cómo se debe acceder a la Tabla de Progreso y Constancia dentro de la interfaz de Aura? → A: En Aprendizaje con acceso rápido desde Calendario (Modo de vista conmutable en Aprendizaje: [ Kanban ] | [ Lista ] | [ 📊 Matriz de Progreso ], complementado con un botón de acceso directo en la cabecera del Calendario semanal para saltar a la matriz sin fricción).
+- Q: ¿Qué cursos o actividades deben aparecer listados en las filas de la Tabla de Progreso? → A: Cursos activos y eventos de estudio del calendario (La tabla consolida los recursos de Aprendizaje en curso junto con los eventos de estudio programados en el Calendario, ofreciendo filtros rápidos para alternar entre "En curso" o "Todos").
+- Q: ¿Cómo debe funcionar la cuadrícula semanal de constancia (Lunes a Domingo) dentro de la tabla? → A: Semana activa con navegación histórica (Muestra los 7 días de la semana con "Hoy" resaltado y marcas de check de asistencia, con controles de paso semanal "←" "→" para auditar el cumplimiento en semanas anteriores).
+- Q: ¿Cómo debe funcionar el botón de acción rápida para avanzar contenido ([ + Avanzar tema ]) directamente desde la tabla? → A: Avance inteligente en 1 clic (Detecta automáticamente el modo del recurso: si tiene checklist de temas completa el siguiente tema pendiente en orden; si es numérico incrementa en +1 unidad, actualizando el progreso y porcentaje al instante sin modales).
+- Q: ¿Cómo deben ordenarse y priorizarse las materias y actividades dentro de la Tabla de Progreso? → A: Prioridad por pendiente de hoy (La tabla sitúa al inicio las materias que aún no tienen check-in completado en la fecha actual para dirigir la atención inmediata del usuario, seguidas de las ya completadas ordenadas por racha activa, complementada con un buscador de texto en tiempo real).
+- Q: ¿Cómo debe definirse y asignarse si un objetivo es de "Corto Plazo" o "Largo Plazo"? → A: Selector manual con sugerencia inteligente (El usuario elige directamente en el drawer [ ⚡ Corto Plazo ] o [ 🏔️ Largo Plazo ], con preselección sugerida automática si la fecha límite ingresada es menor o mayor a 30 días, preservando el control final del usuario).
+- Q: ¿Cómo deben organizarse y visualizarse los objetivos a Corto y Largo Plazo dentro del Panel (GoalsView)? → A: Pestañas de filtro rápido en los controles (Filtros de horizonte temporal [ Todos ] | [ ⚡ Corto Plazo ] | [ 🏔️ Largo Plazo ] en la barra de controles para filtrar al instante tanto en modo tarjetas como en lista tabular).
+- Q: ¿Cómo deben reflejarse las metas a Corto y Largo Plazo en las métricas de la cabecera (Activas, Cumplidas, Avance Promedio)? → A: Métricas dinámicas contextuales (Las tarjetas estadísticas del encabezado se recalculan dinámicamente según el filtro de plazo activo, mostrando en la vista "Todos" el balance global acompañado de un micro-desglose numérico entre corto y largo plazo).
+- Q: ¿Debe existir una relación jerárquica opcional entre objetivos (poder vincular un objetivo de Corto Plazo como parte de un objetivo de Largo Plazo)? → A: Vinculación jerárquica opcional (Permite asociar opcionalmente un objetivo de Corto Plazo a un objetivo padre de Largo Plazo para que su cumplimiento tribute a la visión macro, o mantenerlo como objetivo táctico 100% autónomo).
+- Q: ¿Cómo debe distinguirse visualmente en la tarjeta (GoalCard) y en la tabla (GoalTable) si una meta es de Corto o Largo Plazo? → A: Estilo híbrido con distinción dorada para metas a largo plazo (Metas de Corto Plazo con badge distintivo [ ⚡ Corto Plazo ] en color cian/esmeralda; metas de Largo Plazo con badge [ 🏔️ Largo Plazo ] acompañado de un matiz de fondo y bordes en color dorado/ámbar resplandeciente para otorgarles una jerarquía estratégica prémium sobresaliente).
+- Q: ¿Cómo debe calcularse el porcentaje de progreso global (0-100%) de un objetivo cuando tiene Proyectos, Cursos de Aprendizaje e Hitos vinculados? → A: Promedio automático según componentes presentes (El sistema calcula el porcentaje global como la media equitativa del progreso promedio de los Proyectos vinculados, los Cursos vinculados y los Hitos propios que existan asociados a la meta, adaptándose automáticamente sin requerir pesos manuales).
+- Q: ¿Cómo deben visualizarse los Proyectos y Cursos conectados dentro de la tarjeta del objetivo (GoalCard)? → A: Secciones desplegables independientes con enlace directo (Bloques colapsables con acordeón tipo [ Ver proyectos ▼ ] y [ Ver cursos ▼ ], mostrando para cada ítem su título, porcentaje individual, barra de progreso y botón de salto directo al tablero Kanban o al recurso de estudio).
+- Q: ¿Dónde y cómo debe poder el usuario vincular Proyectos y Cursos a un Objetivo? → A: Vinculación bidireccional (El GoalDrawer permite seleccionar y enlazar directamente qué Proyectos y Cursos de Aprendizaje pertenecen a la meta mediante selectores visuales, manteniendo al mismo tiempo la capacidad de asociarlos desde las fichas de cada proyecto o recurso individual).
+- Q: ¿Cómo debe mostrarse la barra de progreso en la tarjeta del objetivo (GoalCard) para que quede claro de dónde surge el porcentaje? → A: Barra global con chips de desglose multifactorial (Muestra la barra general y el porcentaje consolidado del objetivo, complementada con chips informativos compactos que detallan el avance de cada pilar presente: [ 🚀 Proyectos: X% ] | [ 📚 Aprendizaje: Y% ] | [ 📌 Hitos: Z% ]).
+- Q: Cuando todos los proyectos, cursos e hitos vinculados a un objetivo alcanzan el 100% de progreso, ¿cómo debe gestionarse la finalización y el ciclo de vida de la meta? → A: Confirmación con celebración al 100% (La barra llega al 100% y resalta con una insignia o botón de celebración para 'Concluir y archivar objetivo', permitiendo que el usuario celebre el logro y confirme el cierre formal sin que el sistema lo archive abruptamente de forma automática).
+
+
+
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Header Navigation Bar (Navbar) (Priority: P1)
@@ -181,13 +206,74 @@ As a user managing multiple courses, books, technical articles, and technology d
 5. **Given** a user updates an item's progress (either by ticking off modular topics or entering a direct percentage/page count), **When** saved, **Then** the item's progress bar and last activity timestamp MUST update immediately in the UI.
 6. **Given** a learning item is optionally linked to a Goal, **When** progress on the learning item is updated, **Then** it MUST reflect on the associated Goal's progress tracking.
 
+### User Story 7 - Daily Check-in & Consistency Tracking (Listo Hoy & Racha) (Priority: P1)
+As a user with ongoing study activities and long-term courses, I want to mark "Listo hoy" on my daily sessions and track my consistency streak without prematurely completing the entire multi-week course, so that I maintain regular study habits and clearly see my progress over time.
+
+**Why this priority**: Solves the core user frustration of courses being closed prematurely by "Completar" when they only wanted to log today's study session.
+
+**Independent Test**: Can schedule a study activity spanning multiple days, click "✓ Listo hoy" on the "Hoy" event card or weekly calendar column, verify that today's session is marked complete with a green badge and increases the streak, while the event remains active for future days. Clicking the badge again cleanly reverts the check-in.
+
+**Acceptance Scenarios**:
+1. **Given** a study event or multi-day activity is scheduled for today, **When** viewing the event card in "Hoy", **Then** the primary action displayed MUST be "✓ Listo hoy".
+2. **Given** the user clicks "✓ Listo hoy", **Then** the card MUST immediately display a green "✓ Realizado hoy" badge, record the check-in for the current date, and increment the user's active streak (🔥) in under 50ms without closing the parent event.
+3. **Given** a session has been marked as "✓ Realizado hoy", **When** the user clicks the check-in control again, **Then** the system MUST revert the check-in, restore the pending state, and decrement the streak counter accordingly.
+4. **Given** the user is viewing the weekly calendar view ("Modo Agrandador"), **When** inspecting the day's column, **Then** study session cards MUST display a single-click check-in control allowing the user to mark attendance directly from the calendar.
+5. **Given** a user wishes to configure their streak tracking, **When** inspecting settings or consistency options, **Then** they MUST be able to choose between consecutive daily streaks per individual course or a weekly frequency target (completed days per week).
+6. **Given** the user wishes to conclude an entire multi-week course or event permanently, **When** accessing the event options or details, **Then** an explicit secondary action ("Concluir evento definitivamente") MUST be available to finalize the item without confusing it with the daily check-in.
+
+### User Story 8 - Activity Progress & Habits Matrix (Tabla de Progreso y Hábitos) (Priority: P1)
+As a user studying multiple ongoing courses and subjects, I want a centralized progress and habits table where I can simultaneously monitor my daily consistency streak, see my weekly attendance (Monday to Sunday), and track my module/topic completion with 1-click quick advancement actions, so that I maintain strong study discipline without losing context of where I left off.
+
+**Why this priority**: Solves the user's explicit need for "una tabla o elemento que pueda ver el progreso" combining consistency habits and module progression in one place.
+
+**Independent Test**: Can open the Learning section, switch to "Matriz de Progreso", verify all active courses and study events appear sorted by today's pending status, click "✓ Listo hoy" to toggle today's checkmark on the Monday-Sunday weekly matrix, click "+ Avanzar tema" to immediately complete the next pending topic, and use the calendar shortcut to jump to the table.
+
+**Acceptance Scenarios**:
+1. **Given** the user is in the "Aprendizaje" section, **When** they toggle the view selector to "Matriz de Progreso", **Then** the view MUST display the comprehensive tabular matrix of active learning courses and scheduled study events.
+2. **Given** the user is viewing the weekly calendar, **When** they click the "Ver Tabla de Progreso" shortcut button, **Then** the application MUST transition to the Aprendizaje tab with the "Matriz de Progreso" mode active.
+3. **Given** an activity row in the matrix, **When** viewing the weekly attendance column, **Then** it MUST display 7 day indicators (Lun-Dom) with checkmarks for days attended, highlighting today's column, and providing "←" "→" controls to inspect previous weeks.
+4. **Given** an activity row in the matrix, **When** the user clicks "+ Avanzar tema", **Then** the system MUST complete the next pending topic in order (or increment +1 unit for numeric items) and update the progress bar in under 50ms without opening popups.
+5. **Given** multiple courses are loaded in the matrix, **When** rendering the table, **Then** items pending today's check-in MUST appear at the top, followed by completed items ordered by active streak length.
+
+### User Story 9 - Short-Term vs Long-Term Strategic Goals (Objetivos a Corto y Largo Plazo) (Priority: P1)
+As a user tracking both strategic personal development goals and tactical immediate targets, I want to clearly distinguish and filter between Short-Term and Long-Term goals, with distinct visual badges and a golden highlight for long-term visions, so that I can focus on immediate milestones without losing track of my big picture.
+
+**Why this priority**: Solves the problem of tactical tasks and long-term milestones cluttering the same view without temporal differentiation.
+
+**Independent Test**: Can open the Goals view, filter by "Corto Plazo" or "Largo Plazo", create a goal with smart deadline suggestion, view dynamic header metrics adapting to the selected horizon, and see long-term goal cards highlighted with an amber/gold border and subtle ambient glow.
+
+**Acceptance Scenarios**:
+1. **Given** the user is in the "Objetivos" section, **When** they click the "Corto Plazo" or "Largo Plazo" filter pill, **Then** the view MUST immediately filter the visible goal cards or table rows, updating header metrics to match the filtered subset.
+2. **Given** the user is creating or editing a goal in the drawer, **When** entering a deadline date, **Then** the system MUST automatically suggest either "Corto Plazo" (<30 days) or "Largo Plazo" (>30 days), while preserving the user's ability to override with a single click.
+3. **Given** a goal classified as "Largo Plazo", **When** rendered in the card grid or table, **Then** it MUST display a "🏔️ Largo Plazo" badge and a distinctive golden/amber border accent with subtle ambient background tint.
+4. **Given** a goal classified as "Corto Plazo", **When** creating or editing the goal, **Then** the user MAY optionally select an existing Long-Term goal as its parent objective to link tactical execution to a broader vision.
+
+### User Story 10 - Connected Goals Progress & Alignment (Conexión de Objetivos con Proyectos y Aprendizaje) (Priority: P1)
+As a user tracking strategic goals that rely on concrete execution, I want my goals to dynamically reflect progress from linked Projects and Learning courses alongside Milestones, displaying collapsible breakdown sections, multi-factor progress chips, bidirectional linkage, and a celebration badge upon reaching 100%, so that my everyday task and study execution directly drives my high-level objectives.
+
+**Why this priority**: Solves the disconnection between tactical daily execution (Kanban projects, course completion) and strategic goals, eliminating manual synchronization and providing a unified view of accomplishment.
+
+**Independent Test**: Can link projects and learning courses to a Goal in the drawer or item card, advance project tasks or course topics, verify that the goal's overall progress recalculates automatically as the equitable average of present components, inspect the collapsible "Proyectos" and "Cursos" accordions with deep links in the GoalCard, see the multi-factor progress chips, and verify that reaching 100% displays the celebration badge with a prompt to confirm conclusion and archive.
+
+**Acceptance Scenarios**:
+1. **Given** a goal with linked projects, learning courses, and/or milestones, **When** progress advances in any linked item, **Then** the goal's overall progress percentage MUST recalculate automatically as the equitable average of the present component categories without requiring manual weighting.
+2. **Given** a GoalCard rendered in the Goals view, **When** inspected, **Then** it MUST display collapsible accordion sections for linked "🚀 Proyectos (X)" and "📚 Cursos (Y)" showing each item's title, individual progress bar, percentage, and 1-click navigation links to its Kanban workspace or study resource.
+3. **Given** a GoalCard with multiple linked components, **When** displaying the consolidated progress bar, **Then** it MUST include compact multi-factor chips detailing the individual category averages (e.g. `[ 🚀 Proyectos: X% ]`, `[ 📚 Aprendizaje: Y% ]`, `[ 📌 Hitos: Z% ]`).
+4. **Given** the user is creating or editing a Goal in GoalDrawer, **When** configuring links, **Then** they MUST be able to select and link multiple Projects and LearningItems directly from the drawer (bidirectional association).
+5. **Given** all linked projects, courses, and milestones reach 100% progress, **When** viewing the goal, **Then** it MUST display a celebration badge and explicit confirmation control ("🎉 ¡Meta alcanzada! Concluir y archivar objetivo") allowing the user to celebrate the achievement and confirm formal closure and archiving without abrupt automatic closure.
+
 ---
 
 ## Edge Cases
 
+
+
 - **Mobile Viewports**: On narrow screens, the TabBar horizontal text might overflow. The system MUST render it cleanly (e.g. using horizontal swipe or compact icons with text).
 - **Mobile Auth Layout**: On narrow viewports (<768px), the split screen MUST collapse from side-by-side columns into a single vertical stack, scaling the hero image proportionally so that all inputs and action buttons remain comfortably accessible without zoom or clipped elements.
 - **Extremely High Notification Counts**: If the user has more than 99 notifications, the badge MUST display "99+" instead of wrapping or breaking the layout.
+- **Daily Check-in on Multi-day Activities**: Marking "Listo hoy" MUST NOT complete, cancel, or archive the parent multi-day event or learning resource; all subsequent dates within the range MUST remain active and visible in the schedule.
+- **Accidental Click Reversal**: If the user marks "Listo hoy" by mistake, clicking the control again MUST immediately revert the check-in and recalculate the streak without page refresh or blocking dialogs.
+
 - **Lost Connectivity**: If the application fails to fetch the latest notifications count, the badge SHOULD fail silently without displaying corrupt text or breaking the header layout.
 
 ## Requirements *(mandatory)*
@@ -253,14 +339,33 @@ As a user managing multiple courses, books, technical articles, and technology d
 - **FR-058**: The "Aprendizaje" section MUST provide a slide-over drawer emerging from the right edge for inspecting and editing resource details, including direct resource URL ("Abrir recurso"), "Último punto alcanzado" (module, page, or section), Key Takeaways notes in Markdown, and an interactive checklist of modular topics.
 - **FR-059**: The slide-over drawer and item card MUST provide an "Agendar sesión de estudio" action that creates an `EventItem` in the "Calendario" section styled with the resource's theme color, scheduled start/end times, direct URL link, and a 15-minute advance Web Push reminder.
 - **FR-060**: Learning resources MAY be optionally linked to an existing `Goal` or `Project`, allowing progress on the learning resource to automatically feed into the associated Goal's progress or Project execution.
-- **FR-061**: The background scheduler MUST evaluate dormancy on learning items alongside existing task and goal reminders, suppressing inactivity alerts if the resource is in "En pausa" or "Completado" status.
+- **FR-061**: The background scheduler MUST evaluate dormancy on learning items alongside existing task and goal reminders, suppressing inactivity alerts if the resource is in "En pausa" o "Completado" status.
+- **FR-062**: The "Eventos" (bloque "Hoy") and "Calendario" (modo agrandador semanal) sections MUST provide a "✓ Listo hoy" daily check-in action for study sessions and multi-day activities, recording daily completion for the current date without prematurely closing or canceling the overall multi-day event or course.
+- **FR-063**: Clicking "✓ Listo hoy" MUST operate as an instant, reversible single-click toggle with immediate visual feedback (green badge "✓ Realizado hoy"), updating the user's streak in real time without blocking confirmation modals. Clicking the control again MUST undo the check-in and restore the previous state.
+- **FR-064**: The system MUST support a dual consistency tracking mode configurable by the user: either tracking consecutive daily streaks (Streak 🔥) per individual course/activity, or tracking a weekly frequency target of completed days across the active week.
+- **FR-065**: Event cards in the "Hoy" block MUST implement a clear visual hierarchy where "✓ Listo hoy" is the prominent primary daily action, while permanently concluding the entire course or multi-week activity ("Concluir evento definitivamente") is maintained as an explicit secondary action.
+- **FR-066**: The "Aprendizaje" section MUST provide a view mode selector allowing users to switch dynamically between Kanban board, simple list, and the "Matriz de Progreso y Hábitos" (`ActivityProgressMatrix`).
+- **FR-067**: The "Calendario" section MUST provide a direct quick-link action button in its control header ("Ver Tabla de Progreso") that immediately navigates to the "Matriz de Progreso" view in the Aprendizaje section.
+- **FR-068**: The "Matriz de Progreso" MUST list active learning resources alongside scheduled study events from the Calendar, displaying columns for: Activity Name/Platform, Consistency Streak (🔥), Weekly Matrix (Lun-Dom with attendance checkmarks and week stepper "←" "→"), Content Progress bar (completed vs pending units/topics), and instant actions (`[ ✓ Listo hoy ]` and `[ + Avanzar tema ]`).
+- **FR-069**: Clicking `[ + Avanzar tema ]` in the progress matrix MUST automatically complete the next pending modular topic (for topic-based resources) or increment unit count by +1 (for numeric resources) in a single click without opening dialogs, immediately recalculating progress percentage.
+- **FR-070**: The "Matriz de Progreso" MUST prioritize activities pending completion today at the top of the list, followed by completed items ordered by active streak length, complemented by an instant real-time search filter.
+- **FR-071**: The "Objetivos" section MUST classify goals into two time horizons: "Corto Plazo" (`SHORT_TERM`) and "Largo Plazo" (`LONG_TERM`), supporting manual selection with automatic date-based preselection (<30 days vs >30 days).
+- **FR-072**: The "Objetivos" section MUST provide quick-filter pills in the controls bar: `[ Todos ]`, `[ ⚡ Corto Plazo ]`, and `[ 🏔️ Largo Plazo ]`, immediately filtering both Card and List views.
+- **FR-073**: The "Objetivos" header stats counter (Activas, Cumplidas, Avance Promedio) MUST dynamically recalculate to reflect the selected time horizon filter, and display a micro-breakdown count when viewing "Todos".
+- **FR-074**: Short-Term goals MAY be optionally linked to an existing Long-Term parent goal (`parent_goal`), establishing a hierarchical relationship without breaking standalone short-term goals.
+- **FR-075**: Goal cards and table rows MUST visually distinguish time horizons: Short-Term goals display a cyan/emerald `⚡ Corto Plazo` badge; Long-Term goals display a `🏔️ Largo Plazo` badge accompanied by a distinctive golden/amber border accent and subtle ambient background tint.
+- **FR-076**: The system MUST automatically calculate a Goal's overall progress percentage as the equitable average of all present linked components (average of linked Projects, average of linked LearningItems, and average of GoalMilestones). If a component type has no linked items, it MUST NOT penalize the calculation.
+- **FR-077**: Goal cards in the "Objetivos" section MUST display collapsible accordion sections for linked Projects (`🚀 Proyectos (X)`) and linked Learning resources (`📚 Cursos (Y)`), showing individual completion percentages, visual progress bars, and direct 1-click navigation links to their workspace or resource card.
+- **FR-078**: The GoalCard progress display MUST include compact multi-factor chips below the consolidated progress bar displaying individual component averages (e.g., `[ 🚀 Proyectos: X% ]`, `[ 📚 Aprendizaje: Y% ]`, `[ 📌 Hitos: Z% ]`) when multiple component types are linked.
+- **FR-079**: The system MUST support bidirectional linkage between Goals, Projects, and LearningItems, allowing users to link or unlink Projects and Learning items directly within `GoalDrawer` as well as from their individual item detail drawers.
+- **FR-080**: When a Goal's calculated progress reaches 100%, the UI MUST display a celebration badge and explicit confirmation control ("🎉 ¡Meta alcanzada! Concluir y archivar objetivo") allowing the user to mark the goal as `COMPLETED` and archive it, while preserving the active state until explicit user confirmation.
 
 ### Key Entities
 - **UserSession**: Represents the currently logged-in user, exposing username, email, avatar image URL, auth state, and session persistence status.
 - **Notification**: Represents a single notification item, with properties for read/unread state and creation timestamp.
 - **PushSubscription**: Represents an active Web Push subscription device associated with a User (1:N), storing the endpoint URL, cryptographic keys (`p256dh`, `auth`), user agent metadata, and registration timestamp.
 - **NavigationSection**: Represents a valid section tab (Calendar, Goals, Projects, Events, Learning).
-- **Goal**: Represents an objective with title, target deadline, reminder_minutes (configurable alert offset: 0, 15, 60, 1440 mins), category tag, progress mode (`Manual` or `MilestoneBased`), progress percentage (0-100%), and status (Active, Completed, Paused).
+- **Goal**: Represents an objective with title, target deadline, reminder_minutes (configurable alert offset: 0, 15, 60, 1440 mins), category tag, progress mode (`Manual`, `MilestoneBased`, or `Connected`), progress percentage (0-100%), status (Active, Completed, Paused), time_horizon (`SHORT_TERM` or `LONG_TERM`), optional parent_goal link, linked projects, and linked learning items.
 - **GoalMilestone**: Represents a key checkable milestone or sub-target associated with a Goal, including title, completion state, and an optional weight value.
 - **Project**: Represents a project with title, description, color theme/tag, lifecycle status (`Active`, `Completed`, `Archived`), calculated overall task progress (0-100%), and an optional foreign link to a `Goal`.
 - **ProjectTask**: Represents a task within a project, belonging to one of three workflow columns (`ToDo`, `InProgress`, `Done`), with title, description, priority (`Low`, `Medium`, `High`), deadline datetime, reminder_minutes (configurable alert offset: 0, 15, 60, 1440 mins), and an ordered list of subtasks.
@@ -268,6 +373,7 @@ As a user managing multiple courses, books, technical articles, and technology d
 - **EventItem**: Represents an event with title, description/notes, start datetime, end datetime, location or virtual meeting URL, color category tag, and lifecycle status (`Programado`, `Completado`, `Cancelado`).
 - **LearningItem**: Represents a learning resource (course, book, article, technology documentation) with title, resource_type (`COURSE`, `BOOK`, `ARTICLE`, `TECH_DOC`), platform_url, status (`BACKLOG`, `IN_PROGRESS`, `PAUSED`, `COMPLETED`), progress_mode (`MANUAL`, `TOPICS`), progress_percentage (0-100), current_unit, total_units, last_point_reached, takeaways_markdown, last_activity_at, optional link to `Goal`, and optional link to `Project`.
 - **LearningTopic**: Represents a checkable modular topic or chapter within a `LearningItem`, with title, completion state, order, and optional section grouping.
+- **ActivityCheckIn**: Represents a completed daily session for a specific user, date, and associated learning item or study event item, storing completion status, streak counter metadata, and timestamps.
 
 ## Success Criteria *(mandatory)*
 
@@ -278,6 +384,13 @@ As a user managing multiple courses, books, technical articles, and technology d
 - **SC-004**: 100% of users can successfully find and access the primary views (Calendario, Objetivos, Proyectos, Eventos, Aprendizaje) within their first 5 seconds of interaction.
 - **SC-005**: Returning users with an active session can access the main dashboard from the welcome screen in under 1 second with a single click on "Entrar a Aura" without re-entering credentials.
 - **SC-006**: Users can access their active course platform or document in 1 click from the learning card or drawer, and schedule a study session event on the Calendar in under 3 clicks.
+- **SC-007**: Users can complete their daily study check-in in 1 single click (<50ms local UI response) from either the "Hoy" event card or the weekly calendar column, instantly reflecting updated streak status.
+- **SC-008**: Users can view their entire weekly consistency grid and advance a module or mark a daily check-in in under 1 click from the progress matrix, with state updating in less than 50ms.
+- **SC-009**: Users can filter between Short-Term and Long-Term goals in under 1 click with instantaneous view updates (<50ms).
+- **SC-010**: Users can inspect linked projects and courses directly inside a Goal card in under 1 click, and see recalculated goal progress in under 50ms upon updating any linked project task or course unit.
+
+
+
 
 ## Assumptions
 

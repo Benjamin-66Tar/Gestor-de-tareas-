@@ -43,10 +43,43 @@ def calculate_goal_progress(goal) -> int:
     Calculates progress percentage (0-100) for a Goal based on its progress_mode:
     - MANUAL: returns the existing progress_percentage
     - MILESTONES: computes completed milestone weights over total weights (default weight 1)
+    - CONNECTED: computes equitable unweighted average across present linked components (projects, courses, milestones)
     """
     if goal.progress_mode == 'MANUAL':
         return min(100, max(0, goal.progress_percentage))
 
+    if goal.progress_mode == 'CONNECTED':
+        proj_list = list(goal.projects.filter(is_deleted=False))
+        course_list = list(goal.learning_items.filter(is_deleted=False))
+        milestones = list(goal.milestones.all())
+
+        components = []
+        if proj_list:
+            components.append(sum(p.progress_percentage for p in proj_list) / len(proj_list))
+        if course_list:
+            components.append(sum(c.progress_percentage for c in course_list) / len(course_list))
+        if milestones:
+            total_weight = sum(m.weight if m.weight and m.weight > 0 else 1 for m in milestones)
+            if total_weight > 0:
+                comp_weight = sum(m.weight if m.weight and m.weight > 0 else 1 for m in milestones if m.is_completed)
+                components.append((comp_weight / total_weight) * 100)
+            else:
+                components.append((sum(1 for m in milestones if m.is_completed) / len(milestones)) * 100)
+
+        if not components:
+            progress = goal.progress_percentage or 0
+        else:
+            progress = round(sum(components) / len(components))
+
+        progress = min(100, max(0, progress))
+        goal.progress_percentage = progress
+        # For CONNECTED mode, keep active at 100% until explicit user confirmation/conclude
+        if progress < 100 and goal.status == 'COMPLETED':
+            goal.status = 'ACTIVE'
+        goal.save(update_fields=['progress_percentage', 'status', 'updated_at'])
+        return progress
+
+    # Default: MILESTONES mode
     milestones = goal.milestones.all()
     if not milestones.exists():
         return 0
@@ -527,7 +560,62 @@ def calculate_learning_progress(learning_item):
                 learning_item.progress_percentage = 100
 
     learning_item.save(update_fields=['progress_percentage', 'status', 'updated_at'])
+
+    # Auto-complete milestone in linked goal if 100% completed
+    if (learning_item.progress_percentage == 100 or learning_item.status == 'COMPLETED') and learning_item.goal_id:
+        check_and_complete_goal_milestone_for_learning(learning_item)
+
     return learning_item.progress_percentage
+
+
+def check_and_complete_goal_milestone_for_learning(learning_item):
+    """
+    When a learning resource reaches 100% or is marked COMPLETED,
+    if it is linked to a Goal, searches uncompleted milestones for a match
+    (by title, keywords, or single pending milestone) and marks it completed,
+    triggering goal progress recalculation.
+    """
+    import re
+
+    goal = learning_item.goal
+    if not goal or goal.is_deleted:
+        return None
+
+    uncompleted = goal.milestones.filter(is_completed=False)
+    if not uncompleted.exists():
+        return None
+
+    def clean(text):
+        return re.sub(r'[^\w\s]', '', text.lower()).strip()
+
+    item_title_clean = clean(learning_item.title)
+    item_words = set(w for w in item_title_clean.split() if len(w) > 2)
+
+    matched = None
+    for m in uncompleted:
+        m_title_clean = clean(m.title)
+        # 1. Direct containment
+        if item_title_clean in m_title_clean or m_title_clean in item_title_clean:
+            matched = m
+            break
+        # 2. Significant keyword overlap
+        m_words = set(w for w in m_title_clean.split() if len(w) > 2)
+        overlap = item_words.intersection(m_words)
+        if len(overlap) >= 1:
+            matched = m
+            break
+
+    # 3. Fallback: if only one uncompleted milestone remains and the goal category is related to study
+    if not matched and uncompleted.count() == 1 and goal.category.lower() in ('aprendizaje', 'estudio', 'general'):
+        matched = uncompleted.first()
+
+    if matched:
+        matched.is_completed = True
+        matched.save(update_fields=['is_completed'])
+        calculate_goal_progress(goal)
+        return matched
+
+    return None
 
 
 def schedule_learning_study_session(learning_item, start_time, end_time, notes=None, reminder_minutes=15):
@@ -715,5 +803,356 @@ def log_audit_event(user, action: str, model_name: str, object_id, object_repr: 
         return None
 
 
+def calculate_streak(user, learning_item=None, event_item=None, mode='CONSECUTIVE') -> int:
+    """
+    Calculates consistency streak count for a user and specific learning/event item:
+    - CONSECUTIVE: counts consecutive days stepping backward from today or yesterday.
+    - WEEKLY_TARGET: counts distinct days completed within the current calendar week (Mon-Sun).
+    """
+    from .models import ActivityCheckIn
+    from datetime import timedelta
+    from django.utils import timezone
 
+    if not user or not user.is_authenticated:
+        return 0
+
+    qs = ActivityCheckIn.objects.filter(user=user, is_completed=True)
+    if learning_item:
+        qs = qs.filter(learning_item=learning_item)
+    elif event_item:
+        qs = qs.filter(event_item=event_item)
+    else:
+        return 0
+
+    completed_dates = set(qs.values_list('date', flat=True))
+    if not completed_dates:
+        return 0
+
+    today = timezone.localdate()
+
+    if mode == 'WEEKLY_TARGET':
+        start_of_week = today - timedelta(days=today.weekday())
+        end_of_week = start_of_week + timedelta(days=6)
+        days_in_week = sum(1 for d in completed_dates if start_of_week <= d <= end_of_week)
+        return days_in_week
+
+    # mode == 'CONSECUTIVE'
+    streak = 0
+    curr = today
+    if curr not in completed_dates:
+        curr = today - timedelta(days=1)
+        if curr not in completed_dates:
+            return 0
+
+    while curr in completed_dates:
+        streak += 1
+        curr -= timedelta(days=1)
+
+    return streak
+
+
+@transaction.atomic
+def toggle_activity_checkin(user, date=None, learning_item_id=None, event_item_id=None) -> dict:
+    """
+    Toggles a daily attendance check-in for a learning item or event (<50ms non-destructive).
+    """
+    from .models import ActivityCheckIn, LearningItem, EventItem
+    from django.utils import timezone
+    from datetime import datetime, date as date_class
+
+    if not date:
+        target_date = timezone.localdate()
+    elif isinstance(date, str):
+        try:
+            target_date = datetime.strptime(date, '%Y-%m-%d').date()
+        except ValueError:
+            target_date = timezone.localdate()
+    elif isinstance(date, date_class):
+        target_date = date
+    else:
+        target_date = timezone.localdate()
+
+    learning_item = None
+    event_item = None
+    if learning_item_id:
+        learning_item = LearningItem.objects.filter(id=learning_item_id, is_deleted=False).first()
+    if event_item_id:
+        event_item = EventItem.objects.filter(id=event_item_id, is_deleted=False).first()
+
+    if not learning_item and not event_item:
+        raise ValueError("Must provide either a valid learning_item_id or event_item_id.")
+
+    checkin_filter = {
+        'user': user if user and user.is_authenticated else None,
+        'date': target_date,
+    }
+    if learning_item:
+        checkin_filter['learning_item'] = learning_item
+    if event_item:
+        checkin_filter['event_item'] = event_item
+
+    checkin = ActivityCheckIn.objects.filter(**checkin_filter).first()
+    if checkin:
+        checkin.is_completed = not checkin.is_completed
+        checkin.save(update_fields=['is_completed', 'updated_at'])
+    else:
+        checkin = ActivityCheckIn.objects.create(
+            user=user if user and user.is_authenticated else None,
+            date=target_date,
+            learning_item=learning_item,
+            event_item=event_item,
+            is_completed=True,
+            streak_count=1,
+        )
+
+    # Recalculate streak
+    new_streak = calculate_streak(user, learning_item=learning_item, event_item=event_item)
+    checkin.streak_count = new_streak
+    checkin.save(update_fields=['streak_count', 'updated_at'])
+
+    # If learning item, update last_activity_at and goal progress if connected
+    if learning_item:
+        learning_item.last_activity_at = timezone.now()
+        learning_item.save(update_fields=['last_activity_at', 'updated_at'])
+        if learning_item.goal and learning_item.goal.progress_mode == 'CONNECTED':
+            calculate_goal_progress(learning_item.goal)
+
+    return {
+        'status': 'toggled',
+        'is_completed': checkin.is_completed,
+        'date': str(checkin.date),
+        'streak_count': checkin.streak_count,
+        'item_id': str(learning_item.id if learning_item else event_item.id),
+        'item_type': 'LEARNING' if learning_item else 'EVENT',
+    }
+
+
+def get_progress_matrix_data(user, week_offset=0, search=None) -> dict:
+    """
+    Returns weekly progress matrix rows aggregated for active learning items and study sessions.
+    """
+    from .models import LearningItem, EventItem, ActivityCheckIn
+    from datetime import timedelta
+    from django.utils import timezone
+
+    today = timezone.localdate()
+    try:
+        offset_val = int(week_offset)
+    except (TypeError, ValueError):
+        offset_val = 0
+
+    target_date = today + timedelta(weeks=offset_val)
+    start_of_week = target_date - timedelta(days=target_date.weekday())
+    end_of_week = start_of_week + timedelta(days=6)
+
+    day_letters = ['L', 'M', 'X', 'J', 'V', 'S', 'D']
+    week_dates = [start_of_week + timedelta(days=i) for i in range(7)]
+
+    learning_qs = LearningItem.objects.filter(is_deleted=False).exclude(status='COMPLETED')
+    if user and user.is_authenticated:
+        learning_qs = learning_qs.filter(user=user)
+    if search:
+        learning_qs = learning_qs.filter(title__icontains=search)
+
+    events_qs = EventItem.objects.filter(is_deleted=False, status='PROGRAMMED')
+    if user and user.is_authenticated:
+        events_qs = events_qs.filter(user=user)
+    if search:
+        events_qs = events_qs.filter(title__icontains=search)
+
+    rows = []
+
+    for item in learning_qs:
+        checkins = set(ActivityCheckIn.objects.filter(
+            learning_item=item,
+            is_completed=True,
+            date__range=[start_of_week, end_of_week]
+        ).values_list('date', flat=True))
+
+        attendance = []
+        for i, d in enumerate(week_dates):
+            attendance.append({
+                'date': str(d),
+                'day_letter': day_letters[i],
+                'is_today': (d == today),
+                'is_checked': (d in checkins),
+            })
+
+        is_checked_today = (today in checkins) if (start_of_week <= today <= end_of_week) else ActivityCheckIn.objects.filter(
+            learning_item=item, is_completed=True, date=today
+        ).exists()
+
+        streak = calculate_streak(user, learning_item=item)
+
+        next_topic = None
+        if item.progress_mode == 'TOPICS':
+            next_topic = item.topics.filter(is_completed=False).order_by('order').first()
+
+        rows.append({
+            'id': str(item.id),
+            'title': item.title,
+            'item_type': 'LEARNING',
+            'platform_name': item.platform_name or '',
+            'color_hex': item.color_hex,
+            'current_streak': streak,
+            'is_checked_today': is_checked_today,
+            'progress_mode': item.progress_mode,
+            'progress_percentage': item.progress_percentage,
+            'current_unit': item.current_unit,
+            'total_units': item.total_units,
+            'next_topic_title': next_topic.title if next_topic else None,
+            'weekly_attendance': attendance,
+        })
+
+    for ev in events_qs:
+        checkins = set(ActivityCheckIn.objects.filter(
+            event_item=ev,
+            is_completed=True,
+            date__range=[start_of_week, end_of_week]
+        ).values_list('date', flat=True))
+
+        attendance = []
+        for i, d in enumerate(week_dates):
+            attendance.append({
+                'date': str(d),
+                'day_letter': day_letters[i],
+                'is_today': (d == today),
+                'is_checked': (d in checkins),
+            })
+
+        is_checked_today = (today in checkins) if (start_of_week <= today <= end_of_week) else ActivityCheckIn.objects.filter(
+            event_item=ev, is_completed=True, date=today
+        ).exists()
+
+        streak = calculate_streak(user, event_item=ev)
+
+        rows.append({
+            'id': str(ev.id),
+            'title': ev.title,
+            'item_type': 'EVENT',
+            'platform_name': ev.location or ev.meeting_url or '',
+            'color_hex': ev.color_hex,
+            'current_streak': streak,
+            'is_checked_today': is_checked_today,
+            'progress_mode': 'MANUAL',
+            'progress_percentage': 100 if ev.status == 'COMPLETED' else 0,
+            'current_unit': 1 if is_checked_today else 0,
+            'total_units': 1,
+            'next_topic_title': None,
+            'weekly_attendance': attendance,
+        })
+
+    rows.sort(key=lambda r: (1 if r['is_checked_today'] else 0, -r['current_streak'], r['title'].lower()))
+
+    return {
+        'active_week': {
+            'start_date': str(start_of_week),
+            'end_date': str(end_of_week),
+        },
+        'rows': rows,
+    }
+
+
+@transaction.atomic
+def advance_progress_matrix_item(user, item_id) -> dict:
+    """
+    1-click advance for a learning item row: completes the next topic or increments unit +1,
+    recalculating progress and automatically recording today's check-in.
+    """
+    from .models import LearningItem, LearningTopic
+    from django.utils import timezone
+
+    item = LearningItem.objects.select_for_update().filter(id=item_id, is_deleted=False).first()
+    if not item:
+        raise ValueError(f"Learning item with id '{item_id}' not found.")
+
+    advanced_type = item.progress_mode
+    completed_topic_title = None
+    next_topic_title = None
+
+    if item.progress_mode == 'TOPICS':
+        next_topic = item.topics.filter(is_completed=False).order_by('order').first()
+        if next_topic:
+            next_topic.is_completed = True
+            next_topic.save(update_fields=['is_completed'])
+            completed_topic_title = next_topic.title
+
+            total_topics = item.topics.count()
+            completed_topics = item.topics.filter(is_completed=True).count()
+            if total_topics > 0:
+                item.progress_percentage = min(100, round((completed_topics / total_topics) * 100))
+                item.current_unit = completed_topics
+                item.total_units = total_topics
+                if item.progress_percentage == 100 and item.status != 'COMPLETED':
+                    item.status = 'COMPLETED'
+
+            future_topic = item.topics.filter(is_completed=False).order_by('order').first()
+            if future_topic:
+                next_topic_title = future_topic.title
+        else:
+            item.progress_percentage = 100
+    else:
+        item.current_unit = min(item.total_units, item.current_unit + 1)
+        if item.total_units > 0:
+            item.progress_percentage = min(100, round((item.current_unit / item.total_units) * 100))
+            if item.progress_percentage == 100 and item.status != 'COMPLETED':
+                item.status = 'COMPLETED'
+
+    item.last_activity_at = timezone.now()
+    item.save(update_fields=['current_unit', 'total_units', 'progress_percentage', 'status', 'last_activity_at', 'updated_at'])
+
+    # Auto-log today's check-in
+    toggle_activity_checkin(user, date=timezone.localdate(), learning_item_id=str(item.id))
+
+    if item.goal and item.goal.progress_mode == 'CONNECTED':
+        calculate_goal_progress(item.goal)
+
+    return {
+        'id': str(item.id),
+        'advanced_type': advanced_type,
+        'completed_topic_title': completed_topic_title,
+        'next_topic_title': next_topic_title,
+        'current_unit': item.current_unit,
+        'total_units': item.total_units,
+        'progress_percentage': item.progress_percentage,
+    }
+
+
+@transaction.atomic
+def link_goal_components(goal_id, project_ids=None, learning_item_ids=None):
+    """
+    Associates projects and courses bidirectionally to a Goal and recalculates connected progress.
+    """
+    from .models import Goal, Project, LearningItem
+    goal = Goal.objects.select_for_update().filter(id=goal_id, is_deleted=False).first()
+    if not goal:
+        raise ValueError(f"Goal with id '{goal_id}' not found.")
+
+    if project_ids is not None:
+        Project.objects.filter(goal=goal).exclude(id__in=project_ids).update(goal=None)
+        Project.objects.filter(id__in=project_ids).update(goal=goal)
+
+    if learning_item_ids is not None:
+        LearningItem.objects.filter(goal=goal).exclude(id__in=learning_item_ids).update(goal=None)
+        LearningItem.objects.filter(id__in=learning_item_ids).update(goal=goal)
+
+    calculate_goal_progress(goal)
+    goal.refresh_from_db()
+    return goal
+
+
+@transaction.atomic
+def conclude_goal(goal_id):
+    """
+    Explicit conclusion and celebration closure for a Goal (100% completed).
+    """
+    from .models import Goal
+    goal = Goal.objects.select_for_update().filter(id=goal_id, is_deleted=False).first()
+    if not goal:
+        raise ValueError(f"Goal with id '{goal_id}' not found.")
+
+    goal.status = 'COMPLETED'
+    goal.progress_percentage = 100
+    goal.save(update_fields=['status', 'progress_percentage', 'updated_at'])
+    return goal
 

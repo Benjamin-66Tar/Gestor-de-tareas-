@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Goal, GoalMilestone, ProgressMode, GoalStatus } from '../../domain/types';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Goal, GoalMilestone, ProgressMode, GoalStatus, TimeHorizon } from '../../domain/types';
 import { useAuraState } from '../../context/AuraState';
 import { formatToLocalInputDate } from '../../utils/dateUtils';
 
@@ -13,7 +13,7 @@ const COLOR_PRESETS = [
   '#10B981', // Emerald
   '#6366F1', // Indigo
   '#EC4899', // Pink
-  '#F59E0B', // Amber
+  '#F59E0B', // Amber / Gold
   '#06B6D4', // Cyan
   '#8B5CF6', // Purple
   '#EF4444', // Red
@@ -31,8 +31,25 @@ const REMINDER_OPTIONS = [
   { value: 1440, label: '1 día antes' },
 ];
 
+/**
+ * Componente GoalDrawer (Fases 3 y 4 - US12 y US13):
+ * 
+ * Panel lateral para creación y edición de objetivos estratégicos.
+ * Incluye:
+ * - Clasificador de Horizonte Temporal (Corto Plazo vs Largo Plazo) con sugerencia inteligente según fecha límite (<=30 vs >30 días).
+ * - Selector de objetivo padre (para vincular metas de corto plazo a objetivos estratégicos de largo plazo).
+ * - Selectores multiselección bidireccionales para vincular Proyectos y Recursos de Aprendizaje.
+ * - Modo de progreso integrado ('CONNECTED') que calcula promedio equitativo automáticamente.
+ */
 export const GoalDrawer: React.FC<GoalDrawerProps> = ({ isOpen, onClose, goalToEdit }) => {
-  const { createGoal, updateGoal } = useAuraState();
+  const {
+    createGoal,
+    updateGoal,
+    linkGoalComponents,
+    goals,
+    projects,
+    learningItems,
+  } = useAuraState();
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -42,6 +59,10 @@ export const GoalDrawer: React.FC<GoalDrawerProps> = ({ isOpen, onClose, goalToE
   const [reminderMinutes, setReminderMinutes] = useState<number>(0);
   const [isRangeMode, setIsRangeMode] = useState(false);
   const [startDate, setStartDate] = useState('');
+  const [timeHorizon, setTimeHorizon] = useState<TimeHorizon>('SHORT_TERM');
+  const [parentGoalId, setParentGoalId] = useState<string | null>(null);
+  const [linkedProjectIds, setLinkedProjectIds] = useState<string[]>([]);
+  const [linkedLearningIds, setLinkedLearningIds] = useState<string[]>([]);
   const [progressMode, setProgressMode] = useState<ProgressMode>('MILESTONES');
   const [progressPercentage, setProgressPercentage] = useState<number>(0);
   const [status, setStatus] = useState<GoalStatus>('ACTIVE');
@@ -51,7 +72,14 @@ export const GoalDrawer: React.FC<GoalDrawerProps> = ({ isOpen, onClose, goalToE
   const [newMilestoneDate, setNewMilestoneDate] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
-  // Populate or reset form fields
+  // Lista de posibles objetivos padre (objetivos de largo plazo excluyendo el actual)
+  const candidateParentGoals = useMemo(() => {
+    return (goals || []).filter(
+      (g) => g.timeHorizon === 'LONG_TERM' && (!goalToEdit || g.id !== goalToEdit.id)
+    );
+  }, [goals, goalToEdit]);
+
+  // Poblar o reiniciar el formulario
   useEffect(() => {
     if (goalToEdit) {
       setTitle(goalToEdit.title || '');
@@ -72,6 +100,21 @@ export const GoalDrawer: React.FC<GoalDrawerProps> = ({ isOpen, onClose, goalToE
           ? goalToEdit.reminderMinutes
           : (typeof (goalToEdit as any).reminder_minutes === 'number' ? (goalToEdit as any).reminder_minutes : 0)
       );
+      setTimeHorizon(goalToEdit.timeHorizon || 'SHORT_TERM');
+      setParentGoalId(goalToEdit.parentGoalId || (goalToEdit as any).parent_goal || null);
+      
+      // Proyectos vinculados existentes
+      const currentProjIds = goalToEdit.linkedProjects
+        ? goalToEdit.linkedProjects.map((p) => p.id)
+        : (projects || []).filter((p) => p.goalId === goalToEdit.id || (p as any).goal === goalToEdit.id).map((p) => p.id);
+      setLinkedProjectIds(currentProjIds);
+
+      // Cursos vinculados existentes
+      const currentLearningIds = goalToEdit.linkedCourses
+        ? goalToEdit.linkedCourses.map((c) => c.id)
+        : (learningItems || []).filter((l) => (l.goalId === goalToEdit.id || (l as any).goal === goalToEdit.id) && !(l as any).isDeleted).map((l) => l.id);
+      setLinkedLearningIds(currentLearningIds);
+
       setProgressMode(goalToEdit.progressMode || (goalToEdit as any).progress_mode || 'MILESTONES');
       setProgressPercentage(
         typeof goalToEdit.progressPercentage === 'number'
@@ -100,6 +143,10 @@ export const GoalDrawer: React.FC<GoalDrawerProps> = ({ isOpen, onClose, goalToE
       setStartDate('');
       setDeadline('');
       setReminderMinutes(0);
+      setTimeHorizon('SHORT_TERM');
+      setParentGoalId(null);
+      setLinkedProjectIds([]);
+      setLinkedLearningIds([]);
       setProgressMode('MILESTONES');
       setProgressPercentage(0);
       setStatus('ACTIVE');
@@ -108,22 +155,59 @@ export const GoalDrawer: React.FC<GoalDrawerProps> = ({ isOpen, onClose, goalToE
     setNewMilestoneTitle('');
     setNewMilestoneWeight(1);
     setNewMilestoneDate('');
-  }, [goalToEdit, isOpen]);
+  }, [goalToEdit, isOpen, projects, learningItems]);
 
-  // Recalculate preview progress for milestones mode
-  const calculatedProgress = React.useMemo(() => {
+  // Sugerencia inteligente de horizonte temporal al cambiar la fecha límite
+  const handleDeadlineChange = (val: string) => {
+    setDeadline(val);
+    if (val) {
+      const now = new Date();
+      const start = startDate ? new Date(startDate) : now;
+      const target = new Date(val);
+      const diffDays = Math.round((target.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+      if (diffDays > 30) {
+        setTimeHorizon('LONG_TERM');
+        if (colorHex === '#10B981') setColorHex('#F59E0B');
+      } else {
+        setTimeHorizon('SHORT_TERM');
+      }
+    }
+  };
+
+  // Recálculo del progreso para vista previa
+  const calculatedProgress = useMemo(() => {
     if (progressMode === 'MANUAL') return progressPercentage;
+    if (progressMode === 'CONNECTED') {
+      // Simular cálculo multicomponente
+      const components: number[] = [];
+      if (linkedProjectIds.length > 0) {
+        const pList = (projects || []).filter((p) => linkedProjectIds.includes(p.id));
+        const avgP = pList.length > 0 ? Math.round(pList.reduce((acc, p) => acc + (p.progressPercentage || 0), 0) / pList.length) : 0;
+        components.push(avgP);
+      }
+      if (linkedLearningIds.length > 0) {
+        const lList = (learningItems || []).filter((l) => linkedLearningIds.includes(l.id));
+        const avgL = lList.length > 0 ? Math.round(lList.reduce((acc, l) => acc + (l.progressPercentage || 0), 0) / lList.length) : 0;
+        components.push(avgL);
+      }
+      if (milestones.length > 0) {
+        const totalW = milestones.reduce((sum, m) => sum + (m.weight || 1), 0);
+        const doneW = milestones.filter((m) => m.isCompleted).reduce((sum, m) => sum + (m.weight || 1), 0);
+        components.push(totalW > 0 ? Math.round((doneW / totalW) * 100) : 0);
+      }
+      if (components.length === 0) return 0;
+      return Math.round(components.reduce((a, b) => a + b, 0) / components.length);
+    }
     if (milestones.length === 0) return 0;
     const totalWeight = milestones.reduce((sum, m) => sum + (m.weight && m.weight > 0 ? m.weight : 1), 0);
     if (totalWeight <= 0) return 0;
     const completedWeight = milestones
-      .filter(m => m.isCompleted)
+      .filter((m) => m.isCompleted)
       .reduce((sum, m) => sum + (m.weight && m.weight > 0 ? m.weight : 1), 0);
     return Math.min(100, Math.max(0, Math.round((completedWeight / totalWeight) * 100)));
-  }, [progressMode, progressPercentage, milestones]);
+  }, [progressMode, progressPercentage, milestones, linkedProjectIds, linkedLearningIds, projects, learningItems]);
 
-  // Resumen visual dinámico del rango abarcado por el objetivo
-  const goalRangeText = React.useMemo(() => {
+  const goalRangeText = useMemo(() => {
     if (!isRangeMode || !startDate || !deadline) return null;
     const d1 = new Date(startDate);
     const d2 = new Date(deadline);
@@ -164,6 +248,18 @@ export const GoalDrawer: React.FC<GoalDrawerProps> = ({ isOpen, onClose, goalToE
     setMilestones(updated);
   };
 
+  const toggleProjectLink = (projectId: string) => {
+    setLinkedProjectIds((prev) =>
+      prev.includes(projectId) ? prev.filter((id) => id !== projectId) : [...prev, projectId]
+    );
+  };
+
+  const toggleLearningLink = (learningId: string) => {
+    setLinkedLearningIds((prev) =>
+      prev.includes(learningId) ? prev.filter((id) => id !== learningId) : [...prev, learningId]
+    );
+  };
+
   const handleSave = async () => {
     if (!title.trim()) {
       alert('Por favor ingresa un título para el objetivo.');
@@ -171,6 +267,13 @@ export const GoalDrawer: React.FC<GoalDrawerProps> = ({ isOpen, onClose, goalToE
     }
 
     setIsSaving(true);
+
+    // Si tiene proyectos o cursos vinculados, sugerir o adoptar modo CONNECTED
+    const finalMode =
+      linkedProjectIds.length > 0 || linkedLearningIds.length > 0
+        ? 'CONNECTED'
+        : progressMode;
+
     const payload: Partial<Goal> & { reminder_minutes?: number } = {
       title: title.trim(),
       description: description.trim(),
@@ -180,17 +283,30 @@ export const GoalDrawer: React.FC<GoalDrawerProps> = ({ isOpen, onClose, goalToE
       deadline: deadline ? new Date(deadline).toISOString() : null,
       reminderMinutes,
       reminder_minutes: reminderMinutes,
-      progressMode,
-      progressPercentage: progressMode === 'MANUAL' ? progressPercentage : calculatedProgress,
+      timeHorizon,
+      parentGoalId: parentGoalId || null,
+      progressMode: finalMode,
+      progressPercentage: finalMode === 'MANUAL' ? progressPercentage : calculatedProgress,
       status,
       milestones,
     };
 
+    let savedGoalId = goalToEdit?.id;
     let success = false;
+
     if (goalToEdit) {
       success = await updateGoal(goalToEdit.id, payload);
     } else {
       success = await createGoal(payload);
+      // Obtener el ID recién creado si es posible o esperar sincronización
+      if (success && goals.length > 0) {
+        savedGoalId = goals[0]?.id;
+      }
+    }
+
+    // Vincular componentes si hay objetivo activo
+    if (success && savedGoalId) {
+      await linkGoalComponents(savedGoalId, linkedProjectIds, linkedLearningIds);
     }
 
     setIsSaving(false);
@@ -210,15 +326,22 @@ export const GoalDrawer: React.FC<GoalDrawerProps> = ({ isOpen, onClose, goalToE
       />
 
       {/* Slide-over drawer container */}
-      <div className="relative w-full max-w-lg bg-slate-900 border-l border-slate-800 shadow-2xl h-full flex flex-col z-10 text-slate-100 animate-slideLeft">
+      <div className="relative w-full max-w-xl bg-slate-900 border-l border-slate-800 shadow-2xl h-full flex flex-col z-10 text-slate-100 animate-slideLeft">
         {/* Drawer Header */}
-        <div className="p-5 border-b border-slate-800 flex justify-between items-center bg-slate-950/40">
+        <div className="p-5 border-b border-slate-800 flex justify-between items-center bg-slate-950/50">
           <div>
-            <span className="text-xs font-bold text-emerald-400 uppercase tracking-widest">
-              {goalToEdit ? 'Editar Objetivo' : 'Nuevo Objetivo Estratégico'}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-emerald-400 uppercase tracking-widest">
+                {goalToEdit ? 'Editar Objetivo' : 'Nuevo Objetivo Estratégico'}
+              </span>
+              {timeHorizon === 'LONG_TERM' && (
+                <span className="px-2 py-0.5 text-[10px] font-black rounded-full bg-amber-500/20 text-amber-300 border border-amber-400/50">
+                  🏔️ Largo Plazo
+                </span>
+              )}
+            </div>
             <h2 className="text-xl font-black text-slate-100 mt-0.5">
-              {goalToEdit ? goalToEdit.title : 'Configurar Meta & Hitos'}
+              {goalToEdit ? goalToEdit.title : 'Configurar Meta & Horizontes'}
             </h2>
           </div>
           <button
@@ -257,6 +380,73 @@ export const GoalDrawer: React.FC<GoalDrawerProps> = ({ isOpen, onClose, goalToE
               placeholder="Notas o contexto sobre lo que implica cumplir esta meta..."
               className="w-full px-3.5 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition"
             />
+          </div>
+
+          {/* Clasificador de Horizonte Temporal (Fase 3 - US12) */}
+          <div className="p-4 bg-slate-950/70 border border-slate-800 rounded-2xl space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <label className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
+                  <span>⏱️</span> Horizonte Temporal
+                </label>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  Sugerencia automática según fecha límite con opción de cambio manual.
+                </p>
+              </div>
+            </div>
+
+            {/* Selector Pills: Corto Plazo vs Largo Plazo */}
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setTimeHorizon('SHORT_TERM')}
+                className={`py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 border ${
+                  timeHorizon === 'SHORT_TERM'
+                    ? 'bg-sky-500/20 text-sky-300 border-sky-400 shadow-sm'
+                    : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-850'
+                }`}
+              >
+                <span>⚡</span>
+                <span>Corto Plazo (≤ 30 días)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setTimeHorizon('LONG_TERM');
+                  if (colorHex === '#10B981') setColorHex('#F59E0B');
+                }}
+                className={`py-2 px-3 rounded-xl text-xs font-black transition flex items-center justify-center gap-1.5 border ${
+                  timeHorizon === 'LONG_TERM'
+                    ? 'bg-amber-500/20 text-amber-300 border-amber-400 shadow-md shadow-amber-500/10'
+                    : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-850'
+                }`}
+              >
+                <span>🏔️</span>
+                <span>Largo Plazo (&gt; 30 días)</span>
+              </button>
+            </div>
+
+            {/* Selector de Objetivo Padre (si hay candidatos) */}
+            {candidateParentGoals.length > 0 && (
+              <div className="pt-2 border-t border-slate-800/80">
+                <label className="block text-[11px] font-semibold text-slate-400 mb-1">
+                  Vincular a Objetivo Estratégico Padre (Opcional)
+                </label>
+                <select
+                  value={parentGoalId || ''}
+                  onChange={(e) => setParentGoalId(e.target.value ? e.target.value : null)}
+                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-amber-400"
+                >
+                  <option value="">Sin objetivo padre (Independiente)</option>
+                  {candidateParentGoals.map((pGoal) => (
+                    <option key={pGoal.id} value={pGoal.id}>
+                      🏔️ {pGoal.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
 
           {/* Category & Color */}
@@ -360,7 +550,7 @@ export const GoalDrawer: React.FC<GoalDrawerProps> = ({ isOpen, onClose, goalToE
                 <input
                   type="datetime-local"
                   value={deadline}
-                  onChange={(e) => setDeadline(e.target.value)}
+                  onChange={(e) => handleDeadlineChange(e.target.value)}
                   className="w-full px-3 py-2 bg-slate-800 border border-slate-700 hover:border-slate-600 focus:border-emerald-500 rounded-xl text-xs text-slate-100 focus:outline-none transition cursor-pointer font-mono"
                 />
               </div>
@@ -407,17 +597,129 @@ export const GoalDrawer: React.FC<GoalDrawerProps> = ({ isOpen, onClose, goalToE
             </select>
           </div>
 
+          {/* Pickers Multiselección de Proyectos y Aprendizaje (Fase 4 - US13) */}
+          <div className="p-4 bg-slate-950/70 border border-slate-800 rounded-2xl space-y-4">
+            <div>
+              <div className="flex justify-between items-center mb-1">
+                <label className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
+                  <span>🚀</span> Vincular Proyectos ({linkedProjectIds.length})
+                </label>
+                <span className="text-[10px] text-blue-400 font-semibold">
+                  Alineación táctica
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400 mb-2">
+                Selecciona proyectos de tu tablero que contribuyen directamente al cumplimiento de esta meta.
+              </p>
+
+              <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                {(projects || []).length === 0 ? (
+                  <p className="text-xs text-slate-500 italic p-2 bg-slate-900/40 rounded-lg text-center">
+                    No hay proyectos creados aún.
+                  </p>
+                ) : (
+                  (projects || []).map((proj) => {
+                    const isSelected = linkedProjectIds.includes(proj.id);
+                    return (
+                      <div
+                        key={proj.id}
+                        onClick={() => toggleProjectLink(proj.id)}
+                        className={`p-2 rounded-xl border flex items-center justify-between text-xs cursor-pointer transition select-none ${
+                          isSelected
+                            ? 'bg-blue-950/30 border-blue-500/50 text-slate-100'
+                            : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 truncate">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => {}}
+                            className="w-4 h-4 rounded text-blue-500 bg-slate-800 border-slate-700 pointer-events-none"
+                          />
+                          <span className="font-semibold truncate">{proj.title}</span>
+                        </div>
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-800 text-blue-300">
+                          {proj.progressPercentage || 0}%
+                        </span>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+            <div className="pt-3 border-t border-slate-800/80">
+              <div className="flex justify-between items-center mb-1">
+                <label className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
+                  <span>📚</span> Vincular Recursos de Aprendizaje ({linkedLearningIds.length})
+                </label>
+                <span className="text-[10px] text-purple-400 font-semibold">
+                  Conocimiento aplicado
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400 mb-2">
+                Selecciona cursos, libros o documentación técnica que aportan al objetivo.
+              </p>
+
+              <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                {(learningItems || []).length === 0 ? (
+                  <p className="text-xs text-slate-500 italic p-2 bg-slate-900/40 rounded-lg text-center">
+                    No hay recursos de aprendizaje creados aún.
+                  </p>
+                ) : (
+                  (learningItems || []).map((learn) => {
+                    const isSelected = linkedLearningIds.includes(learn.id);
+                    return (
+                      <div
+                        key={learn.id}
+                        onClick={() => toggleLearningLink(learn.id)}
+                        className={`p-2 rounded-xl border flex items-center justify-between text-xs cursor-pointer transition select-none ${
+                          isSelected
+                            ? 'bg-purple-950/30 border-purple-500/50 text-slate-100'
+                            : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 truncate">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => {}}
+                            className="w-4 h-4 rounded text-purple-500 bg-slate-800 border-slate-700 pointer-events-none"
+                          />
+                          <span className="font-semibold truncate">{learn.title}</span>
+                        </div>
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-800 text-purple-300">
+                          {learn.progressPercentage || 0}%
+                        </span>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          </div>
+
           {/* Progress Mode Selector */}
           <div className="p-4 bg-slate-950/60 rounded-2xl border border-slate-800 space-y-3">
             <div className="flex justify-between items-center">
               <label className="text-xs font-bold text-slate-200 uppercase tracking-wider">
                 Modo de Progreso
               </label>
-              <div className="flex bg-slate-800 p-1 rounded-xl border border-slate-700">
+              <div className="flex bg-slate-800 p-1 rounded-xl border border-slate-700 flex-wrap gap-1">
+                <button
+                  type="button"
+                  onClick={() => setProgressMode('CONNECTED')}
+                  className={`px-2.5 py-1 text-xs font-bold rounded-lg transition ${
+                    progressMode === 'CONNECTED' ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Integrado
+                </button>
                 <button
                   type="button"
                   onClick={() => setProgressMode('MILESTONES')}
-                  className={`px-3 py-1 text-xs font-bold rounded-lg transition ${
+                  className={`px-2.5 py-1 text-xs font-bold rounded-lg transition ${
                     progressMode === 'MILESTONES' ? 'bg-emerald-500 text-slate-950 shadow' : 'text-slate-400 hover:text-white'
                   }`}
                 >
@@ -426,11 +728,11 @@ export const GoalDrawer: React.FC<GoalDrawerProps> = ({ isOpen, onClose, goalToE
                 <button
                   type="button"
                   onClick={() => setProgressMode('MANUAL')}
-                  className={`px-3 py-1 text-xs font-bold rounded-lg transition ${
+                  className={`px-2.5 py-1 text-xs font-bold rounded-lg transition ${
                     progressMode === 'MANUAL' ? 'bg-indigo-500 text-white shadow' : 'text-slate-400 hover:text-white'
                   }`}
                 >
-                  Manual (0-100%)
+                  Manual
                 </button>
               </div>
             </div>
@@ -454,12 +756,16 @@ export const GoalDrawer: React.FC<GoalDrawerProps> = ({ isOpen, onClose, goalToE
             ) : (
               <div className="pt-1">
                 <div className="flex justify-between text-xs font-bold text-slate-300 mb-1.5">
-                  <span>Progreso calculado por hitos</span>
+                  <span>
+                    {progressMode === 'CONNECTED'
+                      ? 'Progreso ponderado automático (Proyectos + Aprendizaje + Hitos)'
+                      : 'Progreso calculado por hitos'}
+                  </span>
                   <span className="text-emerald-400 font-black text-sm">{calculatedProgress}%</span>
                 </div>
                 <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden border border-slate-700">
                   <div
-                    className="h-full bg-emerald-500 transition-all duration-300"
+                    className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 transition-all duration-300"
                     style={{ width: `${calculatedProgress}%` }}
                   />
                 </div>
@@ -467,7 +773,7 @@ export const GoalDrawer: React.FC<GoalDrawerProps> = ({ isOpen, onClose, goalToE
             )}
           </div>
 
-          {/* Milestones Management (Available in both, critical for MILESTONES mode) */}
+          {/* Milestones Management */}
           <div className="space-y-3">
             <div className="flex justify-between items-center">
               <h4 className="text-xs font-black uppercase tracking-wider text-slate-200">

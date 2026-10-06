@@ -18,6 +18,9 @@ export const GoalsView: React.FC = () => {
     setDrawerOpen,
     editingGoal,
     setEditingGoal,
+    goalHorizonFilter,
+    setGoalHorizonFilter,
+    goalMetrics,
   } = useAuraState();
 
   const [searchLocal, setSearchLocal] = useState('');
@@ -44,6 +47,10 @@ export const GoalsView: React.FC = () => {
   // Client-side filtering for ultra-fast responsiveness (<50ms)
   const filteredGoals = useMemo(() => {
     return goals.filter((g) => {
+      // Horizon filter (Fase 3 - US12)
+      if (goalHorizonFilter !== 'ALL' && (g.timeHorizon || 'SHORT_TERM') !== goalHorizonFilter) {
+        return false;
+      }
       // Status filter
       if (goalFilter.status !== 'ALL' && g.status !== goalFilter.status) {
         return false;
@@ -62,22 +69,7 @@ export const GoalsView: React.FC = () => {
       }
       return true;
     });
-  }, [goals, goalFilter, searchLocal]);
-
-  // Overall metrics calculation
-  const totalGoals = goals.length;
-  const completedGoals = goals.filter(g => g.status === 'COMPLETED').length;
-  const activeGoals = goals.filter(g => g.status === 'ACTIVE').length;
-  const avgProgress = totalGoals > 0
-    ? Math.round(
-        goals.reduce((acc, g) => {
-          const p = typeof g.progressPercentage === 'number'
-            ? g.progressPercentage
-            : (typeof (g as any).progress_percentage === 'number' ? (g as any).progress_percentage : 0);
-          return acc + p;
-        }, 0) / totalGoals
-      )
-    : 0;
+  }, [goals, goalFilter, goalHorizonFilter, searchLocal]);
 
   return (
     <div className="space-y-6 animate-fadeIn pb-12">
@@ -91,25 +83,35 @@ export const GoalsView: React.FC = () => {
             </h2>
           </div>
           <p className="text-xs text-slate-400 mt-1">
-            Supervisa metas cuantitativas, ponderación de hitos y progreso en tiempo real.
+            Supervisa metas a corto y largo plazo con hitos y progreso integrado.
           </p>
         </div>
 
-        {/* Global Stats Counter */}
-        <div className="flex items-center gap-3 sm:gap-6 text-xs bg-slate-950/80 px-4 py-2.5 rounded-2xl border border-slate-800">
+        {/* Global Stats Counter Adaptable al Horizonte */}
+        <div className="flex items-center gap-2.5 sm:gap-4 text-xs bg-slate-950/80 px-4 py-2.5 rounded-2xl border border-slate-800 flex-wrap">
           <div>
             <span className="text-[10px] text-slate-500 block uppercase font-bold">Activas</span>
-            <span className="text-sm font-black text-emerald-400">{activeGoals}</span>
+            <span className="text-sm font-black text-emerald-400">{goalMetrics.active}</span>
           </div>
-          <div className="w-px h-6 bg-slate-800" />
+          <div className="w-px h-6 bg-slate-800 hidden sm:block" />
           <div>
             <span className="text-[10px] text-slate-500 block uppercase font-bold">Cumplidas</span>
-            <span className="text-sm font-black text-indigo-400">{completedGoals}</span>
+            <span className="text-sm font-black text-indigo-400">{goalMetrics.completed}</span>
+          </div>
+          <div className="w-px h-6 bg-slate-800 hidden sm:block" />
+          <div>
+            <span className="text-[10px] text-amber-400/80 block uppercase font-bold">Largo Plazo</span>
+            <span className="text-sm font-black text-amber-300">{goalMetrics.longTerm}</span>
+          </div>
+          <div className="w-px h-6 bg-slate-800 hidden sm:block" />
+          <div>
+            <span className="text-[10px] text-sky-400/80 block uppercase font-bold">Corto Plazo</span>
+            <span className="text-sm font-black text-sky-300">{goalMetrics.shortTerm}</span>
           </div>
           <div className="w-px h-6 bg-slate-800" />
           <div>
-            <span className="text-[10px] text-slate-500 block uppercase font-bold">Avance Promedio</span>
-            <span className="text-sm font-black text-pink-400">{avgProgress}%</span>
+            <span className="text-[10px] text-slate-500 block uppercase font-bold">Avance</span>
+            <span className="text-sm font-black text-pink-400">{goalMetrics.avgProgress}%</span>
           </div>
         </div>
 
@@ -124,10 +126,10 @@ export const GoalsView: React.FC = () => {
 
       {/* Controls Bar: Search, Filters & View Switcher */}
       <div className="flex flex-col lg:flex-row justify-between items-stretch lg:items-center gap-4 bg-slate-900/40 p-4 rounded-2xl border border-slate-800">
-        {/* Search & Category filter */}
+        {/* Search, Horizon filter, Status & Category filter */}
         <div className="flex flex-wrap items-center gap-3 flex-1">
           {/* Search Box */}
-          <div className="relative flex-1 min-w-[200px]">
+          <div className="relative flex-1 min-w-[180px]">
             <span className="absolute left-3 top-2.5 text-xs text-slate-500">🔍</span>
             <input
               type="text"
@@ -136,6 +138,30 @@ export const GoalsView: React.FC = () => {
               placeholder="Buscar meta o categoría..."
               className="w-full pl-8 pr-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition"
             />
+          </div>
+
+          {/* Horizon Filter Pills (Fase 3 - US12) */}
+          <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs">
+            {[
+              { id: 'ALL', label: 'Todos', icon: '🎯' },
+              { id: 'SHORT_TERM', label: 'Corto Plazo', icon: '⚡' },
+              { id: 'LONG_TERM', label: 'Largo Plazo', icon: '🏔️' },
+            ].map((h) => (
+              <button
+                key={h.id}
+                onClick={() => setGoalHorizonFilter(h.id as any)}
+                className={`px-3 py-1 rounded-lg font-bold transition text-[11px] flex items-center gap-1.5 ${
+                  goalHorizonFilter === h.id
+                    ? h.id === 'LONG_TERM'
+                      ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 shadow-md shadow-amber-500/25 ring-1 ring-amber-400'
+                      : 'bg-emerald-500 text-slate-950 shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <span>{h.icon}</span>
+                <span>{h.label}</span>
+              </button>
+            ))}
           </div>
 
           {/* Status Filter Chips */}

@@ -8,7 +8,7 @@ interface GoalTableProps {
 }
 
 export const GoalTable: React.FC<GoalTableProps> = ({ goals, onEdit }) => {
-  const { deleteGoal } = useAuraState();
+  const { deleteGoal, learningItems } = useAuraState();
 
   const statusLabels: Record<string, string> = {
     ACTIVE: 'Activo',
@@ -48,6 +48,10 @@ export const GoalTable: React.FC<GoalTableProps> = ({ goals, onEdit }) => {
               ? new Date(goal.deadline).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })
               : '—';
 
+            const linkedLearningCount = (learningItems || []).filter(
+              (item) => (item.goalId === goal.id || (item as any).goal === goal.id) && !(item as any).isDeleted
+            ).length;
+
             return (
               <tr
                 key={goal.id}
@@ -62,6 +66,15 @@ export const GoalTable: React.FC<GoalTableProps> = ({ goals, onEdit }) => {
                       style={{ backgroundColor: colorHex }}
                     />
                     <span className="truncate">{goal.title}</span>
+                    {linkedLearningCount > 0 && (
+                      <span
+                        className="px-1.5 py-0.2 rounded bg-purple-500/15 text-purple-300 border border-purple-500/30 text-[10px] font-bold flex items-center gap-0.5 shrink-0"
+                        title={`${linkedLearningCount} recursos de aprendizaje vinculados`}
+                      >
+                        <span>📚</span>
+                        <span>{linkedLearningCount}</span>
+                      </span>
+                    )}
                   </div>
                 </td>
 

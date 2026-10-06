@@ -55,6 +55,11 @@ class Goal(models.Model):
     PROGRESS_MODES = [
         ('MANUAL', 'Manual'),
         ('MILESTONES', 'Hitos / Automático'),
+        ('CONNECTED', 'Conectado / Multifactorial'),
+    ]
+    TIME_HORIZON_CHOICES = [
+        ('SHORT_TERM', 'Corto Plazo'),
+        ('LONG_TERM', 'Largo Plazo'),
     ]
     STATUS_CHOICES = [
         ('ACTIVE', 'Activo'),
@@ -71,6 +76,8 @@ class Goal(models.Model):
     start_date = models.DateTimeField(blank=True, null=True)
     deadline = models.DateTimeField(blank=True, null=True, db_index=True)
     reminder_minutes = models.PositiveIntegerField(default=0, null=True, blank=True)
+    time_horizon = models.CharField(max_length=20, choices=TIME_HORIZON_CHOICES, default='SHORT_TERM')
+    parent_goal = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='sub_goals')
     progress_mode = models.CharField(max_length=20, choices=PROGRESS_MODES, default='MILESTONES')
     progress_percentage = models.PositiveSmallIntegerField(
         default=0,
@@ -376,6 +383,40 @@ class LearningTopic(models.Model):
 
     def __str__(self):
         return f"[{'X' if self.is_completed else ' '}] {self.title}"
+
+
+class ActivityCheckIn(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='activity_checkins', null=True, blank=True)
+    date = models.DateField(default=timezone.localdate, db_index=True)
+    learning_item = models.ForeignKey(LearningItem, on_delete=models.CASCADE, null=True, blank=True, related_name='check_ins')
+    event_item = models.ForeignKey(EventItem, on_delete=models.CASCADE, null=True, blank=True, related_name='check_ins')
+    is_completed = models.BooleanField(default=True)
+    streak_count = models.PositiveIntegerField(default=1)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-date', '-created_at']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['user', 'learning_item', 'date'],
+                name='unique_user_learning_checkin_per_day',
+                condition=models.Q(learning_item__isnull=False)
+            ),
+            models.UniqueConstraint(
+                fields=['user', 'event_item', 'date'],
+                name='unique_user_event_checkin_per_day',
+                condition=models.Q(event_item__isnull=False)
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['user', 'date'], name='checkin_user_date_idx'),
+        ]
+
+    def __str__(self):
+        item_name = self.learning_item.title if self.learning_item else (self.event_item.title if self.event_item else "General")
+        return f"CheckIn [{self.date}] {item_name}: {'✓' if self.is_completed else '✗'} (Racha: {self.streak_count})"
 
 
 

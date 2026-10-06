@@ -3,7 +3,8 @@ import {
   Project, ProjectTask, TaskSubtask, TaskStatus, EventItem, EventStatus,
   PushSubscriptionDTO, PushSubscriptionKeys,
   LoginCredentials, RegisterData, AuthResponse, AuthSessionUser,
-  LearningItem, LearningTopic, LearningStatus, LearningFilterCriteria
+  LearningItem, LearningTopic, LearningStatus, LearningFilterCriteria,
+  ActivityCheckIn, ProgressMatrixRow, LinkedProjectSummary, LinkedLearningSummary, GoalProgressBreakdown
 } from '../domain/types';
 
 export const API_BASE = `${(import.meta.env.VITE_API_URL || '').replace(/\/$/, '')}/api/v1`;
@@ -184,6 +185,13 @@ export function transformGoalFromApi(raw: any): Goal {
     startDate: raw.start_date ?? raw.startDate ?? null,
     deadline: raw.deadline || null,
     reminderMinutes: raw.reminder_minutes ?? raw.reminderMinutes ?? 0,
+    timeHorizon: raw.time_horizon ?? raw.timeHorizon ?? 'SHORT_TERM',
+    parentGoalId: raw.parent_goal_id ?? raw.parentGoalId ?? (raw.parent_goal ? String(raw.parent_goal) : null),
+    parentGoalTitle: raw.parent_goal_title ?? raw.parentGoalTitle ?? null,
+    linkedProjects: raw.linked_projects ?? raw.linkedProjects ?? [],
+    linkedCourses: raw.linked_courses ?? raw.linkedCourses ?? [],
+    breakdown: raw.breakdown ?? null,
+    isAchieved100: Boolean(raw.is_achieved_100 ?? raw.isAchieved100 ?? (raw.progress_percentage >= 100)),
     progressMode: raw.progress_mode ?? raw.progressMode ?? 'MILESTONES',
     progressPercentage: typeof raw.progress_percentage === 'number'
       ? raw.progress_percentage
@@ -192,18 +200,22 @@ export function transformGoalFromApi(raw: any): Goal {
     milestones: Array.isArray(raw.milestones)
       ? raw.milestones.map(transformMilestoneFromApi)
       : [],
+    linkedLearningCount: raw.linked_learning_count ?? raw.linkedLearningCount ?? 0,
     createdAt: raw.created_at ?? raw.createdAt ?? new Date().toISOString(),
     updatedAt: raw.updated_at ?? raw.updatedAt ?? new Date().toISOString(),
   };
 }
 
-export async function fetchGoals(params?: { status?: string; category?: string }): Promise<Goal[]> {
+export async function fetchGoals(params?: { status?: string; category?: string; timeHorizon?: string }): Promise<Goal[]> {
   const queryParts: string[] = [];
   if (params?.status && params.status !== 'ALL') {
     queryParts.push(`status=${encodeURIComponent(params.status)}`);
   }
   if (params?.category && params.category !== 'ALL') {
     queryParts.push(`category=${encodeURIComponent(params.category)}`);
+  }
+  if (params?.timeHorizon && params.timeHorizon !== 'ALL') {
+    queryParts.push(`time_horizon=${encodeURIComponent(params.timeHorizon)}`);
   }
   const queryString = queryParts.length ? `?${queryParts.join('&')}` : '';
 
@@ -217,7 +229,7 @@ export async function fetchGoals(params?: { status?: string; category?: string }
 }
 
 export async function createGoalApi(goalData: Partial<Goal>): Promise<Goal> {
-  const payload = {
+  const payload: Record<string, any> = {
     title: goalData.title,
     description: goalData.description || '',
     category: goalData.category || 'General',
@@ -227,6 +239,8 @@ export async function createGoalApi(goalData: Partial<Goal>): Promise<Goal> {
     reminder_minutes: goalData.reminderMinutes !== undefined
       ? goalData.reminderMinutes
       : ((goalData as any).reminder_minutes !== undefined ? (goalData as any).reminder_minutes : 0),
+    time_horizon: goalData.timeHorizon || (goalData as any).time_horizon || 'SHORT_TERM',
+    parent_goal: goalData.parentGoalId || (goalData as any).parent_goal || null,
     progress_mode: goalData.progressMode || 'MILESTONES',
     progress_percentage: goalData.progressPercentage || 0,
     status: goalData.status || 'ACTIVE',
@@ -257,6 +271,8 @@ export async function updateGoalApi(id: string, goalData: Partial<Goal>): Promis
   if (goalData.deadline !== undefined) payload.deadline = goalData.deadline;
   if (goalData.reminderMinutes !== undefined) payload.reminder_minutes = goalData.reminderMinutes;
   if ((goalData as any).reminder_minutes !== undefined) payload.reminder_minutes = (goalData as any).reminder_minutes;
+  if (goalData.timeHorizon !== undefined) payload.time_horizon = goalData.timeHorizon;
+  if (goalData.parentGoalId !== undefined) payload.parent_goal = goalData.parentGoalId;
   if (goalData.progressMode !== undefined) payload.progress_mode = goalData.progressMode;
   if (goalData.progressPercentage !== undefined) payload.progress_percentage = goalData.progressPercentage;
   if (goalData.status !== undefined) payload.status = goalData.status;
@@ -758,7 +774,9 @@ export function transformLearningItemFromApi(raw: any): LearningItem {
     lastPointReached: raw.last_point_reached ?? raw.lastPointReached ?? '',
     takeawaysMarkdown: raw.takeaways_markdown ?? raw.takeawaysMarkdown ?? '',
     goalId: raw.goal ?? raw.goal_id ?? raw.goalId ?? null,
+    goalTitle: raw.goal_title ?? raw.goalTitle ?? null,
     projectId: raw.project ?? raw.project_id ?? raw.projectId ?? null,
+    projectTitle: raw.project_title ?? raw.projectTitle ?? null,
     lastActivityAt: raw.last_activity_at ?? raw.lastActivityAt ?? new Date().toISOString(),
     dormancyDays: raw.dormancy_days ?? raw.dormancyDays ?? 0,
     isDormant: Boolean(raw.is_dormant ?? raw.isDormant),
@@ -929,4 +947,105 @@ export async function logLearningActivityApi(learningId: string, logData: { incr
   };
 }
 
+// --- Activity Check-ins & Consistency API (Fase 1) ---
+
+export async function toggleCheckInApi(payload: {
+  learning_item_id?: string;
+  event_item_id?: string;
+  date?: string;
+}): Promise<{
+  status: string;
+  is_completed: boolean;
+  date: string;
+  streak_count: number;
+  item_id: string;
+  item_type: 'LEARNING' | 'EVENT';
+}> {
+  return await apiRequest('/check-ins/toggle/', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+// --- Progress & Habits Matrix API (Fase 2) ---
+
+export async function getProgressMatrixApi(weekOffset = 0, search?: string): Promise<{
+  active_week: { start_date: string; end_date: string };
+  rows: ProgressMatrixRow[];
+}> {
+  const query = new URLSearchParams();
+  if (weekOffset !== 0) query.set('week_offset', String(weekOffset));
+  if (search) query.set('search', search);
+  const qStr = query.toString() ? `?${query.toString()}` : '';
+  const raw = await apiRequest<{
+    active_week: { start_date: string; end_date: string };
+    rows: any[];
+  }>(`/progress-matrix/${qStr}`);
+
+  return {
+    active_week: raw.active_week,
+    rows: (raw.rows || []).map((r) => ({
+      id: r.id,
+      title: r.title,
+      itemType: r.item_type as 'LEARNING' | 'EVENT',
+      platformName: r.platform_name || undefined,
+      colorHex: r.color_hex,
+      currentStreak: r.current_streak,
+      weeklyAttendance: (r.weekly_attendance || []).map((w: any) => ({
+        date: w.date,
+        dayLetter: w.day_letter,
+        isToday: Boolean(w.is_today),
+        isChecked: Boolean(w.is_checked),
+      })),
+      progressPercentage: r.progress_percentage,
+      progressMode: r.progress_mode as 'TOPICS' | 'MANUAL',
+      currentUnit: r.current_unit,
+      totalUnits: r.total_units,
+      nextTopicTitle: r.next_topic_title || undefined,
+      isCheckedToday: Boolean(r.is_checked_today),
+    })),
+  };
+}
+
+export async function advanceMatrixItemApi(id: string): Promise<{
+  id: string;
+  advanced_type: string;
+  completed_topic_title?: string;
+  next_topic_title?: string;
+  current_unit?: number;
+  total_units?: number;
+  progress_percentage: number;
+}> {
+  return await apiRequest(`/progress-matrix/${id}/advance/`, {
+    method: 'POST',
+  });
+}
+
+// --- Connected Goals API (Fases 3 y 4) ---
+
+export async function linkGoalComponentsApi(
+  goalId: string,
+  projectIds: string[],
+  learningItemIds: string[]
+): Promise<Goal> {
+  const raw = await apiRequest<any>(`/goals/${goalId}/link-components/`, {
+    method: 'POST',
+    body: JSON.stringify({
+      project_ids: projectIds,
+      learning_item_ids: learningItemIds,
+    }),
+  });
+  return transformGoalFromApi(raw);
+}
+
+export async function concludeGoalApi(goalId: string): Promise<{
+  id: string;
+  status: string;
+  progress_percentage: number;
+  completed_at: string;
+}> {
+  return await apiRequest(`/goals/${goalId}/conclude/`, {
+    method: 'POST',
+  });
+}
 

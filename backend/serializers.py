@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.db import transaction
-from .models import ElementoAura, UserProfile, Notification, Goal, GoalMilestone, Project, ProjectTask, TaskSubtask, EventItem, PushSubscription, AuditLog, LearningItem, LearningTopic
+from .models import ElementoAura, UserProfile, Notification, Goal, GoalMilestone, Project, ProjectTask, TaskSubtask, EventItem, PushSubscription, AuditLog, LearningItem, LearningTopic, ActivityCheckIn
 
 class ElementoAuraSerializer(serializers.ModelSerializer):
     class Meta:
@@ -33,15 +33,74 @@ class GoalMilestoneSerializer(serializers.ModelSerializer):
 
 class GoalSerializer(serializers.ModelSerializer):
     milestones = GoalMilestoneSerializer(many=True, required=False)
+    linked_learning_count = serializers.SerializerMethodField()
+    parent_goal_id = serializers.UUIDField(source='parent_goal.id', read_only=True, allow_null=True)
+    parent_goal_title = serializers.CharField(source='parent_goal.title', read_only=True, default=None)
+    linked_projects = serializers.SerializerMethodField()
+    linked_courses = serializers.SerializerMethodField()
+    breakdown = serializers.SerializerMethodField()
+    is_achieved_100 = serializers.SerializerMethodField()
 
     class Meta:
         model = Goal
         fields = [
             'id', 'title', 'description', 'category', 'color_hex',
-            'start_date', 'deadline', 'reminder_minutes', 'progress_mode', 'progress_percentage', 'status',
-            'milestones', 'is_deleted', 'deleted_at', 'created_at', 'updated_at'
+            'start_date', 'deadline', 'reminder_minutes', 'time_horizon', 'parent_goal', 'parent_goal_id', 'parent_goal_title',
+            'progress_mode', 'progress_percentage', 'status',
+            'milestones', 'linked_learning_count', 'linked_projects', 'linked_courses', 'breakdown', 'is_achieved_100',
+            'is_deleted', 'deleted_at', 'created_at', 'updated_at'
         ]
-        read_only_fields = ['id', 'is_deleted', 'deleted_at', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'parent_goal_id', 'parent_goal_title', 'is_achieved_100', 'is_deleted', 'deleted_at', 'created_at', 'updated_at']
+
+    def get_linked_learning_count(self, obj):
+        return obj.learning_items.filter(is_deleted=False).count()
+
+    def get_linked_projects(self, obj):
+        projects = obj.projects.filter(is_deleted=False)
+        return [
+            {
+                'id': str(p.id),
+                'title': p.title,
+                'color_hex': p.color_hex,
+                'status': p.status,
+                'progress_percentage': p.progress_percentage,
+            }
+            for p in projects
+        ]
+
+    def get_linked_courses(self, obj):
+        courses = obj.learning_items.filter(is_deleted=False)
+        return [
+            {
+                'id': str(c.id),
+                'title': c.title,
+                'resource_type': c.resource_type,
+                'status': c.status,
+                'progress_percentage': c.progress_percentage,
+                'platform_url': c.platform_url,
+            }
+            for c in courses
+        ]
+
+    def get_breakdown(self, obj):
+        proj_list = list(obj.projects.filter(is_deleted=False))
+        course_list = list(obj.learning_items.filter(is_deleted=False))
+        milestones = list(obj.milestones.all())
+
+        projects_avg = round(sum(p.progress_percentage for p in proj_list) / len(proj_list)) if proj_list else None
+        courses_avg = round(sum(c.progress_percentage for c in course_list) / len(course_list)) if course_list else None
+        milestones_avg = round(sum(100 if m.is_completed else 0 for m in milestones) / len(milestones)) if milestones else None
+
+        present_components = [v for v in [projects_avg, courses_avg, milestones_avg] if v is not None]
+        return {
+            'projects_avg': projects_avg,
+            'courses_avg': courses_avg,
+            'milestones_avg': milestones_avg,
+            'present_count': len(present_components),
+        }
+
+    def get_is_achieved_100(self, obj):
+        return obj.progress_percentage >= 100
 
     def create(self, validated_data):
         with transaction.atomic():
@@ -346,6 +405,8 @@ class LearningItemSerializer(serializers.ModelSerializer):
     is_dormant = serializers.SerializerMethodField()
     topics_count = serializers.IntegerField(source='topics.count', read_only=True)
     completed_topics_count = serializers.SerializerMethodField()
+    goal_title = serializers.CharField(source='goal.title', read_only=True, default=None)
+    project_title = serializers.CharField(source='project.title', read_only=True, default=None)
 
     class Meta:
         model = LearningItem
@@ -354,7 +415,7 @@ class LearningItemSerializer(serializers.ModelSerializer):
             'platform_name', 'platform_url', 'color_hex', 'status',
             'progress_mode', 'progress_percentage', 'current_unit',
             'total_units', 'last_point_reached', 'takeaways_markdown',
-            'goal', 'project', 'last_activity_at', 'dormancy_alert_days',
+            'goal', 'goal_title', 'project', 'project_title', 'last_activity_at', 'dormancy_alert_days',
             'dormancy_days', 'is_dormant', 'topics_count', 'completed_topics_count',
             'created_at', 'updated_at'
         ]
@@ -383,5 +444,38 @@ class LearningItemDetailSerializer(LearningItemSerializer):
         fields = LearningItemSerializer.Meta.fields + ['topics']
 
 
+class ActivityCheckInSerializer(serializers.ModelSerializer):
+    learning_title = serializers.CharField(source='learning_item.title', read_only=True, default=None)
+    event_title = serializers.CharField(source='event_item.title', read_only=True, default=None)
+
+    class Meta:
+        model = ActivityCheckIn
+        fields = [
+            'id', 'user', 'date', 'learning_item', 'learning_title',
+            'event_item', 'event_title', 'is_completed', 'streak_count',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'user', 'created_at', 'updated_at']
 
 
+class WeeklyAttendanceDaySerializer(serializers.Serializer):
+    date = serializers.CharField()
+    day_letter = serializers.CharField()
+    is_today = serializers.BooleanField()
+    is_checked = serializers.BooleanField()
+
+
+class ProgressMatrixRowSerializer(serializers.Serializer):
+    id = serializers.CharField()
+    title = serializers.CharField()
+    item_type = serializers.CharField()  # 'LEARNING' | 'EVENT'
+    platform_name = serializers.CharField(allow_null=True, required=False)
+    color_hex = serializers.CharField()
+    current_streak = serializers.IntegerField()
+    is_checked_today = serializers.BooleanField()
+    progress_mode = serializers.CharField()  # 'TOPICS' | 'MANUAL'
+    progress_percentage = serializers.IntegerField()
+    current_unit = serializers.IntegerField(allow_null=True, required=False)
+    total_units = serializers.IntegerField(allow_null=True, required=False)
+    next_topic_title = serializers.CharField(allow_null=True, required=False)
+    weekly_attendance = WeeklyAttendanceDaySerializer(many=True)

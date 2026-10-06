@@ -1,8 +1,8 @@
-# Implementation Plan: Navigation Layout, Objetivos, Proyectos, Eventos, Web Push (PWA) & Auth Welcome Screen
+# Implementation Plan: Navigation Layout & Core Productivity Suite (Fases 1 a 4)
 
-**Branch**: `001-navigation-layout` | **Date**: 2026-09-23 | **Spec**: [spec.md](file:///d:/Sistemas/Proyectos/Gestor_tareas/specs/001-navigation-layout/spec.md)
+**Branch**: `001-navigation-layout` | **Date**: 2026-10-05 | **Spec**: [spec.md](file:///d:/Sistemas/Proyectos/Gestor_tareas/specs/001-navigation-layout/spec.md)
 
-**Input**: Feature specification from `/specs/001-navigation-layout/spec.md` including Navbar, TabBar, Objetivos, Proyectos (Hub, Workspace Kanban, Tasks, Subtasks), Eventos (Chronological Agenda), Native Web Push Notifications (PWA), and the newly clarified **Welcome & Authentication Screen (Inicio de Sesión y Registro con pantalla de bienvenida dividida en 2 partes)**.
+**Input**: Feature specification from `/specs/001-navigation-layout/spec.md` including Navbar, TabBar, Objetivos, Proyectos, Eventos, Aprendizaje, Web Push (PWA), Welcome & Auth Screen, and all clarified requirements for **Fases 1 a 4**: (1) Botón "Listo Hoy" y Registro de Constancia, (2) Tabla / Matriz de Progreso y Hábitos, (3) Rediseño de Objetivos (Corto vs Largo Plazo con acento dorado), y (4) Conexión Real de Objetivos con Proyectos y Aprendizaje.
 
 ## Summary
 
@@ -47,6 +47,28 @@ The Navigation Layout & Workspaces feature establishes the core visual shell and
    - **Continuity Slide-over Drawer**: Right-edge panel with direct 1-click external URL link, "Último punto alcanzado" bookmark, Markdown Key Takeaways notes, and interactive topic checklist.
    - **Calendar Study Sessions**: Action "Agendar sesión de estudio" generating a calendar `EventItem` with resource color, platform link, and 15-minute advance Web Push reminder.
    - **Flexible Goal & Project Linking**: Optional association with existing Goals or Projects.
+9. **Fase 1: Botón "Listo Hoy" y Registro de Constancia**:
+   - **Non-Destructive Daily Check-in**: Daily session check-in button (`[ ✓ Listo hoy ]`) on "Hoy" event cards and weekly calendar columns without prematurely closing or canceling multi-day events or ongoing courses.
+   - **Instant Reversible Toggle (<50ms)**: Single-click toggle immediately records attendance with emerald visual feedback (`[ ✓ Realizado hoy ]`) and updates streak in real time. Clicking again smoothly reverts check-in without confirmation dialogs.
+   - **Dual Consistency Mode**: Configurable streak tracking between consecutive daily streaks (Streak 🔥) per individual course/event or weekly attendance frequency targets (days completed per week).
+   - **Clear Visual Hierarchy**: Prominent primary button for daily check-in; concluding the entire course/event permanently is maintained as an explicit secondary action in details/menus.
+10. **Fase 2: Tabla / Matriz de Progreso y Hábitos**:
+   - **Centralized Habits & Progress View**: Embedded in the "Aprendizaje" tab via view switcher (`[ Kanban ] | [ Lista ] | [ 📊 Matriz de Progreso ]`) with direct jump button from the weekly calendar header.
+   - **Weekly Attendance Grid (Lun-Dom)**: Displays Monday-Sunday attendance checks with today prominently highlighted and week navigation stepper (`←` `→`).
+   - **Smart 1-Click Content Advance (`[ + Avanzar tema ]`)**: Completes the next pending modular topic or increments unit by +1 in a single click without modals, recalculating progress instantly.
+   - **Priority Sorting & Real-Time Filter**: Items pending check-in today pinned to top, followed by completed items ordered by active streak length; instant title search.
+11. **Fase 3: Rediseño de la Sección de Objetivos (Corto vs Largo Plazo)**:
+   - **Horizon Classification**: `time_horizon` (`SHORT_TERM` vs `LONG_TERM`) with smart deadline suggestion ($\le 30$ days vs $> 30$ days) and manual override.
+   - **Filter Pills & Contextual Header Metrics**: Controls bar pills (`[ Todos ]`, `[ ⚡ Corto Plazo ]`, `[ 🏔️ Largo Plazo ]`) with real-time dynamic recalculation of stats (Activas, Cumplidas, Avance Promedio) and micro-breakdown on "Todos".
+   - **Hierarchical Linking**: Optional parent goal link (`parent_goal`) associating tactical short-term goals to strategic long-term objectives.
+   - **Visual Distinction & Golden Glow**: Cyan/emerald badges for short-term goals; premium golden/amber badge (`🏔️ Largo Plazo`), amber/gold border accent (`border-amber-400/40`), and subtle warm ambient gradient glow for long-term strategic goals.
+12. **Fase 4: Conexión Real de Objetivos con Proyectos y Aprendizaje**:
+   - **Equitable Dynamic Progress Engine**: Automatically computes goal progress as the unweighted mean across all present components:
+     $$P_{\text{goal}} = \text{round}\left( \frac{\bar{P}_{\text{projects}} + \bar{P}_{\text{courses}} + \bar{P}_{\text{milestones}}}{N_{\text{present}}} \right)$$
+   - **Collapsible Accordions with Deep Links**: Expandable sections in `GoalCard` for `[ 🚀 Proyectos (X) ▼ ]` and `[ 📚 Cursos (Y) ▼ ]` with individual progress bars and 1-click jumps to Kanban boards or learning resources.
+   - **Multi-Factor Breakdown Chips**: Compact indicators below the consolidated progress bar (`[ 🚀 Proyectos: X% ]`, `[ 📚 Aprendizaje: Y% ]`, `[ 📌 Hitos: Z% ]`).
+   - **Bidirectional Linkage**: Manage associations from `GoalDrawer` (multi-select pickers) as well as from individual Project and Learning drawers.
+   - **100% Celebration & Lifecycle Confirmation**: Upon reaching 100%, displays celebratory achievement banner (`"🎉 ¡Meta alcanzada! Concluir y archivar objetivo"`), allowing user confirmation before transitioning status to `COMPLETED`.
 
 The implementation strictly enforces a **Layered Architecture (Arquitectura de Capas)** across both backend and frontend to ensure high maintainability, testability, separation of concerns, and ultra-fast UI responsiveness.
 
@@ -84,9 +106,9 @@ The implementation strictly enforces a **Layered Architecture (Arquitectura de C
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-1. **Colorido y Altamente Visual**: The active navigation tabs, notification badge counts, and brand elements MUST utilize vibrant, cohesive HSL-based palettes with high visual contrast. -> **PASS**
-2. **Rendimiento Ultra Rápido**: Navigating tabs MUST perform locally in the UI in under 100ms using state management (React Context) and optimized rendering. Backend APIs MUST support caching. -> **PASS**
-3. **Modularidad Estricta (Arquitectura de Capas)**: Clear boundaries between Presentation, Service/State, Serialization/Client, and Persistence/Domain layers across both backend and frontend. -> **PASS**
+1. **Colorido y Altamente Visual**: Long-term strategic goals featured with premium golden/amber badge (`🏔️ Largo Plazo`), amber/gold border accent (`border-amber-400/40`), and subtle warm ambient glow; short-term goals in cyan/emerald; daily check-in feedback in emerald; learning resources in electric violet (`#8B5CF6`). All visual states maintain accessible contrast $\ge 4.5:1$. -> **PASS**
+2. **Rendimiento Ultra Rápido**: Daily check-in toggle and matrix content advancement resolve locally in $<50$ms via optimistic state updates in `AuraState.tsx` before async background sync. Tab switching under $100$ms (SC-001). Backend queries use `select_related` and `prefetch_related` with sub-millisecond response times. -> **PASS**
+3. **Modularidad Estricta (Arquitectura de Capas)**: Business logic for streak calculations, matrix aggregation, and equitable multi-factor goal progress calculation resides exclusively in `services.py` (backend) and domain helpers (frontend). API views and UI components remain strictly decoupled from data persistence. -> **PASS**
 
 ---
 
@@ -225,6 +247,12 @@ src/
 │   │   ├── EventTimelineBlock.tsx  # Section container for each time block (Hoy, Esta semana, Próximos, Pasados)
 │   │   ├── EventCard.tsx           # Visual card with time span, location/link, category, and quick actions
 │   │   └── EventDrawer.tsx         # Slide-over drawer for creating/editing event details
+│   ├── learning/
+│   │   ├── LearningView.tsx            # Learning Hub container with mode switcher (Kanban, List, Matrix)
+│   │   ├── LearningCard.tsx            # Visual course card with status, progress bar, and external launcher
+│   │   ├── LearningDrawer.tsx          # Continuity drawer with syllabus checklist and notes
+│   │   └── ActivityProgressMatrix.tsx  # Centralized habits & syllabus progress matrix table (Fase 2)
+│   ├── WeekExpandedView.tsx # Expanded weekly calendar view with daily check-ins and matrix shortcut
 │   ├── CalendarGrid.tsx     # Calendar view displaying synchronized goal & task deadlines and events
 │   └── ElementoModal.tsx    # Creation/editing modal for calendar activities
 ├── App.tsx              # Application shell integration
@@ -258,15 +286,36 @@ src/
   - `UserSessionSerializer` for returning authenticated session user details.
 
 #### [MODIFY] [models.py](file:///d:/Sistemas/Proyectos/Gestor_tareas/backend/models.py)
+- Expand `Goal`:
+  - Add `time_horizon = models.CharField(max_length=20, choices=[('SHORT_TERM', 'Corto Plazo'), ('LONG_TERM', 'Largo Plazo')], default='SHORT_TERM')` (Fase 3).
+  - Add `parent_goal = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='sub_goals')` (Fase 3).
 - Add `LearningItem`: learning resource with `resource_type`, `platform_url`, `status`, `progress_mode`, `progress_percentage`, `current_unit`, `total_units`, `last_point_reached`, `takeaways_markdown`, `last_activity_at`, `dormancy_alert_days`, and optional links to `Goal` and `Project`.
 - Add `LearningTopic`: checkable modular topics/chapters within a `LearningItem`.
+- Add `ActivityCheckIn` (Fase 1):
+  - Fields: `user` (FK User), `date` (DateField), `learning_item` (FK LearningItem, null), `event_item` (FK EventItem, null), `is_completed` (BooleanField, default=True), `streak_count` (PositiveIntegerField, default=1), `created_at`, `updated_at`.
+  - Unique constraints: `(user, learning_item, date)` and `(user, event_item, date)`.
 
 #### [MODIFY] [serializers.py](file:///d:/Sistemas/Proyectos/Gestor_tareas/backend/serializers.py)
 - Add `LearningTopicSerializer`.
 - Add `LearningItemSerializer` (list and card metrics) & `LearningItemDetailSerializer` (nested topics, dormancy days calculation).
+- Add `ActivityCheckInSerializer` (Fase 1): validates toggle requests, serializes attendance status, streak length, and date.
+- Add `ProgressMatrixRowSerializer` (Fase 2): serializes consolidated learning & event rows with weekly Monday-Sunday checks, current streak, pending today flag, and unit/topic metrics.
+- Update `GoalSerializer` (Fases 3 y 4):
+  - Includes `time_horizon`, `parent_goal_id`, `parent_goal_title`.
+  - Nested `linked_projects` summary (`id`, `title`, `color_hex`, `status`, `progress_percentage`).
+  - Nested `linked_courses` summary (`id`, `title`, `resource_type`, `status`, `progress_percentage`, `platform_url`).
+  - Dynamic `breakdown` dictionary (`projects_avg`, `courses_avg`, `milestones_avg`, `present_count`).
+  - Flag `is_achieved_100` for celebration triggering.
 
 #### [MODIFY] [services.py](file:///d:/Sistemas/Proyectos/Gestor_tareas/backend/services.py)
-- `calculate_goal_progress(goal)`
+- `toggle_activity_checkin(user, date, learning_item_id=None, event_item_id=None)` (Fase 1): Reversible toggle creating or flipping `ActivityCheckIn` without touching parent lifecycle state.
+- `calculate_streak(user, learning_item=None, event_item=None, mode='CONSECUTIVE')` (Fase 1): Calculates consecutive active attendance days or weekly target achievement.
+- `get_progress_matrix_data(user, week_offset=0, search_query='')` (Fase 2): Consolidates active learning items and calendar study events into structured rows with 7-day attendance marks and priority ordering.
+- `advance_progress_matrix_item(user, item_id)` (Fase 2): Completes next pending topic in order or increments unit by +1 in a single call.
+- `calculate_goal_progress(goal)` (Fase 4): Updated to calculate the equitable unweighted mean across all present components:
+  $$P_{\text{goal}} = \text{round}\left( \frac{\bar{P}_{\text{projects}} + \bar{P}_{\text{courses}} + \bar{P}_{\text{milestones}}}{N_{\text{present}}} \right)$$
+- `link_goal_components(goal, project_ids, learning_item_ids)` (Fase 4): Bidirectional association of Projects and Learning resources to a Goal.
+- `conclude_goal(goal)` (Fase 4): Sets goal status to `COMPLETED` and marks completion timestamp upon user confirmation from celebration banner.
 - `calculate_project_progress(project)`: Computes `(completed_tasks / total_tasks) * 100`.
 - `calculate_learning_progress(item)`: Computes percentage based on topics completed or units/pages read.
 - `check_learning_dormancy(user)`: Evaluates inactive resources in `IN_PROGRESS` state ($\ge 5$ days) and triggers Web Push alert.
@@ -280,6 +329,12 @@ src/
 
 #### [MODIFY] [views.py](file:///d:/Sistemas/Proyectos/Gestor_tareas/backend/views.py)
 - Endpoints for:
+  - `POST /api/v1/check-ins/toggle/` (`CheckInToggleAPI`, Fase 1)
+  - `GET /api/v1/progress-matrix/` (`ProgressMatrixAPI`, Fase 2)
+  - `POST /api/v1/progress-matrix/{id}/advance/` (`ProgressMatrixAdvanceAPI`, Fase 2)
+  - `GET /api/v1/goals/?time_horizon={SHORT_TERM|LONG_TERM}` (Fase 3)
+  - `POST /api/v1/goals/{id}/link-components/` (`GoalLinkComponentsAPI`, Fase 4)
+  - `POST /api/v1/goals/{id}/conclude/` (`GoalConcludeAPI`, Fase 4)
   - `GET/POST /api/v1/projects/`, `GET/PUT/DELETE /api/v1/projects/{id}/`
   - `GET/POST /api/v1/projects/{id}/tasks/`, `PUT/PATCH/DELETE /api/v1/tasks/{id}/`, `PATCH /api/v1/tasks/{id}/status/`
   - `PATCH /api/v1/subtasks/{id}/toggle/`
@@ -298,6 +353,8 @@ src/
   - `GET /api/v1/auth/session/` (`SessionAPI`: check persistent session validity)
 
 #### [MODIFY] [urls.py](file:///d:/Sistemas/Proyectos/Gestor_tareas/backend/urls.py)
+- Register Check-in endpoints under `/api/v1/check-ins/` (Fase 1).
+- Register Progress Matrix endpoints under `/api/v1/progress-matrix/` (Fase 2).
 - Register Learning endpoints under `/api/v1/learning-items/`.
 - Register Web Push endpoints under `/api/v1/notifications/push/`.
 - Register Authentication endpoints under `/api/v1/auth/`.
@@ -310,18 +367,25 @@ src/
 - Add learning domain types: `ResourceType`, `LearningStatus`, `LearningProgressMode`, `LearningTopic`, `LearningItem`, `LearningFilterCriteria`.
 - Add Web Push domain types: `PushSubscriptionKeys`, `PushSubscriptionDTO`, `WebPushStatus`.
 - Add Auth domain types: `AuthMode` (*'LOGIN'* | *'REGISTER'*), `AuthState` (*user, isAuthenticated, hasExistingAccount, isWelcomeOnly*), `LoginCredentials`, `RegisterData`.
+- Add Constancia & Habits domain types (Fases 1 y 2): `StreakMode`, `ActivityCheckIn`, `WeeklyAttendanceDay`, `ProgressMatrixRow`.
+- Add Goal Extension domain types (Fases 3 y 4): `TimeHorizon`, `GoalFilterHorizon`, `LinkedProjectSummary`, `LinkedLearningSummary`, `GoalProgressBreakdown`, updated `Goal` interface.
 
 #### [MODIFY] [AuraState.tsx](file:///d:/Sistemas/Proyectos/Gestor_tareas/src/context/AuraState.tsx)
 - Expose state and handlers for projects collection, active project workspace, project filtering, task creation, task status movement (Kanban), subtask toggling, and project/task drawer toggles.
 - Expose state and handlers for events collection, time-block classification ("Hoy", "Esta semana", "Próximos", "Pasados"), category filters, quick status toggling (Completado/Cancelado), and event drawer visibility.
 - Expose state and handlers for learning items: `learningItems`, `learningFilter`, `setLearningFilter`, `createLearningItem`, `updateLearningItem`, `deleteLearningItem`, `toggleLearningTopic`, `scheduleStudySession`.
 - Expose state and handlers for authentication: `currentUser`, `isAuthenticated`, `isWelcomeOnly`, `login(creds)`, `register(data)`, `enterApp()`, `logout()`, `switchAccount()`.
+- Expose state and handlers for check-ins & habits (Fase 1): `checkIns`, `streakMode`, `toggleCheckIn(itemId, itemType, date)`, `getStreak(itemId)`.
+- Expose state and handlers for progress matrix (Fase 2): `progressMatrixRows`, `matrixWeekOffset`, `matrixSearch`, `advanceMatrixItem(id)`.
+- Expose state and handlers for goals horizons & connected components (Fases 3 y 4): `goalHorizonFilter`, `setGoalHorizonFilter`, `linkGoalComponents(goalId, projectIds, learningItemIds)`, `concludeGoal(goalId)`.
 
 #### [MODIFY] [api.ts](file:///d:/Sistemas/Proyectos/Gestor_tareas/src/services/api.ts)
 - Add API client methods for Projects, Tasks, Subtasks, and Events (`getEvents`, `createEvent`, `updateEvent`, `updateEventStatus`, `deleteEvent`).
 - Add Learning API client methods: `getLearningItems`, `createLearningItem`, `updateLearningItem`, `deleteLearningItem`, `toggleLearningTopic`, `scheduleStudySession`, `logLearningActivity`.
 - Add Web Push client methods: `getVapidPublicKey()`, `subscribePush(sub)`, `unsubscribePush(endpoint)`, `testPushNotification(payload)`.
 - Add Auth client methods: `login(creds)`, `register(data)`, `logout()`, `getSession()`.
+- Add Check-ins & Matrix client methods: `toggleCheckIn(payload)`, `getProgressMatrix(weekOffset, search)`, `advanceMatrixItem(id)`.
+- Add Goal Connected & Horizon methods: `linkGoalComponents(id, data)`, `concludeGoal(id)`.
 
 #### [MODIFY] [TabBar.tsx](file:///d:/Sistemas/Proyectos/Gestor_tareas/src/components/TabBar.tsx)
 - Add 5th navigation tab: `APRENDIZAJE` ("Aprendizaje", icon: `📚`, activeColor: `bg-purple-500 text-slate-950 shadow-purple-500/25`).
@@ -403,9 +467,39 @@ src/
 
 #### [NEW] [EventCard.tsx](file:///d:/Sistemas/Proyectos/Gestor_tareas/src/components/events/EventCard.tsx)
 - Interactive event card displaying category color badge, time span, location or meeting link button, description snippet, and quick-actions (*Completar, Cancelar, Editar*).
+- **Fase 1 Check-in**: Displays prominent primary action `[ ✓ Listo hoy ]` (or `[ ✓ Realizado hoy ]` in emerald) with instant single-click toggle and streak counter (🔥), keeping the parent event active for future days. Concluding the multi-day event completely is kept as a secondary option (*"Concluir evento definitivamente"*).
 
 #### [NEW] [EventDrawer.tsx](file:///d:/Sistemas/Proyectos/Gestor_tareas/src/components/events/EventDrawer.tsx)
 - Slide-over drawer panel for creating and editing event details, time pickers, category theme, virtual links, and reminder lead times.
+
+#### [NEW] [ActivityProgressMatrix.tsx](file:///d:/Sistemas/Proyectos/Gestor_tareas/src/components/learning/ActivityProgressMatrix.tsx) (Fase 2)
+- Centralized tabular habits and progress matrix consolidating active Learning items and scheduled study events.
+- Columns: Activity name & platform, active streak counter (🔥), weekly attendance matrix (Lun-Dom with today highlighted and week navigation stepper `←` `→`), content progression bar with unit/topic indicators, and quick actions (`[ ✓ Listo hoy ]` and `[ + Avanzar tema ]`).
+- `[ + Avanzar tema ]`: 1-click completion of next incomplete topic or +1 unit increment without modal dialogs.
+- Smart sorting: items pending check-in today are pinned to the top, followed by completed items ordered by streak length; real-time search filter.
+
+#### [MODIFY] [LearningView.tsx](file:///d:/Sistemas/Proyectos/Gestor_tareas/src/components/learning/LearningView.tsx)
+- Add view mode selector: `[ Kanban ] | [ Lista ] | [ 📊 Matriz de Progreso ]` to toggle between status columns, compact list, and the new `ActivityProgressMatrix`.
+
+#### [MODIFY] [WeekExpandedView.tsx](file:///d:/Sistemas/Proyectos/Gestor_tareas/src/components/WeekExpandedView.tsx)
+- Add direct single-click check-in action on study event cards in daily columns (Fase 1).
+- Add header shortcut action button `[ 📊 Ver Tabla de Progreso ]` triggering instant tab switch to Aprendizaje with the progress matrix active (Fase 2).
+
+#### [MODIFY] [GoalsView.tsx](file:///d:/Sistemas/Proyectos/Gestor_tareas/src/components/goals/GoalsView.tsx) (Fase 3)
+- Add time horizon filter pills: `[ Todos ]`, `[ ⚡ Corto Plazo ]`, `[ 🏔️ Largo Plazo ]`.
+- Header statistics cards (Activas, Cumplidas, Avance Promedio) dynamically recalculate according to the selected horizon filter.
+- In "Todos", display a subtle micro-breakdown count: `⚡ X corto plazo · 🏔️ Y largo plazo`.
+
+#### [MODIFY] [GoalCard.tsx](file:///d:/Sistemas/Proyectos/Gestor_tareas/src/components/goals/GoalCard.tsx) (Fases 3 y 4)
+- Time horizon badge: cyan/emerald for short-term; golden/amber badge (`🏔️ Largo Plazo`), golden border accent (`border-amber-400/40`), and subtle warm ambient gradient glow for long-term goals.
+- Multi-factor progress display: consolidated progress bar with compact breakdown chips below: `[ 🚀 Proyectos: X% ]`, `[ 📚 Aprendizaje: Y% ]`, `[ 📌 Hitos: Z% ]`.
+- Collapsible accordions: `[ 🚀 Proyectos (X) ▼ ]` and `[ 📚 Cursos (Y) ▼ ]` with individual progress bars and 1-click deep links jumping straight to Kanban boards or learning resources.
+- 100% Celebration Banner: Upon reaching 100%, displays celebratory banner `"🎉 ¡Meta alcanzada al 100%! [ Concluir y archivar objetivo ]"` requiring explicit user confirmation before archiving.
+
+#### [MODIFY] [GoalDrawer.tsx](file:///d:/Sistemas/Proyectos/Gestor_tareas/src/components/goals/GoalDrawer.tsx) (Fases 3 y 4)
+- Time horizon selector (`[ ⚡ Corto Plazo ]` / `[ 🏔️ Largo Plazo ]`) with smart automatic suggestion ($\le 30$ days vs $> 30$ days) based on deadline.
+- Optional parent goal dropdown for short-term goals.
+- Bidirectional component multi-select pickers to link or unlink Projects and Learning items directly within the drawer.
 
 #### [MODIFY] [App.tsx](file:///d:/Sistemas/Proyectos/Gestor_tareas/src/App.tsx)
 - If user is not authenticated or in welcome screen mode, render `AuthView`.

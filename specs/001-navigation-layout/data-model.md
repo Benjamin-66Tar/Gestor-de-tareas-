@@ -46,7 +46,9 @@ Represents a user goal managed in the "Objetivos" section.
 | `start_date` | DateTimeField | Nullable, Blank | Range start date for spanning multiple days. |
 | `deadline` | DateTimeField | Nullable, Blank, DB Index | Target completion date/time. |
 | `reminder_minutes` | PositiveIntegerField | Nullable, Blank, Default: 0 | Alert lead time in minutes (0=exact, 15, 60, 1440). |
-| `progress_mode` | CharField | Choices: `['MANUAL', 'MILESTONES']`, Default: `'MILESTONES'` | Calculation mode for progress. |
+| `time_horizon` | CharField | Choices: `['SHORT_TERM', 'LONG_TERM']`, Default: `'SHORT_TERM'` | Time horizon classification (Corto Plazo vs Largo Plazo). |
+| `parent_goal` | ForeignKey (Goal) | Nullable, Blank, On Delete: SET_NULL, Related Name: `'sub_goals'` | Optional parent Long-Term goal. |
+| `progress_mode` | CharField | Choices: `['MANUAL', 'MILESTONES', 'CONNECTED']`, Default: `'MILESTONES'` | Calculation mode for progress. |
 | `progress_percentage` | PositiveSmallIntegerField | Default: 0, Min: 0, Max: 100 | Current calculated or manual progress (0-100%). |
 | `status` | CharField | Choices: `['ACTIVE', 'COMPLETED', 'PAUSED']`, Default: `'ACTIVE'` | Current status of the goal. |
 | `created_at` | DateTimeField | Auto Now Add | Timestamp of creation. |
@@ -198,6 +200,23 @@ Represents a checkable topic, chapter, or module within a `LearningItem`.
 
 ---
 
+### 10. `ActivityCheckIn` (Registro Diario de Constancia)
+Represents a daily attendance check-in for a learning course or calendar study event to build habit streaks without closing parent activities.
+
+| Field Name | Type | Constraints | Description |
+|---|---|---|---|
+| `id` | UUIDField | Primary Key, default=uuid4 | Unique check-in identifier. |
+| `user` | ForeignKey (User) | On Delete: Cascade, Related Name: `'activity_checkins'` | User who logged attendance. |
+| `date` | DateField | Default: timezone.localdate, DB Index | Target date of attendance. |
+| `learning_item` | ForeignKey (LearningItem) | Nullable, Blank, On Delete: CASCADE, Related Name: `'check_ins'` | Associated learning course/book. |
+| `event_item` | ForeignKey (EventItem) | Nullable, Blank, On Delete: CASCADE, Related Name: `'check_ins'` | Associated calendar event. |
+| `is_completed` | BooleanField | Default: True | Active state of the daily check-in. |
+| `streak_count` | PositiveIntegerField | Default: 1 | Current consecutive streak calculated at check-in time. |
+| `created_at` | DateTimeField | Auto Now Add | Timestamp when check-in was recorded. |
+| `updated_at` | DateTimeField | Auto Now | Timestamp of last modification. |
+
+---
+
 ## Validation & Business Rules
 
 1. **Progress Range**: `progress_percentage` must always be between 0 and 100 inclusive.
@@ -243,6 +262,23 @@ Represents a checkable topic, chapter, or module within a `LearningItem`.
     - Dormant items trigger an in-app notification and Web Push alert once per 48h cycle.
 17. **Calendar Study Block Projection**:
     - Scheduling a study session creates an `EventItem` with `category='Estudio'`, start/end time, meeting URL pointing to `platform_url`, and `reminder_minutes=15`.
+18. **Non-Destructive Daily Check-in & Reversibility (Fase 1)**:
+    - Toggling `ActivityCheckIn` for today's date MUST NOT alter the parent `EventItem` status or `LearningItem` status.
+    - Toggling is reversible: re-clicking removes the record or sets `is_completed=False` and adjusts the active streak counter.
+19. **Dual Consistency Streak Engine (Fase 1)**:
+    - **Consecutive streak (🔥)**: Evaluates unbroken preceding days where check-ins occurred.
+    - **Weekly Frequency Target**: Sum of unique checked-in days within the current Monday-Sunday calendar week.
+20. **Goal Horizon & Smart Deadline Suggestion (Fase 3)**:
+    - If `deadline` is $\le 30$ days from creation/update date, suggest `time_horizon = 'SHORT_TERM'`.
+    - If `deadline` is $> 30$ days from creation/update date, suggest `time_horizon = 'LONG_TERM'`.
+    - The user can explicitly override this suggestion at any time.
+21. **Equitable Multi-Component Goal Progress (Fase 4)**:
+    - A Goal calculates its progress percentage as the unweighted mean across all present categories:
+      $$\text{Progress} = \text{round}\left( \frac{\bar{P}_{\text{projects}} + \bar{P}_{\text{learning}} + \bar{P}_{\text{milestones}}}{N_{\text{present}}} \right)$$
+    - Categories with 0 linked items are omitted from $N_{\text{present}}$ without penalty.
+22. **100% Celebration & Explicit Conclusion (Fase 4)**:
+    - When a Goal reaches 100% progress, it displays a celebratory banner and button `"Concluir y archivar objetivo"`.
+    - The goal remains in `ACTIVE` state until the user explicitly confirms the conclusion.
 
 ---
 
@@ -255,7 +291,9 @@ export type ActiveTab = 'CALENDARIO' | 'OBJETIVOS' | 'PROYECTOS' | 'EVENTOS' | '
 
 export type GoalStatus = 'ACTIVE' | 'COMPLETED' | 'PAUSED';
 
-export type ProgressMode = 'MANUAL' | 'MILESTONES';
+export type TimeHorizon = 'SHORT_TERM' | 'LONG_TERM';
+
+export type ProgressMode = 'MANUAL' | 'MILESTONES' | 'CONNECTED';
 
 export type ViewMode = 'CARDS' | 'LIST';
 
@@ -285,6 +323,30 @@ export interface GoalMilestone {
   order: number;
 }
 
+export interface LinkedProjectSummary {
+  id: string;
+  title: string;
+  colorHex: string;
+  status: string;
+  progressPercentage: number;
+}
+
+export interface LinkedLearningSummary {
+  id: string;
+  title: string;
+  resourceType: string;
+  status: string;
+  progressPercentage: number;
+  platformUrl?: string | null;
+}
+
+export interface GoalProgressBreakdown {
+  projectsAvg?: number | null;
+  coursesAvg?: number | null;
+  milestonesAvg?: number | null;
+  presentCount: number;
+}
+
 export interface Goal {
   id: string;
   title: string;
@@ -294,10 +356,17 @@ export interface Goal {
   startDate?: string | null;
   deadline?: string | null;
   reminderMinutes?: number;
+  timeHorizon: TimeHorizon;
+  parentGoalId?: string | null;
+  parentGoalTitle?: string | null;
   progressMode: ProgressMode;
   progressPercentage: number; // 0 to 100
   status: GoalStatus;
   milestones: GoalMilestone[];
+  linkedProjects?: LinkedProjectSummary[];
+  linkedCourses?: LinkedLearningSummary[];
+  breakdown?: GoalProgressBreakdown;
+  isAchieved100?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -305,6 +374,7 @@ export interface Goal {
 export interface GoalFilterCriteria {
   status: 'ALL' | GoalStatus;
   category: string; // 'ALL' or specific category
+  timeHorizon: 'ALL' | TimeHorizon;
   searchQuery: string;
 }
 
@@ -486,5 +556,45 @@ export interface LearningFilterCriteria {
   status: 'ALL' | LearningStatus;
   resourceType: 'ALL' | ResourceType;
   searchQuery: string;
+}
+
+// --- Constancia y Matriz de Progreso (Fases 1 y 2) ---
+
+export type StreakMode = 'CONSECUTIVE' | 'WEEKLY_TARGET';
+
+export interface ActivityCheckIn {
+  id: string;
+  userId?: string;
+  date: string; // YYYY-MM-DD
+  learningItemId?: string | null;
+  eventItemId?: string | null;
+  isCompleted: boolean;
+  streakCount: number;
+  createdAt?: string;
+}
+
+export interface WeeklyAttendanceDay {
+  date: string; // YYYY-MM-DD
+  dayLetter: string; // 'L', 'M', 'X', 'J', 'V', 'S', 'D'
+  isToday: boolean;
+  isChecked: boolean;
+}
+
+export interface ProgressMatrixRow {
+  id: string;
+  title: string;
+  itemType: 'LEARNING' | 'EVENT';
+  platformName?: string;
+  colorHex: string;
+  currentStreak: number;
+  weeklyAttendance: WeeklyAttendanceDay[];
+  progressPercentage: number;
+  progressMode: 'TOPICS' | 'MANUAL';
+  currentUnit?: number;
+  totalUnits?: number;
+  nextTopicTitle?: string;
+  isCheckedToday: boolean;
+  rawLearningItem?: LearningItem;
+  rawEventItem?: EventItem;
 }
 ```

@@ -1,4 +1,4 @@
-import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
+import React, { createContext, useState, useContext, useEffect, useCallback, useMemo } from 'react';
 import {
   ElementoTipo,
   PlanElemento,
@@ -23,6 +23,10 @@ import {
   AuthSessionUser,
   LearningItem,
   LearningFilterCriteria,
+  ActivityCheckIn,
+  ProgressMatrixRow,
+  GoalFilterHorizon,
+  TimeHorizon,
 } from '../domain/types';
 import { getGridDateRange } from '../utils/dateUtils';
 import * as api from '../services/api';
@@ -77,11 +81,16 @@ interface AuraContextProps {
   setDrawerOpen: (open: boolean) => void;
   editingGoal: Goal | null;
   setEditingGoal: (goal: Goal | null) => void;
+  goalHorizonFilter: GoalFilterHorizon;
+  setGoalHorizonFilter: (filter: GoalFilterHorizon) => void;
+  goalMetrics: { total: number; active: number; completed: number; avgProgress: number; shortTerm: number; longTerm: number };
   fetchGoalsList: () => Promise<void>;
   createGoal: (goalData: Partial<Goal>) => Promise<boolean>;
   updateGoal: (id: string, goalData: Partial<Goal>) => Promise<boolean>;
   deleteGoal: (id: string) => Promise<boolean>;
   toggleMilestone: (goalId: string, milestoneId: string) => Promise<boolean>;
+  linkGoalComponents: (goalId: string, projectIds: string[], learningItemIds: string[]) => Promise<boolean>;
+  concludeGoal: (goalId: string) => Promise<boolean>;
 
   // --- Proyectos Section ---
   projects: Project[];
@@ -173,6 +182,21 @@ interface AuraContextProps {
   deleteLearningTopic: (learningId: string, topicId: string) => Promise<boolean>;
   quickIncrementLearning: (id: string, increment?: number, lastPoint?: string) => Promise<boolean>;
   scheduleStudySession: (learningId: string, data: { startTime: string; endTime: string; notes?: string; reminderMinutes?: number }) => Promise<boolean>;
+  learningViewMode: 'KANBAN' | 'LIST' | 'MATRIX';
+  setLearningViewMode: (mode: 'KANBAN' | 'LIST' | 'MATRIX') => void;
+  matrixRows: ProgressMatrixRow[];
+  matrixLoading: boolean;
+  matrixWeekOffset: number;
+  setMatrixWeekOffset: (offset: number) => void;
+  matrixSearch: string;
+  setMatrixSearch: (search: string) => void;
+  fetchProgressMatrix: (offset?: number, search?: string) => Promise<void>;
+  advanceMatrixItem: (itemId: string) => Promise<boolean>;
+
+  // --- Constancia & Check-in (Fase 1) ---
+  checkIns: Record<string, boolean>;
+  streaks: Record<string, number>;
+  toggleCheckIn: (params: { learningItemId?: string; eventItemId?: string; date?: string }) => Promise<boolean>;
 }
 
 const AuraContext = createContext<AuraContextProps | undefined>(undefined);
@@ -460,6 +484,21 @@ export const AuraProvider: React.FC<{ children: React.ReactNode }> = ({ children
   });
   const [drawerOpen, setDrawerOpen] = useState<boolean>(false);
   const [editingGoal, setEditingGoal] = useState<Goal | null>(null);
+  const [goalHorizonFilter, setGoalHorizonFilter] = useState<GoalFilterHorizon>('ALL');
+
+  const goalMetrics = useMemo(() => {
+    const filtered = goals.filter(g => {
+      if (goalHorizonFilter === 'ALL') return true;
+      return (g.timeHorizon || 'SHORT_TERM') === goalHorizonFilter;
+    });
+    const total = filtered.length;
+    const active = filtered.filter(g => g.status === 'ACTIVE').length;
+    const completed = filtered.filter(g => g.status === 'COMPLETED').length;
+    const avgProgress = total > 0 ? Math.round(filtered.reduce((acc, g) => acc + g.progressPercentage, 0) / total) : 0;
+    const shortTerm = goals.filter(g => (g.timeHorizon || 'SHORT_TERM') === 'SHORT_TERM').length;
+    const longTerm = goals.filter(g => g.timeHorizon === 'LONG_TERM').length;
+    return { total, active, completed, avgProgress, shortTerm, longTerm };
+  }, [goals, goalHorizonFilter]);
 
   const fetchGoalsList = useCallback(async () => {
     setGoalsLoading(true);
@@ -468,6 +507,7 @@ export const AuraProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const data = await api.fetchGoals({
         status: goalFilter.status,
         category: goalFilter.category,
+        timeHorizon: goalHorizonFilter !== 'ALL' ? goalHorizonFilter : undefined,
       });
       setGoals(data);
     } catch (err) {
@@ -476,7 +516,7 @@ export const AuraProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } finally {
       setGoalsLoading(false);
     }
-  }, [goalFilter.status, goalFilter.category]);
+  }, [goalFilter.status, goalFilter.category, goalHorizonFilter]);
 
   const createGoal = async (goalData: Partial<Goal>): Promise<boolean> => {
     try {
@@ -538,6 +578,28 @@ export const AuraProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return false;
     }
   };
+
+  const linkGoalComponents = useCallback(async (goalId: string, projectIds: string[], learningItemIds: string[]): Promise<boolean> => {
+    try {
+      const updated = await api.linkGoalComponentsApi(goalId, projectIds, learningItemIds);
+      setGoals(prev => prev.map(g => g.id === goalId ? updated : g));
+      return true;
+    } catch (err) {
+      console.error('Error linking goal components:', err);
+      return false;
+    }
+  }, []);
+
+  const concludeGoal = useCallback(async (goalId: string): Promise<boolean> => {
+    try {
+      await api.concludeGoalApi(goalId);
+      setGoals(prev => prev.map(g => g.id === goalId ? { ...g, status: 'COMPLETED' as any, progressPercentage: 100 } : g));
+      return true;
+    } catch (err) {
+      console.error('Error concluding goal:', err);
+      return false;
+    }
+  }, []);
 
   // 5. Proyectos (Projects) state & operations
   const [projects, setProjects] = useState<Project[]>([]);
@@ -1073,12 +1135,15 @@ export const AuraProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
         return item;
       }));
+      if (res.parentProgressPercentage === 100) {
+        fetchGoalsList();
+      }
       return true;
     } catch (err) {
       console.error('Error toggling learning topic:', err);
       return false;
     }
-  }, []);
+  }, [fetchGoalsList]);
 
   const deleteLearningTopic = useCallback(async (learningId: string, topicId: string): Promise<boolean> => {
     try {
@@ -1121,12 +1186,15 @@ export const AuraProvider: React.FC<{ children: React.ReactNode }> = ({ children
           lastPointReached: lastPoint || prev.lastPointReached,
         } : null);
       }
+      if (res.progressPercentage === 100) {
+        fetchGoalsList();
+      }
       return true;
     } catch (err) {
       console.error('Error logging learning activity:', err);
       return false;
     }
-  }, [activeLearningItem]);
+  }, [activeLearningItem, fetchGoalsList]);
 
   const scheduleStudySession = useCallback(async (
     learningId: string,
@@ -1145,6 +1213,152 @@ export const AuraProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return false;
     }
   }, [fetchElementos, refreshNotifications]);
+
+  // --- Progress & Habits Matrix State (Fase 2) ---
+  const [learningViewMode, setLearningViewMode] = useState<'KANBAN' | 'LIST' | 'MATRIX'>('KANBAN');
+  const [matrixWeekOffset, setMatrixWeekOffset] = useState<number>(0);
+  const [matrixSearch, setMatrixSearch] = useState<string>('');
+  const [matrixRows, setMatrixRows] = useState<ProgressMatrixRow[]>([]);
+  const [matrixLoading, setMatrixLoading] = useState<boolean>(false);
+
+  // --- Constancia & Check-ins State (Fase 1) ---
+  const [checkIns, setCheckIns] = useState<Record<string, boolean>>({});
+  const [streaks, setStreaks] = useState<Record<string, number>>({});
+
+  const fetchProgressMatrix = useCallback(async (offset = matrixWeekOffset, search = matrixSearch) => {
+    setMatrixLoading(true);
+    try {
+      const res = await api.getProgressMatrixApi(offset, search);
+      setMatrixRows(res.rows);
+      const newChecks: Record<string, boolean> = {};
+      const newStreaks: Record<string, number> = {};
+      res.rows.forEach(r => {
+        newStreaks[r.id] = r.currentStreak;
+        r.weeklyAttendance.forEach(w => {
+          newChecks[`${r.id}_${w.date}`] = w.isChecked;
+        });
+      });
+      setCheckIns(prev => ({ ...prev, ...newChecks }));
+      setStreaks(prev => ({ ...prev, ...newStreaks }));
+    } catch (err) {
+      console.warn('Error fetching progress matrix:', err);
+    } finally {
+      setMatrixLoading(false);
+    }
+  }, [matrixWeekOffset, matrixSearch]);
+
+  const toggleCheckIn = useCallback(async (params: {
+    learningItemId?: string;
+    eventItemId?: string;
+    date?: string;
+  }): Promise<boolean> => {
+    const id = params.learningItemId || params.eventItemId;
+    if (!id) return false;
+    const todayDate = params.date || new Date().toISOString().slice(0, 10);
+    const key = `${id}_${todayDate}`;
+    const currentVal = !!checkIns[key];
+    const nextVal = !currentVal;
+
+    // Optimistic instantaneous feedback (<50ms)
+    setCheckIns(prev => ({ ...prev, [key]: nextVal }));
+    setStreaks(prev => {
+      const currentStreak = prev[id] || 0;
+      const newStreak = nextVal ? currentStreak + 1 : Math.max(0, currentStreak - 1);
+      return { ...prev, [id]: newStreak };
+    });
+
+    // Optimistically update matrix row if loaded
+    setMatrixRows(prev => prev.map(r => {
+      if (r.id !== id) return r;
+      const currentStreak = r.currentStreak || 0;
+      const newStreak = nextVal ? currentStreak + 1 : Math.max(0, currentStreak - 1);
+      return {
+        ...r,
+        isCheckedToday: nextVal,
+        currentStreak: newStreak,
+        weeklyAttendance: r.weeklyAttendance.map(w =>
+          w.date === todayDate ? { ...w, isChecked: nextVal } : w
+        ),
+      };
+    }));
+
+    try {
+      const res = await api.toggleCheckInApi({
+        learning_item_id: params.learningItemId,
+        event_item_id: params.eventItemId,
+        date: params.date,
+      });
+      setCheckIns(prev => ({ ...prev, [key]: res.is_completed }));
+      setStreaks(prev => ({ ...prev, [id]: res.streak_count }));
+      setMatrixRows(prev => prev.map(r => {
+        if (r.id !== id) return r;
+        return {
+          ...r,
+          isCheckedToday: res.is_completed,
+          currentStreak: res.streak_count,
+          weeklyAttendance: r.weeklyAttendance.map(w =>
+            w.date === todayDate ? { ...w, isChecked: res.is_completed } : w
+          ),
+        };
+      }));
+      return true;
+    } catch (err) {
+      console.error('Error toggling check-in:', err);
+      // Revert optimistic state
+      setCheckIns(prev => ({ ...prev, [key]: currentVal }));
+      return false;
+    }
+  }, [checkIns]);
+
+  const advanceMatrixItem = useCallback(async (itemId: string): Promise<boolean> => {
+    const todayDate = new Date().toISOString().slice(0, 10);
+    // Optimistic advance (<50ms)
+    setMatrixRows(prev => prev.map(r => {
+      if (r.id !== itemId) return r;
+      const currentU = (r.currentUnit ?? 0) + 1;
+      const totalU = r.totalUnits || 1;
+      const pct = Math.min(100, Math.round((currentU / totalU) * 100));
+      return {
+        ...r,
+        currentUnit: currentU,
+        progressPercentage: pct,
+        isCheckedToday: true,
+        currentStreak: r.isCheckedToday ? r.currentStreak : r.currentStreak + 1,
+        weeklyAttendance: r.weeklyAttendance.map(w =>
+          w.date === todayDate ? { ...w, isChecked: true } : w
+        ),
+      };
+    }));
+    setCheckIns(prev => ({ ...prev, [`${itemId}_${todayDate}`]: true }));
+
+    try {
+      const res = await api.advanceMatrixItemApi(itemId);
+      setMatrixRows(prev => prev.map(r => {
+        if (r.id !== itemId) return r;
+        return {
+          ...r,
+          currentUnit: res.current_unit ?? r.currentUnit,
+          totalUnits: res.total_units ?? r.totalUnits,
+          progressPercentage: res.progress_percentage ?? r.progressPercentage,
+          nextTopicTitle: res.next_topic_title || r.nextTopicTitle,
+          isCheckedToday: true,
+        };
+      }));
+      fetchLearningList();
+      fetchGoalsList();
+      return true;
+    } catch (err) {
+      console.error('Error advancing matrix item:', err);
+      fetchProgressMatrix(matrixWeekOffset, matrixSearch);
+      return false;
+    }
+  }, [fetchLearningList, fetchGoalsList, fetchProgressMatrix, matrixWeekOffset, matrixSearch]);
+
+  useEffect(() => {
+    if (tabActiva === 'APRENDIZAJE' && learningViewMode === 'MATRIX') {
+      fetchProgressMatrix(matrixWeekOffset, matrixSearch);
+    }
+  }, [tabActiva, learningViewMode, matrixWeekOffset, matrixSearch, fetchProgressMatrix]);
 
   // Unified Calendar CRUD Operations (Seamlessly delegating between Goals, Projects, Events, and native items)
   const crearElemento = async (newEl: Omit<PlanElemento, 'id'>): Promise<boolean> => {
@@ -1348,12 +1562,14 @@ export const AuraProvider: React.FC<{ children: React.ReactNode }> = ({ children
       fetchElementos(range.startStr, range.endStr);
     } else if (tabActiva === 'OBJETIVOS') {
       fetchGoalsList();
+      fetchLearningList();
     } else if (tabActiva === 'PROYECTOS') {
       fetchProjectsList();
     } else if (tabActiva === 'EVENTOS') {
       fetchEventsList();
     } else if (tabActiva === 'APRENDIZAJE') {
       fetchLearningList();
+      fetchGoalsList();
     }
   }, [tabActiva, anioActivo, mesActivo, fetchElementos, fetchGoalsList, fetchProjectsList, fetchEventsList, fetchLearningList]);
 
@@ -1404,11 +1620,16 @@ export const AuraProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setDrawerOpen,
       editingGoal,
       setEditingGoal,
+      goalHorizonFilter,
+      setGoalHorizonFilter,
+      goalMetrics,
       fetchGoalsList,
       createGoal,
       updateGoal,
       deleteGoal,
       toggleMilestone,
+      linkGoalComponents,
+      concludeGoal,
 
       // Proyectos
       projects,
@@ -1500,6 +1721,19 @@ export const AuraProvider: React.FC<{ children: React.ReactNode }> = ({ children
       deleteLearningTopic,
       quickIncrementLearning,
       scheduleStudySession,
+      learningViewMode,
+      setLearningViewMode,
+      matrixRows,
+      matrixLoading,
+      matrixWeekOffset,
+      setMatrixWeekOffset,
+      matrixSearch,
+      setMatrixSearch,
+      fetchProgressMatrix,
+      advanceMatrixItem,
+      checkIns,
+      streaks,
+      toggleCheckIn,
     }}>
       {children}
     </AuraContext.Provider>

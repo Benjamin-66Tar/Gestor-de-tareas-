@@ -262,6 +262,74 @@ The application is available at `http://localhost:5173`.
 
 ---
 
+### Scenario 22: Daily Check-in ("Listo hoy") & Reversibility (Fase 1)
+1. **Mark Check-in from "Hoy" Event Card**:
+   - Navigate to the **"EVENTOS"** tab or look at the "Hoy" block.
+   - For a scheduled study session, verify the prominent primary button is `[ ✓ Listo hoy ]`.
+   - Click `[ ✓ Listo hoy ]`; verify the button turns into a green badge `[ ✓ Realizado hoy ]` in $<50$ms.
+   - Verify the active streak counter (🔥) increments immediately.
+   - Verify the parent event remains active for future days in the schedule.
+2. **Reversibility**:
+   - Click `[ ✓ Realizado hoy ]` again; verify it reverts to `[ ✓ Listo hoy ]` and the streak decrements back without any blocking confirmation modals.
+3. **Weekly Calendar Column Check-in**:
+   - Open the **"CALENDARIO"** tab in weekly expanded mode.
+   - On today's column, locate the study card and click its check-in icon; verify immediate toggle and visual feedback.
+
+---
+
+### Scenario 23: Activity Progress & Habits Matrix (`ActivityProgressMatrix`) (Fase 2)
+1. **Navigate to Progress Matrix**:
+   - In the **"APRENDIZAJE"** tab, toggle the view mode selector to **`[ 📊 Matriz de Progreso ]`** (or click the shortcut button `[ 📊 Ver Tabla de Progreso ]` from the Calendar header).
+   - Verify the table renders all active courses and study events.
+   - Verify items pending today's check-in are sorted at the top.
+2. **Weekly Attendance Grid**:
+   - Inspect the Monday-Sunday column grid; verify "Hoy" is prominently highlighted.
+   - Click today's attendance checkmark; verify the check appears and streak increments in $<50$ms.
+   - Use `[ ← ]` `[ → ]` arrows to navigate previous weeks and audit past attendance.
+3. **Smart 1-Click Topic / Unit Advance**:
+   - On an item row, click **`[ + Avanzar tema ]`**.
+   - If topic-based, verify the next incomplete module marks completed and the progress bar jumps ahead instantly without popups.
+   - If unit-based, verify current units increments by +1.
+
+---
+
+### Scenario 24: Short-Term vs Long-Term Goals & Golden Accent (Fase 3)
+1. **Creation & Smart Horizon Suggestion**:
+   - Navigate to the **"OBJETIVOS"** tab and click **"+ Nuevo Objetivo"**.
+   - Set deadline to 15 days from now; verify the drawer automatically suggests `[ ⚡ Corto Plazo ]`.
+   - Change deadline to 90 days from now; verify the drawer automatically switches suggestion to `[ 🏔️ Largo Plazo ]`.
+   - Manually toggle the option and save.
+2. **Time Horizon Filtering & Contextual Metrics**:
+   - In the control bar, click `[ ⚡ Corto Plazo ]`; verify only short-term goals render and header stats (Activas, Cumplidas, Avance Promedio) recalculate for short-term items only.
+   - Click `[ 🏔️ Largo Plazo ]`; verify long-term goals render.
+   - Click `[ Todos ]`; verify all goals render with micro-breakdown badges (`⚡ X corto plazo · 🏔️ Y largo plazo`).
+3. **Visual Distinction & Golden Styling**:
+   - Verify short-term goals display a cyan/emerald `⚡ Corto Plazo` badge.
+   - Verify long-term goals display a gold badge `🏔️ Largo Plazo`, an amber/gold border accent (`border-amber-400/40`), and a subtle warm ambient glow.
+
+---
+
+### Scenario 25: Connected Goal Progress Calculation & 100% Celebration (Fase 4)
+1. **Bidirectional Component Linking**:
+   - Open a Goal in `GoalDrawer`.
+   - In the "Componentes Vinculados" section, select 1 active Kanban Project and 1 Learning Course.
+   - Save; verify the goal displays both components.
+2. **Dynamic Progress Calculation & Desglose Chips**:
+   - Suppose the linked Project is at $80\%$ and the Learning Course is at $60\%$.
+   - Verify the Goal's overall progress bar calculates:
+     $$\text{Progress} = \frac{80 + 60}{2} = 70\%$$
+   - Verify compact chips appear below the bar: `[ 🚀 Proyectos: 80% ]` and `[ 📚 Aprendizaje: 60% ]`.
+3. **Collapsible Accordions & Deep Links**:
+   - On the Goal card, click `[ 🚀 Proyectos (1) ▼ ]`; verify it expands showing the project name, progress bar, and a direct button that navigates directly to the project's Kanban board.
+   - Click `[ 📚 Cursos (1) ▼ ]`; verify it expands with a direct link to the course.
+4. **100% Achievement Celebration**:
+   - Complete remaining tasks and modules in the linked project and course until both reach $100\%$.
+   - Verify the Goal's progress bar hits $100\%$ and displays the celebratory banner:
+     *"🎉 ¡Meta alcanzada al 100%! [ Concluir y archivar objetivo ]"*.
+   - Verify the goal remains active until the user explicitly clicks the conclusion button, transitioning it to `COMPLETED`.
+
+---
+
 ## 4. Automated Testing
 
 ### Backend Layer Tests (Django)

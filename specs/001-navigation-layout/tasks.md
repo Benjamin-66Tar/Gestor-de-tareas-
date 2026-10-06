@@ -1,4 +1,4 @@
-# Tasks: Navigation Layout, Objetivos, Proyectos, Eventos, Web Push (PWA), Auth & Aprendizaje (Learning Hub)
+# Tasks: Navigation Layout, Objetivos, Proyectos, Eventos, Web Push, Auth, Aprendizaje & Fases 1 a 4
 
 **Input**: Design documents from `/specs/001-navigation-layout/` (`spec.md`, `plan.md`, `research.md`, `data-model.md`, `contracts/api.md`, `quickstart.md`)
 
@@ -419,6 +419,201 @@ Task: "Build LearningDrawer component in src/components/learning/LearningDrawer.
 5. **Step 5: Background Nudges & End-to-End Verification (T137 - T140)**:
    - Connect dormancy evaluation to the background scheduler loop.
    - Run pytest, build checks, and perform Quickstart Scenario 21.
+
+---
+
+## Phase 13: User Story 10 - Daily Study Check-in & Consistency Tracking (Botón "Listo hoy" y Registro de Constancia - Fase 1) (Priority: P1)
+
+**Goal**: Deliver a non-destructive daily session check-in button (`[ ✓ Listo hoy ]`) on "Hoy" event cards and weekly calendar columns with an instant, reversible toggle (<50ms) and dual streak engine (consecutive daily streak 🔥 vs weekly attendance frequency target), preserving active multi-day events and ongoing courses.
+
+**Independent Test**:
+1. Schedule a study activity spanning multiple days; verify the prominent primary button on the "Hoy" event card or weekly calendar column is `[ ✓ Listo hoy ]`.
+2. Click `[ ✓ Listo hoy ]`: verify the badge turns green (`[ ✓ Realizado hoy ]`) in <50ms and streak counter (🔥) increments, while the parent event remains active for future days.
+3. Click `[ ✓ Realizado hoy ]` again: verify the check-in is cleanly reverted and streak decrements without blocking confirmation dialogs.
+4. Verify full event conclusion is available as an explicit secondary action (*"Concluir evento definitivamente"*).
+
+- [X] T141 [P] [US10] Define TypeScript domain interfaces for `ActivityCheckIn` and `StreakMode` in `src/domain/types.ts`
+- [X] T142 [P] [US10] Implement `ActivityCheckIn` model with user, date, learning_item, event_item, is_completed, streak_count, and unique constraints in `backend/models.py`
+- [X] T143 [US10] Generate and run database migrations for `ActivityCheckIn` in `backend/`
+- [X] T144 [P] [US10] Create DRF `ActivityCheckInSerializer` for attendance validation and status serialization in `backend/serializers.py`
+- [X] T145 [US10] Implement domain services `toggle_activity_checkin` and `calculate_streak` with local date evaluation in `backend/services.py`
+- [X] T146 [P] [US10] Implement REST API endpoint `POST /api/v1/check-ins/toggle/` (`CheckInToggleAPI`) in `backend/views.py` and `backend/urls.py`
+- [X] T147 [P] [US10] Create automated unit tests for `ActivityCheckIn` toggle, streak calculation, and reversibility in `backend/tests.py`
+- [X] T148 [P] [US10] Implement typed API client method `toggleCheckIn` in `src/services/api.ts`
+- [X] T149 [US10] Extend application state in `src/context/AuraState.tsx` with check-ins collection, streak cache, and optimistic `<50ms` `toggleCheckIn` action handler
+- [X] T150 [US10] Update `EventCard.tsx` in `src/components/events/EventCard.tsx` to render prominent primary button `[ ✓ Listo hoy ]` / `[ ✓ Realizado hoy ]` with streak 🔥 badge and move full event conclusion to secondary menu action
+- [X] T151 [US10] Update daily columns in `src/components/WeekExpandedView.tsx` to include 1-click check-in control on study session cards
+- [X] T152 [US10] Execute Scenario 22 end-to-end verification in `quickstart.md` for daily check-in and reversibility
+
+---
+
+## Phase 14: User Story 11 - Activity Progress & Habits Matrix (Tabla / Matriz de Progreso y Hábitos - Fase 2) (Priority: P1)
+
+**Goal**: Deliver a centralized tabular habits and progress matrix (`ActivityProgressMatrix`) in the Aprendizaje section with Monday-Sunday attendance grid, today highlighted, week navigation stepper (`←` `→`), smart 1-click topic advance (`[ + Avanzar tema ]`), priority sorting (pending today pinned at top), and direct shortcut from Calendar header.
+
+**Independent Test**:
+1. In the Aprendizaje tab, switch view mode selector to `[ 📊 Matriz de Progreso ]`: verify active courses and study events render with 7-day attendance marks.
+2. Click `[ 📊 Ver Tabla de Progreso ]` in the Calendar header: verify instant transition to the Aprendizaje tab with matrix view active.
+3. Click `[ + Avanzar tema ]` on an item row: verify next topic completes (or unit increments +1) in <50ms without modal dialogs.
+4. Verify items pending check-in today are pinned to the top, followed by completed items ordered by active streak length.
+
+- [X] T153 [P] [US11] Define TypeScript domain interfaces `ProgressMatrixRow` and `WeeklyAttendanceDay` in `src/domain/types.ts`
+- [X] T154 [P] [US11] Create DRF `ProgressMatrixRowSerializer` in `backend/serializers.py`
+- [X] T155 [US11] Implement domain services `get_progress_matrix_data` and `advance_progress_matrix_item` in `backend/services.py`
+- [X] T156 [P] [US11] Implement REST API endpoints `GET /api/v1/progress-matrix/` and `POST /api/v1/progress-matrix/{id}/advance/` in `backend/views.py` and `backend/urls.py`
+- [X] T157 [P] [US11] Create automated unit tests for progress matrix aggregation and 1-click topic advancement in `backend/tests.py`
+- [X] T158 [P] [US11] Implement typed API client methods `getProgressMatrix` and `advanceMatrixItem` in `src/services/api.ts`
+- [X] T159 [US11] Extend application state context with `progressMatrixRows`, week offset navigation, and optimistic `advanceMatrixItem` handler in `src/context/AuraState.tsx`
+- [X] T160 [P] [US11] Build `ActivityProgressMatrix` table component with Monday-Sunday grid, streak counter, `[ + Avanzar tema ]` button, search bar, and priority sorting in `src/components/learning/ActivityProgressMatrix.tsx`
+- [X] T161 [US11] Update `LearningView.tsx` in `src/components/learning/LearningView.tsx` to add view switcher `[ Kanban ] | [ Lista ] | [ 📊 Matriz de Progreso ]`
+- [X] T162 [US11] Update header in `src/components/WeekExpandedView.tsx` to add direct shortcut action button `[ 📊 Ver Tabla de Progreso ]` jumping to Aprendizaje with matrix mode
+- [X] T163 [US11] Execute Scenario 23 end-to-end verification in `quickstart.md` for habits matrix and quick content advance
+
+---
+
+## Phase 15: User Story 12 - Short-Term vs Long-Term Strategic Goals (Objetivos a Corto y Largo Plazo - Fase 3) (Priority: P1)
+
+**Goal**: Deliver temporal horizon classification (`time_horizon`: `SHORT_TERM` vs `LONG_TERM`) with smart deadline suggestion ($\le 30$ vs $> 30$ days), quick-filter pills (`[ Todos ]`, `[ ⚡ Corto Plazo ]`, `[ 🏔️ Largo Plazo ]`), dynamic contextual header statistics, optional parent goal linkage, and golden/amber styling for long-term strategic goals (`border-amber-400/40`, amber badge, subtle ambient glow).
+
+**Independent Test**:
+1. Open Goals view, filter by "Corto Plazo" or "Largo Plazo": verify dynamic header metrics adapt to the filtered subset.
+2. In `GoalDrawer`, enter deadline: verify smart suggestion selects "Corto Plazo" (<30 days) or "Largo Plazo" (>30 days) with 1-click override.
+3. Inspect long-term goal cards: verify distinctive golden/amber badge (`🏔️ Largo Plazo`), amber border accent (`border-amber-400/40`), and subtle warm ambient glow.
+4. Link a short-term goal to a long-term parent goal: verify hierarchical linkage persists.
+
+- [X] T164 [P] [US12] Define TypeScript domain types `TimeHorizon` and `GoalFilterHorizon` and update `Goal` interface in `src/domain/types.ts`
+- [X] T165 [P] [US12] Add `time_horizon` and `parent_goal` fields to `Goal` model in `backend/models.py`
+- [X] T166 [US12] Generate and run database migrations for `Goal` horizon fields in `backend/`
+- [X] T167 [P] [US12] Update `GoalSerializer` to serialize `time_horizon`, `parent_goal_id`, and `parent_goal_title` in `backend/serializers.py`
+- [X] T168 [P] [US12] Update `GoalViewSet` to support query filtering by `?time_horizon={SHORT_TERM|LONG_TERM}` in `backend/views.py`
+- [X] T169 [P] [US12] Create automated unit tests for goal horizon filtering and parent-child goal relationships in `backend/tests.py`
+- [X] T170 [US12] Extend application state in `src/context/AuraState.tsx` with `goalHorizonFilter` and filtered goal selector with dynamic metrics
+- [X] T171 [US12] Update `GoalsView.tsx` in `src/components/goals/GoalsView.tsx` to add horizon filter pills `[ Todos ]`, `[ ⚡ Corto Plazo ]`, `[ 🏔️ Largo Plazo ]` and contextual header metrics
+- [X] T172 [US12] Update `GoalCard.tsx` in `src/components/goals/GoalCard.tsx` to render cyan/emerald badge for short-term and golden/amber badge (`🏔️ Largo Plazo`) with `border-amber-400/40` and subtle warm ambient gradient glow
+- [X] T173 [US12] Update `GoalDrawer.tsx` in `src/components/goals/GoalDrawer.tsx` with horizon selector, smart auto-suggestion ($\le 30$ days vs $> 30$ days), and optional parent goal selector
+- [X] T174 [US12] Execute Scenario 24 end-to-end verification in `quickstart.md` for short vs long-term goal horizons and visual styling
+
+---
+
+## Phase 16: User Story 13 - Connected Goals Progress & Alignment (Conexión Real de Objetivos con Proyectos y Aprendizaje - Fase 4) (Priority: P1)
+
+**Goal**: Deliver real dynamic multi-component goal progress calculation (equitable unweighted mean across present projects, courses, and milestones), collapsible accordions in `GoalCard` with deep links (`[ 🚀 Proyectos (X) ▼ ]` and `[ 📚 Cursos (Y) ▼ ]`), multi-factor breakdown chips (`[ 🚀 Proyectos: X% ]`, `[ 📚 Aprendizaje: Y% ]`, `[ 📌 Hitos: Z% ]`), bidirectional linking in `GoalDrawer`, and 100% celebration achievement banner with explicit conclusion.
+
+**Independent Test**:
+1. Link active projects and learning courses to a Goal in `GoalDrawer`: verify bidirectional association.
+2. Advance tasks in the project and topics in the course: verify the Goal's overall progress recalculates automatically as the equitable average of present components.
+3. In `GoalCard`, expand `[ 🚀 Proyectos (X) ▼ ]` and `[ 📚 Cursos (Y) ▼ ]`: verify individual progress bars and 1-click deep links jumping directly to Kanban boards or courses.
+4. When all components hit 100%: verify GoalCard displays celebration banner `"🎉 ¡Meta alcanzada al 100%! [ Concluir y archivar objetivo ]"`, keeping the goal active until the user confirms conclusion.
+
+- [X] T175 [P] [US13] Define TypeScript interfaces `LinkedProjectSummary`, `LinkedLearningSummary`, and `GoalProgressBreakdown` in `src/domain/types.ts`
+- [X] T176 [US13] Update `calculate_goal_progress` service in `backend/services.py` to calculate equitable average across present linked components (projects, learning items, milestones) with fallback for 0 components
+- [X] T177 [US13] Implement `link_goal_components` and `conclude_goal` service functions in `backend/services.py`
+- [X] T178 [P] [US13] Update `GoalSerializer` to include `linked_projects`, `linked_courses`, `breakdown`, and `is_achieved_100` in `backend/serializers.py`
+- [X] T179 [P] [US13] Implement REST endpoints `POST /api/v1/goals/{id}/link-components/` and `POST /api/v1/goals/{id}/conclude/` in `backend/views.py` and `backend/urls.py`
+- [X] T180 [P] [US13] Create automated unit tests for multi-component progress calculation, bidirectional linking, and goal conclusion in `backend/tests.py`
+- [X] T181 [P] [US13] Implement typed API client methods `linkGoalComponents` and `concludeGoal` in `src/services/api.ts`
+- [X] T182 [US13] Extend application state in `src/context/AuraState.tsx` to handle connected components linking, automatic progress updates, and goal completion confirmation
+- [X] T183 [US13] Update `GoalCard.tsx` in `src/components/goals/GoalCard.tsx` to render collapsible accordions for linked projects and courses with deep links, multi-factor breakdown chips, and 100% celebration banner
+- [X] T184 [US13] Update `GoalDrawer.tsx` in `src/components/goals/GoalDrawer.tsx` to include bidirectional multi-select pickers for Projects and Learning Items
+- [X] T185 [US13] Execute Scenario 25 end-to-end verification in `quickstart.md` for connected goal calculations and 100% celebration
+
+---
+
+## Phase 17: Polish, Verification & Quality Audit (Fases 1 a 4)
+
+**Goal**: Full verification, automated test runs, TypeScript compile checks, and cross-platform responsive auditing.
+
+- [X] T186 [P] Run full backend test suite with `pytest backend/tests.py` covering check-ins, progress matrix, goal horizons, and connected progress calculations
+- [X] T187 [P] Run TypeScript compile check and production build with `npm run build` to verify zero lint and type errors
+- [X] T188 Verify cross-section responsiveness on mobile viewports (<768px) across Progress Matrix, Goal cards with accordions, and Event check-in buttons in `src/`
+
+---
+
+## Dependencies & Execution Order (Fases 1 a 4)
+
+```mermaid
+graph TD
+    subgraph US10["User Story 10 (Fase 1: Check-in & Racha)"]
+        T141["T141: types.ts"] --> T142["T142: models.py"] --> T143["T143: migrations"] --> T144["T144: serializers.py"]
+        T143 --> T145["T145: services.py"] --> T146["T146: views & urls"]
+        T146 --> T147["T147: tests.py"]
+        T146 --> T148["T148: api.ts"] --> T149["T149: AuraState.tsx"]
+        T149 --> T150["T150: EventCard.tsx"]
+        T149 --> T151["T151: WeekExpandedView.tsx"]
+        T150 & T151 --> T152["T152: Scenario 22 validation"]
+    end
+
+    subgraph US11["User Story 11 (Fase 2: Matriz de Progreso)"]
+        T152 --> T153["T153: types.ts"] --> T154["T154: serializers.py"] --> T155["T155: services.py"] --> T156["T156: views & urls"]
+        T156 --> T157["T157: tests.py"]
+        T156 --> T158["T158: api.ts"] --> T159["T159: AuraState.tsx"]
+        T159 --> T160["T160: ActivityProgressMatrix.tsx"]
+        T160 --> T161["T161: LearningView.tsx"]
+        T160 --> T162["T162: WeekExpandedView.tsx"]
+        T161 & T162 --> T163["T163: Scenario 23 validation"]
+    end
+
+    subgraph US12["User Story 12 (Fase 3: Objetivos Corto vs Largo Plazo)"]
+        T164["T164: types.ts"] --> T165["T165: models.py"] --> T166["T166: migrations"] --> T167["T167: serializers.py"]
+        T166 --> T168["T168: views.py"] --> T169["T169: tests.py"]
+        T168 --> T170["T170: AuraState.tsx"]
+        T170 --> T171["T171: GoalsView.tsx"]
+        T170 --> T172["T172: GoalCard.tsx (Golden glow)"]
+        T170 --> T173["T173: GoalDrawer.tsx"]
+        T171 & T172 & T173 --> T174["T174: Scenario 24 validation"]
+    end
+
+    subgraph US13["User Story 13 (Fase 4: Conexión Real y Celebración)"]
+        T174 --> T175["T175: types.ts"] --> T176["T176: calculate_goal_progress"] --> T177["T177: link & conclude services"]
+        T177 --> T178["T178: serializers.py"] --> T179["T179: views & urls"]
+        T179 --> T180["T180: tests.py"]
+        T179 --> T181["T181: api.ts"] --> T182["T182: AuraState.tsx"]
+        T182 --> T183["T183: GoalCard.tsx (Accordions & 100%)"]
+        T182 --> T184["T184: GoalDrawer.tsx (Pickers)"]
+        T183 & T184 --> T185["T185: Scenario 25 validation"]
+    end
+
+    subgraph Polish["Phase 17: Polish & Audit"]
+        T152 & T163 & T174 & T185 --> T186["T186: pytest backend"] & T187["T187: npm run build"] & T188["T188: mobile responsive"]
+    end
+```
+
+---
+
+## Parallel Opportunities (Fases 1 a 4)
+
+```bash
+# Fase 1: Domain types and backend model
+Task: "Define TypeScript domain interfaces for ActivityCheckIn in src/domain/types.ts" (T141)
+Task: "Implement ActivityCheckIn model in backend/models.py" (T142)
+
+# Fase 2: Serialization and frontend matrix component
+Task: "Create DRF ProgressMatrixRowSerializer in backend/serializers.py" (T154)
+Task: "Build ActivityProgressMatrix table component in src/components/learning/ActivityProgressMatrix.tsx" (T160)
+
+# Fase 3: Goal horizons backend and visual styling
+Task: "Add time_horizon and parent_goal fields in backend/models.py" (T165)
+Task: "Update GoalCard.tsx with golden/amber badge and glow in src/components/goals/GoalCard.tsx" (T172)
+
+# Fase 4: Component accordions and drawer pickers
+Task: "Update GoalCard.tsx with accordions and 100% celebration banner" (T183)
+Task: "Update GoalDrawer.tsx with bidirectional component pickers" (T184)
+```
+
+---
+
+## Implementation Strategy: Fases 1 a 4
+
+1. **Incremental Milestone 1: Daily Check-in & Streak (T141 - T152)**:
+   - Delivers immediate user value: logging daily study attendance without closing multi-week courses.
+2. **Incremental Milestone 2: Progress & Habits Matrix (T153 - T163)**:
+   - Delivers the consolidated table in Aprendizaje with 1-click topic advance and calendar header shortcut.
+3. **Incremental Milestone 3: Short-Term vs Long-Term Goals (T164 - T174)**:
+   - Establishes strategic temporal clarity with golden styling and contextual header metrics.
+4. **Incremental Milestone 4: Connected Goals Progress & Celebration (T175 - T185)**:
+   - Closes the loop between tactical execution (projects and courses) and strategic goal completion with celebratory conclusion.
+5. **Final Quality Audit (T186 - T188)**:
+   - End-to-end automated testing and build verification across all layers.
 
 
 

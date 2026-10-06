@@ -13,7 +13,10 @@ export const LearningCard: React.FC<LearningCardProps> = ({
   onOpenDrawer,
   onOpenSchedule,
 }) => {
-  const { deleteLearningItem, quickIncrementLearning } = useAuraState();
+  const { deleteLearningItem, quickIncrementLearning, goals, setTabActiva } = useAuraState();
+
+  const linkedGoal = goals.find((g) => g.id === item.goalId);
+  const goalTitle = linkedGoal?.title || item.goalTitle || (item as any).goal_title;
 
   const resourceTypeConfig: Record<ResourceType, { label: string; icon: string; badgeClass: string }> = {
     COURSE: {
@@ -143,6 +146,31 @@ export const LearningCard: React.FC<LearningCardProps> = ({
             </a>
           )}
         </div>
+
+        {/* Linked Goal Badge */}
+        {goalTitle && (
+          <div className="flex items-center gap-1.5 mb-3 flex-wrap">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setTabActiva('OBJETIVOS');
+              }}
+              className="text-[11px] font-bold px-2.5 py-1 rounded-lg border shadow-sm flex items-center gap-1.5 transition hover:brightness-125 group/goal cursor-pointer"
+              style={{
+                backgroundColor: linkedGoal ? `${linkedGoal.colorHex || '#10B981'}18` : '#10B98118',
+                borderColor: linkedGoal ? `${linkedGoal.colorHex || '#10B981'}40` : '#10B98140',
+                color: linkedGoal ? (linkedGoal.colorHex || '#10B981') : '#10B981',
+              }}
+              title={`Aporta al objetivo: "${goalTitle}". Haz clic para ir a Objetivos.`}
+            >
+              <span>🎯</span>
+              <span className="text-slate-400 group-hover/goal:text-slate-200">Objetivo:</span>
+              <span className="truncate max-w-[220px]">{goalTitle}</span>
+              <span className="text-[10px] opacity-60 group-hover/goal:opacity-100">&rarr;</span>
+            </button>
+          </div>
+        )}
 
         {/* Description (if present) */}
         {item.description && (

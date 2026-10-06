@@ -50,9 +50,37 @@ export type ActiveTab = 'CALENDARIO' | 'OBJETIVOS' | 'PROYECTOS' | 'EVENTOS' | '
 
 export type GoalStatus = 'ACTIVE' | 'COMPLETED' | 'PAUSED';
 
-export type ProgressMode = 'MANUAL' | 'MILESTONES';
+export type ProgressMode = 'MANUAL' | 'MILESTONES' | 'CONNECTED';
 
 export type GoalViewMode = 'CARDS' | 'LIST';
+
+export type TimeHorizon = 'SHORT_TERM' | 'LONG_TERM';
+
+export type GoalFilterHorizon = 'ALL' | TimeHorizon;
+
+export interface LinkedProjectSummary {
+  id: string;
+  title: string;
+  colorHex: string;
+  status: string;
+  progressPercentage: number;
+}
+
+export interface LinkedLearningSummary {
+  id: string;
+  title: string;
+  resourceType: string;
+  status: string;
+  progressPercentage: number;
+  platformUrl?: string | null;
+}
+
+export interface GoalProgressBreakdown {
+  projectsAvg?: number | null;
+  coursesAvg?: number | null;
+  milestonesAvg?: number | null;
+  presentCount: number;
+}
 
 export interface UserProfile {
   id: string;
@@ -89,10 +117,18 @@ export interface Goal {
   startDate?: string | null;
   deadline?: string | null;
   reminderMinutes?: number;
+  timeHorizon?: TimeHorizon;
+  parentGoalId?: string | null;
+  parentGoalTitle?: string | null;
   progressMode: ProgressMode;
   progressPercentage: number; // 0 to 100
   status: GoalStatus;
   milestones: GoalMilestone[];
+  linkedLearningCount?: number;
+  linkedProjects?: LinkedProjectSummary[];
+  linkedCourses?: LinkedLearningSummary[];
+  breakdown?: GoalProgressBreakdown;
+  isAchieved100?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -100,6 +136,7 @@ export interface Goal {
 export interface GoalFilterCriteria {
   status: 'ALL' | GoalStatus;
   category: string; // 'ALL' or specific category
+  timeHorizon?: 'ALL' | TimeHorizon;
   searchQuery: string;
 }
 
@@ -281,7 +318,9 @@ export interface LearningItem {
   lastPointReached?: string;
   takeawaysMarkdown?: string;
   goalId?: string | null;
+  goalTitle?: string | null;
   projectId?: string | null;
+  projectTitle?: string | null;
   lastActivityAt: string;
   dormancyDays?: number;
   isDormant?: boolean;
@@ -295,6 +334,46 @@ export interface LearningFilterCriteria {
   status: 'ALL' | LearningStatus;
   resourceType: 'ALL' | ResourceType;
   searchQuery: string;
+}
+
+// --- Constancia Diaria y Matriz de Progreso (Fases 1 y 2) ---
+
+export type StreakMode = 'CONSECUTIVE' | 'WEEKLY_TARGET';
+
+export interface ActivityCheckIn {
+  id: string;
+  userId?: string;
+  date: string; // YYYY-MM-DD
+  learningItemId?: string | null;
+  eventItemId?: string | null;
+  isCompleted: boolean;
+  streakCount: number;
+  createdAt?: string;
+}
+
+export interface WeeklyAttendanceDay {
+  date: string; // YYYY-MM-DD
+  dayLetter: string; // 'L', 'M', 'X', 'J', 'V', 'S', 'D'
+  isToday: boolean;
+  isChecked: boolean;
+}
+
+export interface ProgressMatrixRow {
+  id: string;
+  title: string;
+  itemType: 'LEARNING' | 'EVENT';
+  platformName?: string;
+  colorHex: string;
+  currentStreak: number;
+  weeklyAttendance: WeeklyAttendanceDay[];
+  progressPercentage: number;
+  progressMode: 'TOPICS' | 'MANUAL';
+  currentUnit?: number;
+  totalUnits?: number;
+  nextTopicTitle?: string;
+  isCheckedToday: boolean;
+  rawLearningItem?: LearningItem;
+  rawEventItem?: EventItem;
 }
 
 

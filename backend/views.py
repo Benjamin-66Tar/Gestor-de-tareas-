@@ -219,6 +219,9 @@ class GoalListCreateAPI(APIView):
         category_param = request.query_params.get('category')
         if category_param and category_param != 'ALL':
             qs = qs.filter(category=category_param)
+        time_horizon_param = request.query_params.get('time_horizon')
+        if time_horizon_param and time_horizon_param != 'ALL':
+            qs = qs.filter(time_horizon=time_horizon_param)
         search_param = request.query_params.get('search')
         if search_param:
             qs = qs.filter(title__icontains=search_param)
@@ -232,7 +235,7 @@ class GoalListCreateAPI(APIView):
         serializer = GoalSerializer(data=request.data)
         if serializer.is_valid():
             goal = serializer.save(user=request.user)
-            if goal.progress_mode == 'MILESTONES':
+            if goal.progress_mode in ['MILESTONES', 'CONNECTED']:
                 calculate_goal_progress(goal)
             log_audit_event(
                 user=request.user,
@@ -253,7 +256,7 @@ class GoalDetailAPI(APIView):
     def get_object(self, pk, user):
         from .models import Goal
         try:
-            return Goal.objects.prefetch_related('milestones').get(pk=pk, user=user, is_deleted=False)
+            return Goal.objects.prefetch_related('milestones', 'projects', 'learning_items').get(pk=pk, user=user, is_deleted=False)
         except Goal.DoesNotExist:
             raise Http404
 
@@ -269,7 +272,7 @@ class GoalDetailAPI(APIView):
         serializer = GoalSerializer(goal, data=request.data)
         if serializer.is_valid():
             updated_goal = serializer.save()
-            if updated_goal.progress_mode == 'MILESTONES':
+            if updated_goal.progress_mode in ['MILESTONES', 'CONNECTED']:
                 calculate_goal_progress(updated_goal)
             log_audit_event(
                 user=request.user,
@@ -290,7 +293,7 @@ class GoalDetailAPI(APIView):
         serializer = GoalSerializer(goal, data=request.data, partial=True)
         if serializer.is_valid():
             updated_goal = serializer.save()
-            if updated_goal.progress_mode == 'MILESTONES':
+            if updated_goal.progress_mode in ['MILESTONES', 'CONNECTED']:
                 calculate_goal_progress(updated_goal)
             log_audit_event(
                 user=request.user,
@@ -1315,3 +1318,102 @@ class LearningLogActivityAPI(APIView):
             "is_dormant": False,
         }, status=status.HTTP_200_OK)
 
+
+# --- Check-in & Consistency APIs (Fase 1) ---
+
+class CheckInToggleAPI(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        from .services import toggle_activity_checkin
+        learning_item_id = request.data.get('learning_item_id')
+        event_item_id = request.data.get('event_item_id')
+        target_date = request.data.get('date')
+
+        if not learning_item_id and not event_item_id:
+            return Response(
+                {"detail": "Debe proporcionar learning_item_id o event_item_id."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            result = toggle_activity_checkin(
+                user=request.user,
+                date=target_date,
+                learning_item_id=learning_item_id,
+                event_item_id=event_item_id
+            )
+            return Response(result, status=status.HTTP_200_OK)
+        except ValueError as e:
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({"detail": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# --- Progress & Habits Matrix APIs (Fase 2) ---
+
+class ProgressMatrixAPI(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from .services import get_progress_matrix_data
+        week_offset = request.query_params.get('week_offset', 0)
+        search = request.query_params.get('search')
+        try:
+            data = get_progress_matrix_data(user=request.user, week_offset=week_offset, search=search)
+            return Response(data, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"detail": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class ProgressMatrixAdvanceAPI(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        from .services import advance_progress_matrix_item
+        try:
+            data = advance_progress_matrix_item(user=request.user, item_id=pk)
+            return Response(data, status=status.HTTP_200_OK)
+        except ValueError as e:
+            return Response({"detail": str(e)}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"detail": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# --- Connected Goals APIs (Fases 3 y 4) ---
+
+class GoalLinkComponentsAPI(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        from .services import link_goal_components
+        from .serializers import GoalSerializer
+        project_ids = request.data.get('project_ids')
+        learning_item_ids = request.data.get('learning_item_ids')
+        try:
+            goal = link_goal_components(goal_id=pk, project_ids=project_ids, learning_item_ids=learning_item_ids)
+            return Response(GoalSerializer(goal).data, status=status.HTTP_200_OK)
+        except ValueError as e:
+            return Response({"detail": str(e)}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"detail": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class GoalConcludeAPI(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        from .services import conclude_goal
+        from django.utils import timezone
+        try:
+            goal = conclude_goal(goal_id=pk)
+            return Response({
+                "id": str(goal.id),
+                "status": goal.status,
+                "progress_percentage": goal.progress_percentage,
+                "completed_at": timezone.now().isoformat(),
+            }, status=status.HTTP_200_OK)
+        except ValueError as e:
+            return Response({"detail": str(e)}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"detail": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

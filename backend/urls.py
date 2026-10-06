@@ -40,6 +40,11 @@ from .views import (
     LearningTopicToggleAPI,
     LearningScheduleSessionAPI,
     LearningLogActivityAPI,
+    CheckInToggleAPI,
+    ProgressMatrixAPI,
+    ProgressMatrixAdvanceAPI,
+    GoalLinkComponentsAPI,
+    GoalConcludeAPI,
 )
 
 urlpatterns = [
@@ -104,5 +109,16 @@ urlpatterns = [
     path('api/v1/learning-items/<uuid:learning_id>/topics/<uuid:topic_id>/toggle/', LearningTopicToggleAPI.as_view(), name='learning-topic-toggle'),
     path('api/v1/learning-items/<uuid:pk>/schedule-session/', LearningScheduleSessionAPI.as_view(), name='learning-schedule-session'),
     path('api/v1/learning-items/<uuid:pk>/log-activity/', LearningLogActivityAPI.as_view(), name='learning-log-activity'),
+
+    # Activity Check-ins & Consistency (Fase 1)
+    path('api/v1/check-ins/toggle/', CheckInToggleAPI.as_view(), name='checkin-toggle'),
+
+    # Progress & Habits Matrix (Fase 2)
+    path('api/v1/progress-matrix/', ProgressMatrixAPI.as_view(), name='progress-matrix'),
+    path('api/v1/progress-matrix/<uuid:pk>/advance/', ProgressMatrixAdvanceAPI.as_view(), name='progress-matrix-advance'),
+
+    # Connected Goals (Fases 3 y 4)
+    path('api/v1/goals/<uuid:pk>/link-components/', GoalLinkComponentsAPI.as_view(), name='goal-link-components'),
+    path('api/v1/goals/<uuid:pk>/conclude/', GoalConcludeAPI.as_view(), name='goal-conclude'),
 ]
 

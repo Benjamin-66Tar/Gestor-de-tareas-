@@ -317,3 +317,121 @@ Implement an integrated **Welcome & Authentication Screen** serving as the appli
 
 ### Alternatives Considered
 - **Separate Third-Party Integration (e.g. Udemy/Coursera APIs)**: Rejected due to API paywalls, lack of uniform APIs for physical books and tech docs, and privacy considerations. A platform-agnostic URL + syllabus model works universally for all learning types.
+
+---
+
+## 18. Daily Check-in ("Listo hoy") & Consistency Engine (Fase 1)
+
+### Decision
+1. **Non-Destructive Daily Check-in**:
+   - Model `ActivityCheckIn` in `backend/models.py` referencing `user`, `date`, optional `learning_item`, optional `event_item`, `is_completed`, and `streak_count`.
+   - Distinct from parent lifecycle state: clicking `[ ✓ Listo hoy ]` creates/toggles the check-in for the current date only, leaving multi-day events and ongoing courses active in `IN_PROGRESS` or `PROGRAMMED`.
+   - Reversible toggle: A single click toggles the state locally (<50ms) and invokes `POST /api/v1/check-ins/toggle/`. Re-clicking reverts the check-in and adjusts the streak.
+2. **Dual Consistency Mode**:
+   - **Mode A (Individual Consecutive Streak 🔥)**: Counts consecutive days with at least one check-in for the specific course/event. A missed day resets the current streak.
+   - **Mode B (Weekly Frequency Target)**: Tracks target days per week (e.g. 4/5 days accomplished this week), evaluating attendance within the active Monday-Sunday window.
+3. **Visual Hierarchy**:
+   - Primary action on "Hoy" event cards and calendar day columns: `[ ✓ Listo hoy ]` (or `[ ✓ Realizado hoy ]` in emerald when active).
+   - Concluding the entire event/course permanently is relegated to a secondary dropdown/drawer action (`"Concluir evento definitivamente"`).
+
+### Rationale
+- Completely eliminates accidental premature closure of multi-week courses.
+- Provides immediate dopamine feedback and habit reinforcement without modal friction.
+
+### Alternatives Considered
+- **Modifying Event Status to Completed for the day**: Rejected because multi-day events would disappear from the rest of the week's schedule.
+- **Complex habit tracker third-party widgets**: Rejected to keep local ultra-fast state in `AuraState.tsx` without dependency bloat.
+
+---
+
+## 19. Activity Progress & Habits Matrix (`ActivityProgressMatrix`) (Fase 2)
+
+### Decision
+1. **Centralized Habits & Progress View**:
+   - Embedded in the "Aprendizaje" tab via view switcher: `[ Kanban ] | [ Lista ] | [ 📊 Matriz de Progreso ]`.
+   - Added direct shortcut button in `WeekExpandedView.tsx` and `CalendarGrid.tsx` header: `[ 📊 Ver Tabla de Progreso ]` triggering tab transition to Aprendizaje with matrix view mode.
+2. **Weekly Attendance Grid (Lun-Dom)**:
+   - Renders 7 day cells (Monday to Sunday) for the active week with "Hoy" highlighted in neon cyan/indigo.
+   - Attendance checkmarks populated directly from `ActivityCheckIn` records, with stepper buttons `[ ← ] [ → ]` to inspect past weeks.
+3. **Smart 1-Click Topic / Unit Advance (`[ + Avanzar tema ]`)**:
+   - In `TOPICS` mode: automatically marks the next incomplete `LearningTopic` as `is_completed=True` and recalculates percentage.
+   - In `MANUAL` / numeric mode: increments `current_unit` by +1 (capped at `total_units`) and updates percentage.
+   - No modal confirmation required; optimistic update in `<50ms` with background sync.
+4. **Smart Priority Sorting & Real-Time Filter**:
+   - Items pending check-in today are pinned to the top.
+   - Items completed today follow, ordered by highest active streak 🔥.
+   - Instant client-side text filter by activity title.
+
+### Rationale
+- Fulfills the user's explicit desire for a consolidated matrix combining habit consistency with content syllabus progression.
+- Allows 1-click execution for both daily attendance and curriculum advancement.
+
+### Alternatives Considered
+- **Separate Standalone Top-Level Tab**: Rejected to avoid overcrowding the TabBar (5 tabs is optimal for desktop and mobile).
+- **Read-Only Matrix**: Rejected because users need immediate actionability without having to open drawers.
+
+---
+
+## 20. Short-Term vs Long-Term Strategic Goals Redesign (Fase 3)
+
+### Decision
+1. **Classification Scheme**:
+   - Add field `time_horizon` to `Goal` model: choices `SHORT_TERM` (*Corto Plazo*) and `LONG_TERM` (*Largo Plazo*), default `SHORT_TERM`.
+   - Add optional self-referential foreign key `parent_goal = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='sub_goals')`.
+2. **Smart Suggestion in GoalDrawer**:
+   - When user sets or changes `deadline`, if days from today $\le 30$, default suggestion is `SHORT_TERM`; if $> 30$, default suggestion is `LONG_TERM`.
+   - The user can freely override with 1-click pills `[ ⚡ Corto Plazo ]` / `[ 🏔️ Largo Plazo ]`.
+3. **Filter Pills & Contextual Header Metrics**:
+   - Filter pills in `GoalsView`: `[ Todos ]`, `[ ⚡ Corto Plazo ]`, `[ 🏔️ Largo Plazo ]`.
+   - Header stat cards (Activas, Cumplidas, Avance Promedio) dynamically calculate values based on the active horizon filter.
+   - In "Todos", display a subtle micro-badge breakdown: `⚡ X corto plazo · 🏔️ Y largo plazo`.
+4. **Golden/Amber Styling for Long-Term Goals**:
+   - Short-term goals: Cyan/Emerald badge `[ ⚡ Corto Plazo ]` (`bg-emerald-500/10 text-emerald-400 border-emerald-500/20`).
+   - Long-term goals: Amber/Gold badge `[ 🏔️ Largo Plazo ]` (`bg-amber-500/10 text-amber-400 border-amber-500/30`), with a golden border accent (`border-amber-400/40`) and subtle warm ambient gradient background tint (`from-amber-500/5 via-slate-900/40 to-slate-900/90`).
+
+### Rationale
+- Brings psychological clarity and strategic hierarchy to goal management.
+- Amber/gold styling creates immediate visual distinction for high-stakes long-term visions while preserving UI elegance.
+
+### Alternatives Considered
+- **Fixed timeframes without manual override**: Rejected because users may have intensive 2-week strategic goals or flexible long-term aspirations.
+- **Separate pages for Short and Long term**: Rejected because unified filtering in `GoalsView` maintains continuity and speed.
+
+---
+
+## 21. Real Goal Progress Calculation & Connected Architecture (Fase 4)
+
+### Decision
+1. **Dynamic Progress Engine (Equitable Component Average)**:
+   - When a Goal has linked components, progress is automatically computed as the unweighted mean of present categories:
+     $$\text{Progress}_{\text{Goal}} = \text{round}\left(\frac{\sum_{c \in \text{PresentComponents}} \text{Average}(c)}{|\text{PresentComponents}|}\right)$$
+   - Present component categories evaluated:
+     1. **Projects**: $\bar{P}_{\text{proj}} = \frac{1}{M}\sum_{i=1}^{M} \text{progress\_percentage}(P_i)$
+     2. **Learning Items**: $\bar{P}_{\text{learn}} = \frac{1}{K}\sum_{j=1}^{K} \text{progress\_percentage}(L_j)$
+     3. **Milestones**: $\bar{P}_{\text{milestones}} = \text{calculate\_milestones\_progress}(G)$
+   - If a Goal only has Projects and Milestones, $|\text{PresentComponents}| = 2$ and each contributes 50%. If it only has Learning items, Learning accounts for 100%. If none are linked, falls back to manual progress or 0%.
+2. **Visual Accordions in `GoalCard`**:
+   - Collapsible sections:
+     * `[ 🚀 Proyectos ({count}) ▼ ]`: List of linked projects showing color pill, title, progress bar, percentage, and 1-click jump button to Kanban workspace.
+     * `[ 📚 Cursos / Aprendizaje ({count}) ▼ ]`: List of linked learning items showing status pill, title, progress bar, percentage, and 1-click jump button to learning drawer/platform.
+3. **Multi-Factor Breakdown Chips**:
+   - Below the consolidated progress bar in `GoalCard`, display compact informative chips:
+     * `[ 🚀 Proyectos: X% ]` (if projects present)
+     * `[ 📚 Aprendizaje: Y% ]` (if learning items present)
+     * `[ 📌 Hitos: Z% ]` (if milestones present)
+4. **Bidirectional Linkage**:
+   - In `GoalDrawer`: Multi-select pickers allowing the user to check/uncheck associated Projects and Learning resources.
+   - In `ProjectDrawer` and `LearningDrawer`: Goal dropdown allowing association to an overarching Goal.
+5. **100% Celebration & Lifecycle Confirmation**:
+   - When calculated progress reaches 100%, the GoalCard displays a celebratory achievement banner:
+     * `"🎉 ¡Meta alcanzada al 100%! [ Concluir y archivar objetivo ]"`
+   - Clicking the action marks the goal as `COMPLETED` and archives it. The goal is NOT abruptly closed automatically, allowing the user to review and celebrate their milestone.
+
+### Rationale
+- Completely bridges daily operational execution (Kanban tasks, course study) with strategic vision.
+- Equitable category averaging ensures balanced progress without burdening the user with manual mathematical weight configuration.
+- Celebration banner respects user agency while acknowledging achievement.
+
+### Alternatives Considered
+- **Complex manual weighting across all items**: Rejected because assigning mathematical weights between a Kanban project and a 40-hour course creates high friction.
+- **Automatic auto-close at 100%**: Rejected by user decision to prevent unexpected disappearance of goals from active views.

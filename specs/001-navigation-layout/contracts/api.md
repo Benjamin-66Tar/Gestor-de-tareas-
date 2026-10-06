@@ -805,6 +805,182 @@ All endpoints are served under the `/api/v1` namespace and expect/return `applic
 }
 ```
 
+---
+
+## 8. Activity Check-ins & Consistency API (Fase 1)
+
+### Toggle Daily Check-in ("Listo hoy")
+- **Method**: `POST`
+- **URL**: `/api/v1/check-ins/toggle/`
+- **Headers**: `Authorization: Bearer <token>`, `Content-Type: application/json`
+- **Request Body**:
+```json
+{
+  "learning_item_id": "l1-1111-2222-3333-444455556666",
+  "date": "2026-10-05"
+}
+```
+*Note: Alternately accepts `event_item_id` for study calendar events.*
+- **Response (200 OK)**:
+```json
+{
+  "status": "toggled",
+  "is_completed": true,
+  "date": "2026-10-05",
+  "streak_count": 6,
+  "item_id": "l1-1111-2222-3333-444455556666",
+  "item_type": "LEARNING"
+}
+```
+
+---
+
+## 9. Progress & Habits Matrix API (Fase 2)
+
+### Get Progress Matrix Data
+- **Method**: `GET`
+- **URL**: `/api/v1/progress-matrix/`
+- **Query Params**: `week_offset` (int, default: 0), `search` (string)
+- **Response (200 OK)**:
+```json
+{
+  "active_week": {
+    "start_date": "2026-10-05",
+    "end_date": "2026-10-11"
+  },
+  "rows": [
+    {
+      "id": "l1-1111-2222-3333-444455556666",
+      "title": "Designing Data-Intensive Applications",
+      "item_type": "LEARNING",
+      "platform_name": "O'Reilly",
+      "color_hex": "#8B5CF6",
+      "current_streak": 6,
+      "is_checked_today": true,
+      "progress_mode": "TOPICS",
+      "progress_percentage": 45,
+      "current_unit": 9,
+      "total_units": 20,
+      "next_topic_title": "Capítulo 5: Replicación de Datos",
+      "weekly_attendance": [
+        { "date": "2026-10-05", "day_letter": "L", "is_today": true, "is_checked": true },
+        { "date": "2026-10-06", "day_letter": "M", "is_today": false, "is_checked": false },
+        { "date": "2026-10-07", "day_letter": "X", "is_today": false, "is_checked": false },
+        { "date": "2026-10-08", "day_letter": "J", "is_today": false, "is_checked": false },
+        { "date": "2026-10-09", "day_letter": "V", "is_today": false, "is_checked": false },
+        { "date": "2026-10-10", "day_letter": "S", "is_today": false, "is_checked": false },
+        { "date": "2026-10-11", "day_letter": "D", "is_today": false, "is_checked": false }
+      ]
+    }
+  ]
+}
+```
+
+### Quick Advance Item from Matrix (`+ Avanzar tema`)
+- **Method**: `POST`
+- **URL**: `/api/v1/progress-matrix/{id}/advance/`
+- **Headers**: `Authorization: Bearer <token>`, `Content-Type: application/json`
+- **Response (200 OK)**:
+```json
+{
+  "id": "l1-1111-2222-3333-444455556666",
+  "advanced_type": "TOPIC",
+  "completed_topic_title": "Capítulo 5: Replicación de Datos",
+  "next_topic_title": "Capítulo 6: Particionamiento",
+  "current_unit": 10,
+  "total_units": 20,
+  "progress_percentage": 50
+}
+```
+
+---
+
+## 10. Goals Horizons & Connected Components API (Fases 3 y 4)
+
+### List Goals by Time Horizon
+- **Method**: `GET`
+- **URL**: `/api/v1/goals/?time_horizon=SHORT_TERM`
+- **Response (200 OK)**: Standard list of goals filtered by `time_horizon`.
+
+### Get Goal Connected Breakdown & Accordions
+- **Method**: `GET`
+- **URL**: `/api/v1/goals/{id}/`
+- **Response (200 OK)**:
+```json
+{
+  "id": "g1-1234-5678-abcd-ef0000000001",
+  "title": "Lanzar MVP de Aura y Certificación Cloud",
+  "time_horizon": "LONG_TERM",
+  "parent_goal_id": null,
+  "category": "Desarrollo",
+  "color_hex": "#10B981",
+  "progress_mode": "CONNECTED",
+  "progress_percentage": 73,
+  "status": "ACTIVE",
+  "is_achieved_100": false,
+  "breakdown": {
+    "projects_avg": 85,
+    "courses_avg": 60,
+    "milestones_avg": 75,
+    "present_count": 3
+  },
+  "linked_projects": [
+    {
+      "id": "p1-proj-1111",
+      "title": "Backend DRF & API Core",
+      "color_hex": "#3B82F6",
+      "status": "ACTIVE",
+      "progress_percentage": 85
+    }
+  ],
+  "linked_courses": [
+    {
+      "id": "l1-1111-2222",
+      "title": "AWS Solutions Architect",
+      "resource_type": "COURSE",
+      "status": "IN_PROGRESS",
+      "progress_percentage": 60,
+      "platform_url": "https://aws.training"
+    }
+  ],
+  "milestones": [
+    {
+      "id": "m1-mile-1111",
+      "title": "Deploy inicial a staging",
+      "is_completed": true,
+      "weight": 1
+    }
+  ]
+}
+```
+
+### Associate Components to Goal (Bidirectional Sync)
+- **Method**: `POST`
+- **URL**: `/api/v1/goals/{id}/link-components/`
+- **Headers**: `Authorization: Bearer <token>`, `Content-Type: application/json`
+- **Request Body**:
+```json
+{
+  "project_ids": ["p1-proj-1111"],
+  "learning_item_ids": ["l1-1111-2222"]
+}
+```
+- **Response (200 OK)**: Updated goal details with recalculated `progress_percentage` and breakdown.
+
+### Formal Goal Conclude & Archive (100% Celebration Action)
+- **Method**: `POST`
+- **URL**: `/api/v1/goals/{id}/conclude/`
+- **Headers**: `Authorization: Bearer <token>`, `Content-Type: application/json`
+- **Response (200 OK)**:
+```json
+{
+  "id": "g1-1234-5678-abcd-ef0000000001",
+  "status": "COMPLETED",
+  "progress_percentage": 100,
+  "completed_at": "2026-10-05T18:00:00Z"
+}
+```
+
 
 
 

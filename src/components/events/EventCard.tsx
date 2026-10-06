@@ -8,8 +8,17 @@ interface EventCardProps {
 }
 
 export const EventCard: React.FC<EventCardProps> = ({ event, onEdit }) => {
-  const { updateEventStatus, deleteEvent } = useAuraState();
+  const { updateEventStatus, deleteEvent, checkIns, streaks, toggleCheckIn } = useAuraState();
   const [isUpdating, setIsUpdating] = useState<boolean>(false);
+
+  const todayDate = new Date().toISOString().slice(0, 10);
+  const isCheckedToday = !!checkIns[`${event.id}_${todayDate}`];
+  const currentStreak = streaks[event.id] || 0;
+
+  const handleToggleCheckIn = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    await toggleCheckIn({ eventItemId: event.id, date: todayDate });
+  };
 
   const handleDelete = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -194,25 +203,51 @@ export const EventCard: React.FC<EventCardProps> = ({ event, onEdit }) => {
       </div>
 
       {/* Quick Action Footer */}
-      <div className="pt-3 mt-3 border-t border-slate-800/80 flex items-center justify-between gap-2 flex-wrap text-xs">
-        <div className="flex items-center gap-1.5 flex-wrap">
-          {event.status !== 'COMPLETED' && (
+      <div className="pt-3 mt-3 border-t border-slate-800/80 flex items-center justify-between gap-3 flex-wrap text-xs">
+        {/* Primary Daily Consistency Action: Listo hoy toggle */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {event.status === 'PROGRAMMED' && (
             <button
-              onClick={(e) => handleStatusChange('COMPLETED', e)}
-              className="px-2.5 py-1 rounded-lg font-semibold bg-emerald-500/10 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 transition active:scale-95 text-xs flex items-center gap-1"
+              onClick={handleToggleCheckIn}
+              className={`px-3.5 py-1.5 rounded-xl font-bold transition-all duration-150 transform active:scale-95 flex items-center gap-1.5 text-xs shadow-md ${
+                isCheckedToday
+                  ? 'bg-emerald-500 text-slate-950 hover:bg-emerald-400 ring-2 ring-emerald-400/50'
+                  : 'bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/30 border border-emerald-500/40'
+              }`}
+              title="Registrar constancia de hoy (no cierra el evento para días futuros)"
             >
               <span>✓</span>
-              <span>Completar</span>
+              <span>{isCheckedToday ? 'Realizado hoy' : 'Listo hoy'}</span>
+              {currentStreak > 0 && (
+                <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-black border ${
+                  isCheckedToday
+                    ? 'bg-slate-950/20 text-slate-950 border-slate-950/30'
+                    : 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                }`}>
+                  🔥 {currentStreak}
+                </span>
+              )}
             </button>
           )}
 
-          {event.status !== 'CANCELED' && (
+          {/* Secondary conclusion action */}
+          {event.status === 'PROGRAMMED' && (
+            <button
+              onClick={(e) => handleStatusChange('COMPLETED', e)}
+              className="text-[11px] text-slate-400 hover:text-emerald-400 transition underline underline-offset-2 ml-1"
+              title="Concluir evento definitivamente (marca todo el ciclo como terminado)"
+            >
+              Concluir evento definitivamente
+            </button>
+          )}
+
+          {event.status !== 'CANCELED' && event.status !== 'COMPLETED' && (
             <button
               onClick={(e) => handleStatusChange('CANCELED', e)}
-              className="px-2.5 py-1 rounded-lg font-semibold bg-rose-500/10 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 transition active:scale-95 text-xs flex items-center gap-1"
+              className="px-2 py-1 rounded-lg font-medium text-slate-500 hover:text-rose-400 transition text-xs"
+              title="Cancelar evento"
             >
-              <span>✕</span>
-              <span>Cancelar</span>
+              ✕ Cancelar
             </button>
           )}
 
@@ -229,7 +264,7 @@ export const EventCard: React.FC<EventCardProps> = ({ event, onEdit }) => {
 
         <button
           onClick={() => onEdit(event)}
-          className="text-[11px] font-semibold text-slate-400 hover:text-slate-200 transition"
+          className="text-[11px] font-semibold text-slate-400 hover:text-slate-200 transition ml-auto"
         >
           Detalles &rarr;
         </button>

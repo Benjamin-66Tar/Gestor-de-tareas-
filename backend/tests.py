@@ -7,7 +7,7 @@ from rest_framework.test import APITestCase
 from django.utils import timezone
 from datetime import datetime
 from django.contrib.auth.models import User
-from .models import ElementoAura, UserProfile, Notification, Goal, GoalMilestone, Project, ProjectTask, TaskSubtask, EventItem, PushSubscription, AuditLog, LearningItem, LearningTopic
+from .models import ElementoAura, UserProfile, Notification, Goal, GoalMilestone, Project, ProjectTask, TaskSubtask, EventItem, PushSubscription, AuditLog, LearningItem, LearningTopic, ActivityCheckIn
 from .authentication import create_user_token
 
 
@@ -1605,6 +1605,311 @@ class LearningDormancyServiceTests(TestCase):
         self.assertEqual(len(notifs2), 0)
 
 
+class LearningGoalLinkIntegrationTests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="learner1", email="learner@aura.app", password="password123")
+        self.client.force_authenticate(user=self.user)
+
+        self.goal = Goal.objects.create(
+            user=self.user,
+            title="Aprender TypeScript y React",
+            category="Aprendizaje",
+            progress_mode="MILESTONES",
+            status="ACTIVE"
+        )
+        self.m1 = GoalMilestone.objects.create(
+            goal=self.goal,
+            title="Completar curso de TypeScript",
+            is_completed=False,
+            weight=1,
+            order=0
+        )
+        self.m2 = GoalMilestone.objects.create(
+            goal=self.goal,
+            title="Construir app práctica",
+            is_completed=False,
+            weight=1,
+            order=1
+        )
+
+        self.course = LearningItem.objects.create(
+            user=self.user,
+            title="Curso de TypeScript Avanzado",
+            resource_type="COURSE",
+            status="IN_PROGRESS",
+            progress_mode="TOPICS",
+            goal=self.goal
+        )
+        self.t1 = LearningTopic.objects.create(learning_item=self.course, title="Tipos Básicos", is_completed=True, order=0)
+        self.t2 = LearningTopic.objects.create(learning_item=self.course, title="Genéricos", is_completed=False, order=1)
+
+    def test_completing_course_auto_completes_goal_milestone(self):
+        from .services import calculate_learning_progress
+
+        # Initially milestone m1 is uncompleted, goal progress is 0%
+        self.assertFalse(self.m1.is_completed)
+        self.assertEqual(self.goal.progress_percentage, 0)
+
+        # Complete second topic to make course 100%
+        self.t2.is_completed = True
+        self.t2.save()
+
+        # Calculate learning progress
+        progress = calculate_learning_progress(self.course)
+        self.assertEqual(progress, 100)
+        self.assertEqual(self.course.status, 'COMPLETED')
+
+        # Milestone m1 should now be auto-completed
+        self.m1.refresh_from_db()
+        self.assertTrue(self.m1.is_completed)
+
+        # Goal progress should be recalculated (1 of 2 milestones = 50%)
+        self.goal.refresh_from_db()
+        self.assertEqual(self.goal.progress_percentage, 50)
+
+    def test_serializers_include_linkage_fields(self):
+        from .serializers import LearningItemSerializer, GoalSerializer
+        goal_data = GoalSerializer(self.goal).data
+        self.assertEqual(goal_data['linked_learning_count'], 1)
+
+        course_data = LearningItemSerializer(self.course).data
+        self.assertEqual(course_data['goal_title'], "Aprender TypeScript y React")
 
 
+class ActivityCheckInAPITests(APITestCase):
+    def setUp(self):
+        from datetime import timedelta
+        self.user = User.objects.create_user(username="checkinuser", password="securepassword123")
+        self.token = create_user_token(self.user)
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {self.token}')
 
+        self.course = LearningItem.objects.create(
+            user=self.user,
+            title="Diseño de Software",
+            resource_type="COURSE",
+            status="IN_PROGRESS",
+            progress_mode="TOPICS",
+            current_unit=0,
+            total_units=5
+        )
+        self.event = EventItem.objects.create(
+            user=self.user,
+            title="Sesión de Estudio Semanal",
+            start_time=timezone.now(),
+            end_time=timezone.now() + timedelta(hours=2),
+            status="PROGRAMMED"
+        )
+        self.toggle_url = reverse('checkin-toggle')
+
+    def test_toggle_checkin_learning_item(self):
+        """Should create check-in with is_completed=True and calculate streak"""
+        response = self.client.post(self.toggle_url, {
+            'learning_item_id': str(self.course.id),
+            'date': str(timezone.localdate())
+        })
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data['is_completed'])
+        self.assertEqual(response.data['streak_count'], 1)
+        self.assertEqual(response.data['item_type'], 'LEARNING')
+
+        # Check persistence
+        checkin = ActivityCheckIn.objects.get(user=self.user, learning_item=self.course, date=timezone.localdate())
+        self.assertTrue(checkin.is_completed)
+
+    def test_toggle_checkin_reversible(self):
+        """Clicking toggle again should uncheck without removing history"""
+        # First toggle: check
+        self.client.post(self.toggle_url, {'learning_item_id': str(self.course.id)})
+        # Second toggle: uncheck
+        response = self.client.post(self.toggle_url, {'learning_item_id': str(self.course.id)})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(response.data['is_completed'])
+
+    def test_dual_streak_calculation(self):
+        """Calculates consecutive days and weekly attendance targets"""
+        from datetime import timedelta
+        from .services import calculate_streak
+        today = timezone.localdate()
+
+        # Day 1: yesterday
+        ActivityCheckIn.objects.create(
+            user=self.user,
+            learning_item=self.course,
+            date=today - timedelta(days=1),
+            is_completed=True
+        )
+        # Day 2: today
+        ActivityCheckIn.objects.create(
+            user=self.user,
+            learning_item=self.course,
+            date=today,
+            is_completed=True
+        )
+
+        streak_consecutive = calculate_streak(self.user, learning_item=self.course, mode='CONSECUTIVE')
+        self.assertEqual(streak_consecutive, 2)
+
+        streak_weekly = calculate_streak(self.user, learning_item=self.course, mode='WEEKLY_TARGET')
+        self.assertGreaterEqual(streak_weekly, 1)
+
+    def test_toggle_event_checkin_preserves_event_status(self):
+        """Daily check-in on multi-day event marks attendance without canceling/completing the event"""
+        response = self.client.post(self.toggle_url, {'event_item_id': str(self.event.id)})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data['is_completed'])
+
+        self.event.refresh_from_db()
+        self.assertEqual(self.event.status, 'PROGRAMMED')
+
+
+class ProgressMatrixAPITests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="matrixuser", password="password123")
+        self.token = create_user_token(self.user)
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {self.token}')
+
+        self.course = LearningItem.objects.create(
+            user=self.user,
+            title="Arquitectura Limpia",
+            resource_type="BOOK",
+            status="IN_PROGRESS",
+            progress_mode="TOPICS",
+            current_unit=0,
+            total_units=3
+        )
+        self.t1 = LearningTopic.objects.create(learning_item=self.course, title="Tema 1", is_completed=False, order=0)
+        self.t2 = LearningTopic.objects.create(learning_item=self.course, title="Tema 2", is_completed=False, order=1)
+        self.matrix_url = reverse('progress-matrix')
+
+    def test_get_progress_matrix(self):
+        """Should return active week and rows sorted by pending today first"""
+        response = self.client.get(self.matrix_url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('active_week', response.data)
+        self.assertIn('rows', response.data)
+        self.assertGreaterEqual(len(response.data['rows']), 1)
+        row = response.data['rows'][0]
+        self.assertEqual(len(row['weekly_attendance']), 7)
+        self.assertFalse(row['is_checked_today'])
+
+    def test_advance_progress_matrix_item(self):
+        """1-click advance completes next topic and automatically logs today's check-in"""
+        advance_url = reverse('progress-matrix-advance', kwargs={'pk': str(self.course.id)})
+        response = self.client.post(advance_url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['completed_topic_title'], "Tema 1")
+        self.assertEqual(response.data['next_topic_title'], "Tema 2")
+
+        self.t1.refresh_from_db()
+        self.assertTrue(self.t1.is_completed)
+
+        # Check that check-in was registered
+        checkin_exists = ActivityCheckIn.objects.filter(
+            user=self.user,
+            learning_item=self.course,
+            date=timezone.localdate(),
+            is_completed=True
+        ).exists()
+        self.assertTrue(checkin_exists)
+
+
+class GoalHorizonAPITests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="horizonuser", password="password123")
+        self.token = create_user_token(self.user)
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {self.token}')
+
+        self.long_goal = Goal.objects.create(
+            user=self.user,
+            title="Convertirse en Tech Lead",
+            time_horizon="LONG_TERM",
+            category="Carrera"
+        )
+        self.short_goal = Goal.objects.create(
+            user=self.user,
+            title="Aprender Docker",
+            time_horizon="SHORT_TERM",
+            parent_goal=self.long_goal,
+            category="DevOps"
+        )
+        self.goals_url = reverse('goals-list-create')
+
+    def test_filter_goals_by_time_horizon(self):
+        """Can query goals filtered by SHORT_TERM and LONG_TERM"""
+        res_short = self.client.get(self.goals_url, {'time_horizon': 'SHORT_TERM'})
+        self.assertEqual(res_short.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(res_short.data), 1)
+        self.assertEqual(res_short.data[0]['title'], "Aprender Docker")
+
+        res_long = self.client.get(self.goals_url, {'time_horizon': 'LONG_TERM'})
+        self.assertEqual(res_long.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(res_long.data), 1)
+        self.assertEqual(res_long.data[0]['title'], "Convertirse en Tech Lead")
+
+    def test_parent_child_goal_serialization(self):
+        """Short-term goal includes parent goal id and title"""
+        detail_url = reverse('goal-detail', kwargs={'pk': str(self.short_goal.id)})
+        response = self.client.get(detail_url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['parent_goal_id'], str(self.long_goal.id))
+        self.assertEqual(response.data['parent_goal_title'], "Convertirse en Tech Lead")
+
+
+class ConnectedGoalAPITests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="connecteduser", password="password123")
+        self.token = create_user_token(self.user)
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {self.token}')
+
+        self.goal = Goal.objects.create(
+            user=self.user,
+            title="Lanzar Plataforma Web",
+            progress_mode="CONNECTED",
+            category="Emprendimiento"
+        )
+        self.proj = Project.objects.create(
+            user=self.user,
+            title="Frontend App",
+            progress_percentage=80,
+            goal=self.goal
+        )
+        self.course = LearningItem.objects.create(
+            user=self.user,
+            title="React y Vite Master",
+            progress_percentage=60,
+            goal=self.goal
+        )
+        self.milestone = GoalMilestone.objects.create(
+            goal=self.goal,
+            title="Beta Testing",
+            is_completed=True,
+            weight=1
+        )
+
+    def test_equitable_multi_component_progress_calculation(self):
+        """Calculates equitable average across projects (80%), courses (60%), and milestones (100%)"""
+        from .services import calculate_goal_progress
+        progress = calculate_goal_progress(self.goal)
+        # Average of (80 + 60 + 100) / 3 = 240 / 3 = 80%
+        self.assertEqual(progress, 80)
+        self.goal.refresh_from_db()
+        self.assertEqual(self.goal.progress_percentage, 80)
+
+    def test_link_components_api(self):
+        """Associates projects and courses bidirectionally via REST API"""
+        link_url = reverse('goal-link-components', kwargs={'pk': str(self.goal.id)})
+        response = self.client.post(link_url, {
+            'project_ids': [str(self.proj.id)],
+            'learning_item_ids': [str(self.course.id)]
+        })
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('breakdown', response.data)
+        self.assertEqual(response.data['breakdown']['present_count'], 3)
+
+    def test_conclude_goal_api(self):
+        """Marks goal as COMPLETED and 100% when celebrating completion"""
+        conclude_url = reverse('goal-conclude', kwargs={'pk': str(self.goal.id)})
+        response = self.client.post(conclude_url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['status'], 'COMPLETED')
+        self.assertEqual(response.data['progress_percentage'], 100)

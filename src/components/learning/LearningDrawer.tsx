@@ -510,6 +510,11 @@ export const LearningDrawer: React.FC<LearningDrawerProps> = ({
                   </option>
                 ))}
               </select>
+              {goalId && (
+                <span className="text-[10px] text-purple-400 mt-1 block">
+                  ✓ Al completar el 100%, se actualizarán los hitos y avance de esta meta.
+                </span>
+              )}
             </div>
 
             <div>

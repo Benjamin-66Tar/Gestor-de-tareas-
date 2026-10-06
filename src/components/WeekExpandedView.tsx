@@ -35,7 +35,12 @@ export const WeekExpandedView: React.FC<WeekExpandedViewProps> = ({
     setFechaSemanaSeleccionada,
     setVistaCalendario,
     irSemanaAnterior,
-    irSemanaSiguiente
+    irSemanaSiguiente,
+    setTabActiva,
+    setLearningViewMode,
+    checkIns,
+    streaks,
+    toggleCheckIn,
   } = useAuraState();
 
   // Generar los 7 días de la semana activa a partir de la fecha seleccionada
@@ -107,8 +112,20 @@ export const WeekExpandedView: React.FC<WeekExpandedViewProps> = ({
           </div>
         </div>
 
-        {/* Lado Derecho: Controles de paso semanal (Anterior, Hoy, Siguiente) */}
-        <div className="flex items-center gap-2 self-end lg:self-auto">
+        {/* Lado Derecho: Controles de paso semanal (Anterior, Hoy, Siguiente) y Acceso a Matriz */}
+        <div className="flex items-center gap-2 self-end lg:self-auto flex-wrap">
+          <button
+            onClick={() => {
+              setTabActiva('APRENDIZAJE');
+              setLearningViewMode('MATRIX');
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-600/20 hover:bg-violet-600/35 text-violet-300 hover:text-white text-xs font-bold rounded-lg transition border border-violet-500/40 active:scale-95 shadow-sm"
+            title="Ir a la Matriz de Progreso y Hábitos de Aprendizaje"
+          >
+            <span>📊</span>
+            <span className="hidden sm:inline">Ver Tabla de Progreso</span>
+          </button>
+
           <button
             onClick={irSemanaAnterior}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-semibold rounded-lg transition border border-slate-700/60 active:scale-95"
@@ -222,6 +239,37 @@ export const WeekExpandedView: React.FC<WeekExpandedViewProps> = ({
                           <p className="text-[11px] text-slate-400 line-clamp-2 mt-1 leading-snug">
                             {item.descripcion}
                           </p>
+                        )}
+
+                        {/* Check-in diario de constancia (Fase 1 - US10) */}
+                        {item.tipo === 'EVENTO' && (
+                          <div className="mt-2 pt-1.5 border-t border-slate-800/80 flex items-center justify-between">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const eventId = String(item.id).replace('event-', '');
+                                toggleCheckIn({ eventItemId: eventId, date: dia.formattedDate });
+                              }}
+                              className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all duration-150 flex items-center gap-1 active:scale-95 ${
+                                checkIns[`${String(item.id).replace('event-', '')}_${dia.formattedDate}`]
+                                  ? 'bg-emerald-500 text-slate-950 font-black shadow-sm ring-1 ring-emerald-400'
+                                  : 'bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25 border border-emerald-500/30'
+                              }`}
+                              title="Registrar constancia de este día"
+                            >
+                              <span>✓</span>
+                              <span>
+                                {checkIns[`${String(item.id).replace('event-', '')}_${dia.formattedDate}`]
+                                  ? 'Realizado'
+                                  : 'Listo hoy'}
+                              </span>
+                              {(streaks[String(item.id).replace('event-', '')] || 0) > 0 && (
+                                <span className="text-[9px] font-black text-amber-300">
+                                  🔥 {streaks[String(item.id).replace('event-', '')]}
+                                </span>
+                              )}
+                            </button>
+                          </div>
                         )}
                       </div>
                     );

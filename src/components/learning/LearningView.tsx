@@ -1,9 +1,10 @@
-import React, { useState, useMemo } from 'react';
+import React, { useMemo } from 'react';
 import { useAuraState } from '../../context/AuraState';
 import { LearningItem, ResourceType, LearningStatus } from '../../domain/types';
 import { LearningCard } from './LearningCard';
 import { LearningDrawer } from './LearningDrawer';
 import { StudySessionModal } from './StudySessionModal';
+import { ActivityProgressMatrix } from './ActivityProgressMatrix';
 
 export const LearningView: React.FC = () => {
   const {
@@ -20,9 +21,9 @@ export const LearningView: React.FC = () => {
     studyModalItem,
     setStudyModalItem,
     fetchLearningList,
+    learningViewMode,
+    setLearningViewMode,
   } = useAuraState();
-
-  const [viewMode, setViewMode] = useState<'KANBAN' | 'GRID'>('KANBAN');
 
   // Resource Type pills
   const typePills: { type: 'ALL' | ResourceType; label: string; icon: string }[] = [
@@ -220,29 +221,41 @@ export const LearningView: React.FC = () => {
           ))}
         </div>
 
-        {/* View Mode Toggle (Kanban vs Grid) */}
-        <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800 self-end md:self-auto">
+        {/* View Mode Switcher: Kanban | Lista | Matriz de Progreso (T161) */}
+        <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800 self-end md:self-auto overflow-x-auto">
           <button
-            onClick={() => setViewMode('KANBAN')}
-            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition ${
-              viewMode === 'KANBAN'
+            onClick={() => setLearningViewMode('KANBAN')}
+            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition whitespace-nowrap ${
+              learningViewMode === 'KANBAN'
                 ? 'bg-purple-600 text-white shadow'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
             title="Vista de columnas por estado"
           >
-            Columnas
+            Kanban
           </button>
           <button
-            onClick={() => setViewMode('GRID')}
-            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition ${
-              viewMode === 'GRID'
+            onClick={() => setLearningViewMode('LIST')}
+            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition whitespace-nowrap ${
+              learningViewMode === 'LIST'
                 ? 'bg-purple-600 text-white shadow'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
-            title="Vista de cuadrícula continua"
+            title="Vista de lista / cuadrícula"
           >
-            Cuadrícula
+            Lista
+          </button>
+          <button
+            onClick={() => setLearningViewMode('MATRIX')}
+            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap ${
+              learningViewMode === 'MATRIX'
+                ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-md shadow-purple-600/30'
+                : 'text-purple-300 hover:text-purple-200 hover:bg-purple-500/10'
+            }`}
+            title="Matriz semanal de hábitos y progreso con avance en 1-clic"
+          >
+            <span>📊</span>
+            <span>Matriz de Progreso</span>
           </button>
         </div>
       </div>
@@ -271,8 +284,13 @@ export const LearningView: React.FC = () => {
         </div>
       )}
 
-      {/* Empty State */}
-      {!learningLoading && filteredItems.length === 0 && (
+      {/* 4. Vista de Matriz de Progreso (Fase 2 - US11) */}
+      {learningViewMode === 'MATRIX' && (
+        <ActivityProgressMatrix />
+      )}
+
+      {/* Empty State para vistas Kanban y Lista */}
+      {learningViewMode !== 'MATRIX' && !learningLoading && filteredItems.length === 0 && (
         <div className="text-center py-16 px-4 bg-slate-900/30 border border-dashed border-slate-800 rounded-3xl">
           <span className="text-4xl mb-3 block">📚</span>
           <h3 className="text-base font-bold text-slate-200 mb-1">
@@ -296,8 +314,8 @@ export const LearningView: React.FC = () => {
         </div>
       )}
 
-      {/* 4. Kanban View (Grouped by status) */}
-      {!learningLoading && filteredItems.length > 0 && viewMode === 'KANBAN' && (
+      {/* 5. Kanban View (Grouped by status) */}
+      {learningViewMode === 'KANBAN' && !learningLoading && filteredItems.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 items-start">
           {columnsConfig.map((col) => {
             const items = itemsByStatus[col.status] || [];
@@ -341,8 +359,8 @@ export const LearningView: React.FC = () => {
         </div>
       )}
 
-      {/* 5. Grid View */}
-      {!learningLoading && filteredItems.length > 0 && viewMode === 'GRID' && (
+      {/* 6. List/Grid View */}
+      {learningViewMode === 'LIST' && !learningLoading && filteredItems.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
           {filteredItems.map((item) => (
             <LearningCard
