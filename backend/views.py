@@ -1054,10 +1054,49 @@ class LearningItemListCreateAPI(APIView):
     def post(self, request):
         from .serializers import LearningItemSerializer
         from .services import calculate_learning_progress, log_audit_event, get_client_ip
+        from django.utils import timezone
 
-        serializer = LearningItemSerializer(data=request.data)
+        data = request.data.copy() if hasattr(request.data, 'copy') else dict(request.data)
+        url = data.get('platform_url')
+        if url and not data.get('platform_name'):
+            u = str(url).lower()
+            if 'youtube.com' in u or 'youtu.be' in u:
+                data['platform_name'] = 'YouTube'
+                if not data.get('color_hex'):
+                    data['color_hex'] = '#EF4444'
+            elif 'udemy.com' in u:
+                data['platform_name'] = 'Udemy'
+                if not data.get('color_hex'):
+                    data['color_hex'] = '#A435F0'
+            elif 'coursera.org' in u:
+                data['platform_name'] = 'Coursera'
+                if not data.get('color_hex'):
+                    data['color_hex'] = '#0056D2'
+            elif 'platzi.com' in u:
+                data['platform_name'] = 'Platzi'
+                if not data.get('color_hex'):
+                    data['color_hex'] = '#00BF63'
+            elif 'edx.org' in u:
+                data['platform_name'] = 'edX'
+                if not data.get('color_hex'):
+                    data['color_hex'] = '#D9381E'
+            elif 'github.com' in u:
+                data['platform_name'] = 'GitHub'
+                if not data.get('color_hex'):
+                    data['color_hex'] = '#6E5494'
+            elif 'medium.com' in u:
+                data['platform_name'] = 'Medium'
+                if not data.get('color_hex'):
+                    data['color_hex'] = '#00AB6C'
+
+        serializer = LearningItemSerializer(data=data)
         if serializer.is_valid():
             item = serializer.save(user=request.user)
+            if item.status == 'DROPPED':
+                item.dropped_at = timezone.now()
+                item.is_focus = False
+                item.goal = None
+                item.save(update_fields=['dropped_at', 'is_focus', 'goal', 'updated_at'])
             calculate_learning_progress(item)
             log_audit_event(
                 user=request.user,
@@ -1092,12 +1131,23 @@ class LearningItemDetailAPI(APIView):
 
     def patch(self, request, pk):
         from .serializers import LearningItemDetailSerializer, LearningItemSerializer
-        from .services import calculate_learning_progress, log_audit_event, get_client_ip
+        from .services import calculate_learning_progress, calculate_goal_progress, log_audit_event, get_client_ip
+        from django.utils import timezone
 
         item = self.get_object(pk, request.user)
+        old_goal = item.goal
         serializer = LearningItemSerializer(item, data=request.data, partial=True)
         if serializer.is_valid():
             updated_item = serializer.save()
+            if updated_item.status == 'DROPPED':
+                updated_item.is_focus = False
+                updated_item.dropped_at = timezone.now()
+                if old_goal:
+                    updated_item.goal = None
+                    updated_item.save(update_fields=['dropped_at', 'is_focus', 'goal', 'updated_at'])
+                    calculate_goal_progress(old_goal)
+                else:
+                    updated_item.save(update_fields=['dropped_at', 'is_focus', 'updated_at'])
             calculate_learning_progress(updated_item)
             log_audit_event(
                 user=request.user,
@@ -1113,12 +1163,16 @@ class LearningItemDetailAPI(APIView):
 
     def delete(self, request, pk):
         from django.utils import timezone
-        from .services import log_audit_event, get_client_ip
+        from .services import log_audit_event, get_client_ip, calculate_goal_progress
 
         item = self.get_object(pk, request.user)
+        old_goal = item.goal
         item.is_deleted = True
         item.deleted_at = timezone.now()
-        item.save(update_fields=['is_deleted', 'deleted_at', 'updated_at'])
+        item.is_focus = False
+        item.save(update_fields=['is_deleted', 'deleted_at', 'is_focus', 'updated_at'])
+        if old_goal:
+            calculate_goal_progress(old_goal)
         log_audit_event(
             user=request.user,
             action='DELETE',
@@ -1129,6 +1183,124 @@ class LearningItemDetailAPI(APIView):
             ip_address=get_client_ip(request)
         )
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class LearningBulkActionAPI(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request):
+        from django.db import transaction
+        from django.utils import timezone
+        from .models import LearningItem, Goal
+        from .services import calculate_goal_progress, log_audit_event, get_client_ip
+
+        item_ids = request.data.get('item_ids', [])
+        action = request.data.get('action')
+        payload = request.data.get('payload', {})
+
+        if not item_ids or not action:
+            return Response(
+                {"detail": "Parámetros incompletos. Se requieren 'item_ids' y 'action'."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        with transaction.atomic():
+            items = list(LearningItem.objects.select_for_update().filter(
+                id__in=item_ids,
+                user=request.user,
+                is_deleted=False
+            ))
+            affected_count = len(items)
+
+            if action == 'UPDATE_STATUS':
+                new_status = payload.get('status')
+                valid_statuses = [choice[0] for choice in LearningItem.STATUS_CHOICES]
+                if new_status not in valid_statuses:
+                    return Response({"detail": f"Estado '{new_status}' no válido."}, status=status.HTTP_400_BAD_REQUEST)
+
+                goals_to_recalc = set()
+                now = timezone.now()
+                for item in items:
+                    item.status = new_status
+                    if new_status == 'DROPPED':
+                        item.is_focus = False
+                        item.dropped_at = now
+                        if payload.get('dropped_reason'):
+                            item.dropped_reason = payload.get('dropped_reason')
+                        if item.goal:
+                            goals_to_recalc.add(item.goal)
+                            item.goal = None
+                    elif new_status == 'COMPLETED':
+                        item.is_focus = False
+                        item.progress_percentage = 100
+                    item.save()
+
+                for g in goals_to_recalc:
+                    calculate_goal_progress(g)
+
+            elif action == 'SET_FOCUS':
+                is_focus = bool(payload.get('is_focus', False))
+                for item in items:
+                    # Dropped or Completed items cannot have focus
+                    if is_focus and item.status in ['DROPPED', 'COMPLETED']:
+                        continue
+                    item.is_focus = is_focus
+                    item.save(update_fields=['is_focus', 'updated_at'])
+
+            elif action == 'LINK_GOAL':
+                goal_id = payload.get('goal_id')
+                target_goal = None
+                if goal_id:
+                    try:
+                        target_goal = Goal.objects.get(id=goal_id, user=request.user, is_deleted=False)
+                    except Goal.DoesNotExist:
+                        return Response({"detail": "Objetivo especificado no existe."}, status=status.HTTP_404_NOT_FOUND)
+
+                affected_goals = set()
+                for item in items:
+                    if item.goal and item.goal != target_goal:
+                        affected_goals.add(item.goal)
+                    item.goal = target_goal
+                    item.save(update_fields=['goal', 'updated_at'])
+
+                if target_goal:
+                    affected_goals.add(target_goal)
+                for g in affected_goals:
+                    calculate_goal_progress(g)
+
+            elif action == 'SOFT_DELETE':
+                now = timezone.now()
+                goals_to_recalc = set()
+                for item in items:
+                    item.is_deleted = True
+                    item.deleted_at = now
+                    item.is_focus = False
+                    if item.goal:
+                        goals_to_recalc.add(item.goal)
+                    item.save(update_fields=['is_deleted', 'deleted_at', 'is_focus', 'updated_at'])
+
+                for g in goals_to_recalc:
+                    calculate_goal_progress(g)
+
+            else:
+                return Response({"detail": f"Acción masiva '{action}' no soportada."}, status=status.HTTP_400_BAD_REQUEST)
+
+            log_audit_event(
+                user=request.user,
+                action='BULK_UPDATE',
+                model_name='LearningItem',
+                object_id='bulk',
+                object_repr=f"{action} on {affected_count} items",
+                changes={'action': action, 'count': affected_count, 'payload': payload},
+                ip_address=get_client_ip(request)
+            )
+
+        return Response({
+            "success": True,
+            "action": action,
+            "affected_count": affected_count,
+            "message": f"Se aplicó '{action}' a {affected_count} recursos exitosamente."
+        }, status=status.HTTP_200_OK)
 
 
 class LearningItemRestoreAPI(APIView):
