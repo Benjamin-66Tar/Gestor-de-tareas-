@@ -175,9 +175,12 @@ class Project(models.Model):
 
 class ProjectTask(models.Model):
     STATUS_CHOICES = [
-        ('TODO', 'Por hacer'),
-        ('IN_PROGRESS', 'En progreso'),
+        ('BACKLOG', 'Backlog'),
+        ('ANALYSIS', 'Análisis'),
+        ('IN_PROGRESS', 'Desarrollo'),
+        ('TESTING', 'Pruebas'),
         ('DONE', 'Completado'),
+        ('TODO', 'Por hacer'),  # Compatibilidad con datos previos
     ]
     PRIORITY_CHOICES = [
         ('LOW', 'Baja'),
@@ -189,9 +192,12 @@ class ProjectTask(models.Model):
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='tasks')
     title = models.CharField(max_length=250)
     description = models.TextField(blank=True, null=True)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='TODO')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='BACKLOG')
     priority = models.CharField(max_length=20, choices=PRIORITY_CHOICES, default='MEDIUM')
+    start_date = models.DateTimeField(blank=True, null=True)
     deadline = models.DateTimeField(blank=True, null=True, db_index=True)
+    estimated_days = models.PositiveIntegerField(default=1, blank=True, null=True)
+    deviation_reason = models.TextField(blank=True, null=True)
     reminder_minutes = models.PositiveIntegerField(default=0, null=True, blank=True)
     order = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)

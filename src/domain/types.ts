@@ -147,7 +147,7 @@ export interface GoalFilterCriteria {
 
 export type ProjectStatus = 'ACTIVE' | 'COMPLETED' | 'ARCHIVED';
 
-export type TaskStatus = 'TODO' | 'IN_PROGRESS' | 'DONE';
+export type TaskStatus = 'BACKLOG' | 'ANALYSIS' | 'IN_PROGRESS' | 'TESTING' | 'DONE' | 'TODO';
 
 export type TaskPriority = 'LOW' | 'MEDIUM' | 'HIGH';
 
@@ -170,6 +170,8 @@ export interface ProjectTask {
   priority: TaskPriority;
   startDate?: string | null;
   deadline?: string | null;
+  estimatedDays?: number;
+  deviationReason?: string | null;
   reminderMinutes?: number;
   order: number;
   subtasks: TaskSubtask[];

@@ -239,6 +239,7 @@ def sync_projects_to_calendar(user=None, start_date=None, end_date=None):
             'titulo': f"📋 {task.title}",
             'descripcion': task.description or '',
             'tipo': 'PROYECTO',
+            'fecha_inicio': task.start_date.isoformat() if task.start_date else None,
             'fecha_limite': task.deadline.isoformat(),
             'color_hex': task.project.color_hex,
             'source_id': str(task.id),

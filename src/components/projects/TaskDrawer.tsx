@@ -30,9 +30,12 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [status, setStatus] = useState<TaskStatus>('TODO');
+  const [status, setStatus] = useState<TaskStatus>('BACKLOG');
   const [priority, setPriority] = useState<TaskPriority>('MEDIUM');
+  const [startDate, setStartDate] = useState('');
   const [deadline, setDeadline] = useState('');
+  const [estimatedDays, setEstimatedDays] = useState<number>(1);
+  const [deviationReason, setDeviationReason] = useState('');
   const [reminderMinutes, setReminderMinutes] = useState<number>(0);
   const [subtasks, setSubtasks] = useState<Array<{ id?: string; title: string; isCompleted: boolean }>>([]);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
@@ -43,9 +46,12 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
     if (taskToEdit) {
       setTitle(taskToEdit.title);
       setDescription(taskToEdit.description || '');
-      setStatus(taskToEdit.status);
+      setStatus((taskToEdit.status === 'TODO' ? 'BACKLOG' : taskToEdit.status) as TaskStatus);
       setPriority(taskToEdit.priority);
+      setStartDate(formatToLocalInputDate(taskToEdit.startDate));
       setDeadline(formatToLocalInputDate(taskToEdit.deadline));
+      setEstimatedDays(taskToEdit.estimatedDays || 1);
+      setDeviationReason(taskToEdit.deviationReason || '');
       setReminderMinutes(
         typeof taskToEdit.reminderMinutes === 'number'
           ? taskToEdit.reminderMinutes
@@ -61,9 +67,12 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
     } else {
       setTitle('');
       setDescription('');
-      setStatus('TODO');
+      setStatus('BACKLOG');
       setPriority('MEDIUM');
+      setStartDate('');
       setDeadline('');
+      setEstimatedDays(1);
+      setDeviationReason('');
       setReminderMinutes(0);
       setSubtasks([]);
     }
@@ -83,6 +92,35 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
   }, [isOpen, onClose]);
 
   if (!isOpen) return null;
+
+  const handleStartDateChange = (val: string) => {
+    setStartDate(val);
+    if (val && deadline) {
+      const s = new Date(val).getTime();
+      const d = new Date(deadline).getTime();
+      if (d > s) {
+        const days = Math.max(1, Math.round((d - s) / (1000 * 60 * 60 * 24)));
+        setEstimatedDays(days);
+      }
+    }
+  };
+
+  const handleDeadlineChange = (val: string) => {
+    setDeadline(val);
+    if (startDate && val) {
+      const s = new Date(startDate).getTime();
+      const d = new Date(val).getTime();
+      if (d > s) {
+        const days = Math.max(1, Math.round((d - s) / (1000 * 60 * 60 * 24)));
+        setEstimatedDays(days);
+      }
+    }
+  };
+
+  const isOverdue = Boolean(deadline && new Date(deadline).getTime() < Date.now() && status !== 'DONE');
+  const daysOverdue = isOverdue && deadline
+    ? Math.max(1, Math.ceil((Date.now() - new Date(deadline).getTime()) / (1000 * 60 * 60 * 24)))
+    : 0;
 
   const handleAddSubtask = (e: React.FormEvent) => {
     e.preventDefault();
@@ -123,7 +161,10 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
         description: description.trim(),
         status,
         priority,
+        startDate: startDate ? new Date(startDate).toISOString() : null,
         deadline: deadline ? new Date(deadline).toISOString() : null,
+        estimatedDays: estimatedDays > 0 ? estimatedDays : 1,
+        deviationReason: deviationReason.trim() ? deviationReason.trim() : null,
         reminderMinutes,
         reminder_minutes: reminderMinutes,
         subtasks: subtasks.map((s, idx) => ({
@@ -173,7 +214,7 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
                 {taskToEdit ? 'Editar Tarea' : 'Nueva Tarea'}
               </h2>
               <p className="text-xs text-slate-400 mt-0.5">
-                Configura prioridades, fecha límite y subtareas.
+                Configura ciclo de desarrollo, rango de fechas y bitácora.
               </p>
             </div>
             <button
@@ -222,21 +263,23 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
                 />
               </div>
 
-              {/* Grid: Status, Priority, Deadline */}
+              {/* Grid: Status, Priority */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {/* Status */}
                 <div>
                   <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                    Columna / Estado
+                    Columna / Ciclo de Desarrollo
                   </label>
                   <select
                     value={status}
                     onChange={(e) => setStatus(e.target.value as TaskStatus)}
                     className="w-full px-3 py-2 bg-slate-800/90 border border-slate-700/80 focus:border-indigo-500 rounded-xl text-xs text-white outline-none cursor-pointer"
                   >
-                    <option value="TODO">Por hacer</option>
-                    <option value="IN_PROGRESS">En progreso</option>
-                    <option value="DONE">Completado</option>
+                    <option value="BACKLOG">Backlog</option>
+                    <option value="ANALYSIS">Análisis</option>
+                    <option value="IN_PROGRESS">Desarrollo</option>
+                    <option value="TESTING">Pruebas</option>
+                    <option value="DONE">Completo</option>
                   </select>
                 </div>
 
@@ -257,36 +300,89 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
                 </div>
               </div>
 
-              {/* Deadline & Reminder */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Date Range Execution & Estimated Days */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-1.5">
-                    <span>🗓️</span> Fecha y Hora Límite
+                    <span>🚀</span> Fecha de Inicio
                   </label>
                   <input
                     type="datetime-local"
-                    value={deadline}
-                    onChange={(e) => setDeadline(e.target.value)}
+                    value={startDate}
+                    onChange={(e) => handleStartDateChange(e.target.value)}
                     className="w-full px-3 py-2 bg-slate-800/90 border border-slate-700/80 hover:border-slate-600 focus:border-indigo-500 rounded-xl text-xs text-white outline-none cursor-pointer font-mono transition"
                   />
                 </div>
 
                 <div>
                   <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-1.5">
-                    <span>🔔</span> Recordatorio y Alerta Push
+                    <span>🗓️</span> Fecha Límite
                   </label>
-                  <select
-                    value={reminderMinutes}
-                    onChange={(e) => setReminderMinutes(parseInt(e.target.value) || 0)}
-                    className="w-full px-3 py-2 bg-slate-800/90 border border-slate-700/80 focus:border-indigo-500 rounded-xl text-xs text-white outline-none cursor-pointer"
-                  >
-                    {REMINDER_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
+                  <input
+                    type="datetime-local"
+                    value={deadline}
+                    onChange={(e) => handleDeadlineChange(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-800/90 border border-slate-700/80 hover:border-slate-600 focus:border-indigo-500 rounded-xl text-xs text-white outline-none cursor-pointer font-mono transition"
+                  />
                 </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-1.5">
+                    <span>⏱️</span> Días Estimados
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={365}
+                    value={estimatedDays}
+                    onChange={(e) => setEstimatedDays(Math.max(1, parseInt(e.target.value) || 1))}
+                    className="w-full px-3 py-2 bg-slate-800/90 border border-slate-700/80 hover:border-slate-600 focus:border-indigo-500 rounded-xl text-xs text-white outline-none transition"
+                  />
+                </div>
+              </div>
+
+              {/* Deviation Review / Bitácora Section */}
+              {(isOverdue || Boolean(deviationReason)) && (
+                <div className="p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-xl space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-base">⚠️</span>
+                    <div>
+                      <h4 className="text-xs font-bold text-amber-300">
+                        Revisión de Desvío / Retraso {isOverdue && daysOverdue > 0 ? `(+${daysOverdue} días)` : ''}
+                      </h4>
+                      <p className="text-[11px] text-slate-400">
+                        Esta tarea superó la fecha planificada. Registra la causa para retrospectiva sin alterar el progreso del proyecto.
+                      </p>
+                    </div>
+                  </div>
+                  <div>
+                    <textarea
+                      rows={2}
+                      value={deviationReason}
+                      onChange={(e) => setDeviationReason(e.target.value)}
+                      placeholder="Ej: Dependencia externa, refactor necesario, pruebas complejas..."
+                      className="w-full px-3 py-2 bg-slate-900 border border-amber-500/30 focus:border-amber-400 rounded-lg text-xs text-slate-100 placeholder-slate-500 outline-none resize-none"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Reminder minutes */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-1.5">
+                  <span>🔔</span> Recordatorio y Alerta Push
+                </label>
+                <select
+                  value={reminderMinutes}
+                  onChange={(e) => setReminderMinutes(parseInt(e.target.value) || 0)}
+                  className="w-full px-3 py-2 bg-slate-800/90 border border-slate-700/80 focus:border-indigo-500 rounded-xl text-xs text-white outline-none cursor-pointer"
+                >
+                  {REMINDER_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
               </div>
             </form>
 

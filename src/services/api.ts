@@ -345,6 +345,8 @@ export function transformTaskFromApi(raw: any): ProjectTask {
     priority: raw.priority,
     startDate: raw.start_date ?? raw.startDate ?? null,
     deadline: raw.deadline,
+    estimatedDays: raw.estimated_days ?? raw.estimatedDays ?? 1,
+    deviationReason: raw.deviation_reason ?? raw.deviationReason ?? null,
     reminderMinutes: raw.reminder_minutes ?? raw.reminderMinutes ?? 0,
     order: raw.order ?? 0,
     subtasks: (raw.subtasks || []).map((s: any) => ({
@@ -449,10 +451,12 @@ export async function createProjectTaskApi(projectId: string, taskData: Partial<
   const payload = {
     title: taskData.title,
     description: taskData.description || '',
-    status: taskData.status || 'TODO',
+    status: taskData.status || 'BACKLOG',
     priority: taskData.priority || 'MEDIUM',
     start_date: taskData.startDate || (taskData as any).start_date || null,
     deadline: taskData.deadline || null,
+    estimated_days: taskData.estimatedDays ?? (taskData as any).estimated_days ?? 1,
+    deviation_reason: taskData.deviationReason ?? (taskData as any).deviation_reason ?? null,
     reminder_minutes: taskData.reminderMinutes !== undefined
       ? taskData.reminderMinutes
       : ((taskData as any).reminder_minutes !== undefined ? (taskData as any).reminder_minutes : 0),
@@ -479,6 +483,10 @@ export async function updateProjectTaskApi(taskId: string, taskData: Partial<Pro
   if (taskData.startDate !== undefined) payload.start_date = taskData.startDate;
   if ((taskData as any).start_date !== undefined) payload.start_date = (taskData as any).start_date;
   if (taskData.deadline !== undefined) payload.deadline = taskData.deadline;
+  if (taskData.estimatedDays !== undefined) payload.estimated_days = taskData.estimatedDays;
+  if ((taskData as any).estimated_days !== undefined) payload.estimated_days = (taskData as any).estimated_days;
+  if (taskData.deviationReason !== undefined) payload.deviation_reason = taskData.deviationReason;
+  if ((taskData as any).deviation_reason !== undefined) payload.deviation_reason = (taskData as any).deviation_reason;
   if (taskData.reminderMinutes !== undefined) payload.reminder_minutes = taskData.reminderMinutes;
   if ((taskData as any).reminder_minutes !== undefined) payload.reminder_minutes = (taskData as any).reminder_minutes;
   if (taskData.subtasks !== undefined) {

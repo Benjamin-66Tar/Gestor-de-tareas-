@@ -14,9 +14,12 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ project, onEditTask })
   const tasksByStatus = useMemo(() => {
     const all = project.tasks || [];
     return {
-      TODO: all.filter(t => t.status === 'TODO'),
+      BACKLOG: all.filter(t => t.status === 'BACKLOG' || t.status === 'TODO'),
+      ANALYSIS: all.filter(t => t.status === 'ANALYSIS'),
       IN_PROGRESS: all.filter(t => t.status === 'IN_PROGRESS'),
+      TESTING: all.filter(t => t.status === 'TESTING'),
       DONE: all.filter(t => t.status === 'DONE'),
+      TODO: [],
     };
   }, [project.tasks]);
 
@@ -33,20 +36,22 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ project, onEditTask })
   };
 
   const columns: { status: TaskStatus; title: string }[] = [
-    { status: 'TODO', title: 'Por hacer' },
-    { status: 'IN_PROGRESS', title: 'En progreso' },
-    { status: 'DONE', title: 'Completado' },
+    { status: 'BACKLOG', title: 'Backlog' },
+    { status: 'ANALYSIS', title: 'Análisis' },
+    { status: 'IN_PROGRESS', title: 'Desarrollo' },
+    { status: 'TESTING', title: 'Pruebas' },
+    { status: 'DONE', title: 'Completo' },
   ];
 
   return (
     <div className="w-full flex-1 overflow-x-auto pb-6 pt-2 scrollbar-thin">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5 min-w-[860px] md:min-w-0">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 min-w-[1200px] xl:min-w-0">
         {columns.map(col => (
           <KanbanColumn
             key={col.status}
             status={col.status}
             title={col.title}
-            tasks={tasksByStatus[col.status]}
+            tasks={tasksByStatus[col.status] || []}
             projectColor={project.colorHex}
             onEditTask={onEditTask}
             onDropTask={handleDropTask}

@@ -37,9 +37,12 @@ export const ProjectWorkspace: React.FC<ProjectWorkspaceProps> = ({
   };
 
   const statusStyles: Record<TaskStatus, { bg: string; text: string; label: string }> = {
-    TODO: { bg: 'bg-slate-700/60 border-slate-600/40', text: 'text-slate-300', label: 'Por hacer' },
-    IN_PROGRESS: { bg: 'bg-indigo-500/20 border-indigo-500/30', text: 'text-indigo-300', label: 'En progreso' },
-    DONE: { bg: 'bg-emerald-500/20 border-emerald-500/30', text: 'text-emerald-300', label: 'Completado' },
+    BACKLOG: { bg: 'bg-slate-700/60 border-slate-600/40', text: 'text-slate-300', label: 'Backlog' },
+    ANALYSIS: { bg: 'bg-cyan-500/20 border-cyan-500/30', text: 'text-cyan-300', label: 'Análisis' },
+    IN_PROGRESS: { bg: 'bg-indigo-500/20 border-indigo-500/30', text: 'text-indigo-300', label: 'Desarrollo' },
+    TESTING: { bg: 'bg-amber-500/20 border-amber-500/30', text: 'text-amber-300', label: 'Pruebas' },
+    DONE: { bg: 'bg-emerald-500/20 border-emerald-500/30', text: 'text-emerald-300', label: 'Completo' },
+    TODO: { bg: 'bg-slate-700/60 border-slate-600/40', text: 'text-slate-300', label: 'Backlog' },
   };
 
   return (
@@ -183,7 +186,7 @@ export const ProjectWorkspace: React.FC<ProjectWorkspaceProps> = ({
                   <th className="py-3 px-4 font-semibold">Tarea</th>
                   <th className="py-3 px-4 font-semibold">Estado</th>
                   <th className="py-3 px-4 font-semibold">Prioridad</th>
-                  <th className="py-3 px-4 font-semibold">Fecha Límite</th>
+                  <th className="py-3 px-4 font-semibold">Ejecución / Plazo</th>
                   <th className="py-3 px-4 font-semibold">Subtareas</th>
                   <th className="py-3 px-4 font-semibold text-right">Acciones</th>
                 </tr>
@@ -197,8 +200,8 @@ export const ProjectWorkspace: React.FC<ProjectWorkspaceProps> = ({
                   </tr>
                 ) : (
                   tasks.map((t) => {
-                    const statusConfig = statusStyles[t.status];
-                    const priorityConfig = priorityStyles[t.priority];
+                    const statusConfig = statusStyles[t.status] || statusStyles.BACKLOG;
+                    const priorityConfig = priorityStyles[t.priority] || priorityStyles.MEDIUM;
                     const subtasks = t.subtasks || [];
                     const completedSubs = subtasks.filter(s => s.isCompleted).length;
 
@@ -220,14 +223,16 @@ export const ProjectWorkspace: React.FC<ProjectWorkspaceProps> = ({
                         </td>
                         <td className="py-3 px-4">
                           <select
-                            value={t.status}
+                            value={t.status === 'TODO' ? 'BACKLOG' : t.status}
                             onClick={(e) => e.stopPropagation()}
                             onChange={(e) => moveTaskStatus(t.id, e.target.value as TaskStatus)}
                             className={`px-2.5 py-1 rounded-lg border text-xs font-semibold outline-none cursor-pointer ${statusConfig.bg} ${statusConfig.text}`}
                           >
-                            <option value="TODO">Por hacer</option>
-                            <option value="IN_PROGRESS">En progreso</option>
-                            <option value="DONE">Completado</option>
+                            <option value="BACKLOG">Backlog</option>
+                            <option value="ANALYSIS">Análisis</option>
+                            <option value="IN_PROGRESS">Desarrollo</option>
+                            <option value="TESTING">Pruebas</option>
+                            <option value="DONE">Completo</option>
                           </select>
                         </td>
                         <td className="py-3 px-4">
@@ -236,9 +241,25 @@ export const ProjectWorkspace: React.FC<ProjectWorkspaceProps> = ({
                           </span>
                         </td>
                         <td className="py-3 px-4 text-slate-400">
-                          {t.deadline
-                            ? new Date(t.deadline).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })
-                            : '—'}
+                          <div className="flex flex-col gap-0.5">
+                            <span>
+                              {t.startDate && t.deadline
+                                ? `${new Date(t.startDate).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })} - ${new Date(t.deadline).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}`
+                                : t.deadline
+                                ? new Date(t.deadline).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })
+                                : '—'}
+                            </span>
+                            {t.deadline && new Date(t.deadline).getTime() < Date.now() && t.status !== 'DONE' && (
+                              <span className="text-[10px] text-amber-400 font-medium flex items-center gap-1">
+                                <span>⚠️</span> +{Math.max(1, Math.ceil((Date.now() - new Date(t.deadline).getTime()) / (1000 * 60 * 60 * 24)))}d desvío
+                              </span>
+                            )}
+                            {t.deviationReason && (
+                              <span className="text-[10px] text-slate-400 italic truncate max-w-[140px]" title={t.deviationReason}>
+                                📝 {t.deviationReason}
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="py-3 px-4">
                           {subtasks.length > 0 ? (

@@ -28,24 +28,39 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({
 
   // Column header configurations
   const columnConfigs: Record<TaskStatus, { icon: string; headerColor: string; pillColor: string }> = {
-    TODO: {
-      icon: '⭕',
-      headerColor: 'text-slate-200',
+    BACKLOG: {
+      icon: '📥',
+      headerColor: 'text-slate-300',
       pillColor: 'bg-slate-700/60 text-slate-300 border-slate-600/40',
     },
+    ANALYSIS: {
+      icon: '🔍',
+      headerColor: 'text-cyan-300',
+      pillColor: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30',
+    },
     IN_PROGRESS: {
-      icon: '⏳',
+      icon: '⚡',
       headerColor: 'text-indigo-300',
       pillColor: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30',
+    },
+    TESTING: {
+      icon: '🧪',
+      headerColor: 'text-amber-300',
+      pillColor: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
     },
     DONE: {
       icon: '✅',
       headerColor: 'text-emerald-300',
       pillColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
     },
+    TODO: {
+      icon: '⭕',
+      headerColor: 'text-slate-200',
+      pillColor: 'bg-slate-700/60 text-slate-300 border-slate-600/40',
+    },
   };
 
-  const config = columnConfigs[status];
+  const config = columnConfigs[status] || columnConfigs.BACKLOG;
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -86,7 +101,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
-      className={`flex flex-col w-full min-w-[280px] max-w-full lg:max-w-md bg-slate-950/60 rounded-2xl border transition-all duration-200 p-3.5 sm:p-4 ${
+      className={`flex flex-col w-full min-w-[220px] max-w-full bg-slate-950/60 rounded-2xl border transition-all duration-200 p-3 sm:p-3.5 ${
         isDragOver
           ? 'border-indigo-500/80 bg-indigo-950/20 shadow-lg shadow-indigo-500/10 ring-2 ring-indigo-500/30'
           : 'border-slate-800/80'

@@ -41,15 +41,40 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, projectColor = '#6366F
     await moveTaskStatus(task.id, targetStatus);
   };
 
+  const STATUS_ORDER: TaskStatus[] = ['BACKLOG', 'ANALYSIS', 'IN_PROGRESS', 'TESTING', 'DONE'];
+  const STATUS_NAMES: Record<string, string> = {
+    BACKLOG: 'Backlog',
+    ANALYSIS: 'Análisis',
+    IN_PROGRESS: 'Desarrollo',
+    TESTING: 'Pruebas',
+    DONE: 'Completo',
+    TODO: 'Backlog',
+  };
+
+  const currentStatus = (task.status === 'TODO' ? 'BACKLOG' : task.status) as TaskStatus;
+  const currentIndex = STATUS_ORDER.indexOf(currentStatus);
+  const prevStatus = currentIndex > 0 ? STATUS_ORDER[currentIndex - 1] : null;
+  const nextStatus = currentIndex >= 0 && currentIndex < STATUS_ORDER.length - 1 ? STATUS_ORDER[currentIndex + 1] : null;
+
   const subtasks = task.subtasks || [];
   const completedSubtasks = subtasks.filter(s => s.isCompleted).length;
   const totalSubtasks = subtasks.length;
 
+  const formattedStart = task.startDate
+    ? new Date(task.startDate).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })
+    : null;
   const formattedDeadline = task.deadline
     ? new Date(task.deadline).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })
     : null;
 
-  const isOverdue = task.deadline && new Date(task.deadline).getTime() < Date.now() && task.status !== 'DONE';
+  const calculatedDays = task.startDate && task.deadline
+    ? Math.max(1, Math.round((new Date(task.deadline).getTime() - new Date(task.startDate).getTime()) / (1000 * 60 * 60 * 24)))
+    : (task.estimatedDays || null);
+
+  const isOverdue = Boolean(task.deadline && new Date(task.deadline).getTime() < Date.now() && task.status !== 'DONE');
+  const daysOverdue = isOverdue && task.deadline
+    ? Math.max(1, Math.ceil((Date.now() - new Date(task.deadline).getTime()) / (1000 * 60 * 60 * 24)))
+    : 0;
 
   return (
     <div
@@ -61,23 +86,50 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, projectColor = '#6366F
         isDeleting ? 'opacity-40 pointer-events-none' : ''
       }`}
     >
-      {/* Top row: Priority Badge, Deadline & Action buttons */}
+      {/* Top row: Priority Badge, Dates & Action buttons */}
       <div className="flex items-center justify-between gap-2 mb-2">
         <div className="flex items-center gap-1.5 flex-wrap">
           <span className={`px-2 py-0.5 text-[10px] font-bold rounded-full border ${priorityInfo.bg} ${priorityInfo.text} ${priorityInfo.border}`}>
             {priorityInfo.label}
           </span>
 
-          {formattedDeadline && (
+          {/* Date range or deadline badge */}
+          {(formattedStart || formattedDeadline) && (
             <span
               className={`px-2 py-0.5 text-[10px] font-semibold rounded-full border flex items-center gap-1 ${
                 isOverdue
-                  ? 'bg-rose-500/20 text-rose-300 border-rose-500/40 animate-pulse'
+                  ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
                   : 'bg-slate-800 text-slate-300 border-slate-700'
               }`}
             >
               <span>📅</span>
-              <span>{formattedDeadline}</span>
+              <span>
+                {formattedStart && formattedDeadline
+                  ? `${formattedStart} - ${formattedDeadline}${calculatedDays ? ` (${calculatedDays}d)` : ''}`
+                  : (formattedDeadline || formattedStart)}
+              </span>
+            </span>
+          )}
+
+          {/* Deviation alert badge */}
+          {isOverdue && (
+            <span
+              title={`Esta tarea supera el tiempo estimado por ${daysOverdue} días`}
+              className="px-2 py-0.5 text-[10px] font-semibold rounded-full border bg-amber-500/20 text-amber-300 border-amber-500/40 flex items-center gap-1"
+            >
+              <span>⚠️</span>
+              <span>+{daysOverdue}d desvío</span>
+            </span>
+          )}
+
+          {/* Deviation cause chip */}
+          {task.deviationReason && (
+            <span
+              title={`Motivo del desvío: ${task.deviationReason}`}
+              className="px-2 py-0.5 text-[10px] font-medium rounded-full border bg-slate-800 text-indigo-300 border-indigo-500/30 flex items-center gap-1 truncate max-w-[120px]"
+            >
+              <span>📝</span>
+              <span className="truncate">{task.deviationReason}</span>
             </span>
           )}
         </div>
@@ -170,25 +222,25 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, projectColor = '#6366F
       {/* Column Switcher Quick Arrows (for touch / mouse accessibility) */}
       <div className="mt-3 pt-2 border-t border-slate-800/60 flex items-center justify-between text-[10px] text-slate-500">
         <div>
-          {task.status !== 'TODO' && (
+          {prevStatus && (
             <button
-              onClick={(e) => handleQuickMove(e, task.status === 'DONE' ? 'IN_PROGRESS' : 'TODO')}
-              title={`Mover a ${task.status === 'DONE' ? 'En progreso' : 'Por hacer'}`}
+              onClick={(e) => handleQuickMove(e, prevStatus)}
+              title={`Mover a ${STATUS_NAMES[prevStatus]}`}
               className="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 hover:text-slate-200 rounded font-semibold transition"
             >
-              ← {task.status === 'DONE' ? 'En progreso' : 'Por hacer'}
+              ← {STATUS_NAMES[prevStatus]}
             </button>
           )}
         </div>
 
         <div>
-          {task.status !== 'DONE' && (
+          {nextStatus && (
             <button
-              onClick={(e) => handleQuickMove(e, task.status === 'TODO' ? 'IN_PROGRESS' : 'DONE')}
-              title={`Mover a ${task.status === 'TODO' ? 'En progreso' : 'Completado'}`}
+              onClick={(e) => handleQuickMove(e, nextStatus)}
+              title={`Mover a ${STATUS_NAMES[nextStatus]}`}
               className="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 hover:text-slate-200 rounded font-semibold transition"
             >
-              {task.status === 'TODO' ? 'En progreso' : 'Completado'} →
+              {STATUS_NAMES[nextStatus]} →
             </button>
           )}
         </div>

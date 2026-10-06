@@ -163,7 +163,8 @@ class ProjectTaskSerializer(serializers.ModelSerializer):
         model = ProjectTask
         fields = [
             'id', 'project', 'project_id', 'title', 'description',
-            'status', 'priority', 'deadline', 'reminder_minutes', 'order', 'subtasks',
+            'status', 'priority', 'start_date', 'deadline', 'estimated_days', 'deviation_reason',
+            'reminder_minutes', 'order', 'subtasks',
             'created_at', 'updated_at'
         ]
         extra_kwargs = {
