@@ -13,7 +13,15 @@ export const LearningCard: React.FC<LearningCardProps> = ({
   onOpenDrawer,
   onOpenSchedule,
 }) => {
-  const { deleteLearningItem, quickIncrementLearning, goals, setTabActiva } = useAuraState();
+  const {
+    deleteLearningItem,
+    quickIncrementLearning,
+    updateLearningItem,
+    toggleLearningFocus,
+    learningItems,
+    goals,
+    setTabActiva,
+  } = useAuraState();
 
   const linkedGoal = goals.find((g) => g.id === item.goalId);
   const goalTitle = linkedGoal?.title || item.goalTitle || (item as any).goal_title;
@@ -46,15 +54,45 @@ export const LearningCard: React.FC<LearningCardProps> = ({
     IN_PROGRESS: { label: 'En curso', badgeClass: 'bg-purple-500/20 text-purple-300 border-purple-500/40' },
     PAUSED: { label: 'En pausa', badgeClass: 'bg-amber-500/20 text-amber-300 border-amber-500/40' },
     COMPLETED: { label: 'Completado', badgeClass: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' },
+    DROPPED: { label: 'Descartado', badgeClass: 'bg-rose-500/20 text-rose-300 border-rose-500/40' },
   };
 
   const currentType = resourceTypeConfig[item.resourceType] || resourceTypeConfig.COURSE;
   const currentStatus = statusConfig[item.status] || statusConfig.BACKLOG;
   const colorHex = item.colorHex || '#8B5CF6';
+  const isFocus = Boolean(item.is_focus ?? item.isFocus);
+
+  const handleToggleFocus = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (item.status === 'DROPPED' || item.status === 'COMPLETED') return;
+    if (!isFocus) {
+      const activeFocusCount = learningItems.filter(i => Boolean(i.is_focus ?? i.isFocus)).length;
+      if (activeFocusCount >= 3) {
+        const proceed = confirm(
+          `Ya tienes ${activeFocusCount} recursos en tu Enfoque Semanal.\nPara evitar la saturación cognitiva, te sugerimos un máximo de 3.\n\n¿Deseas agregar "${item.title}" al enfoque de todos modos?`
+        );
+        if (!proceed) return;
+      }
+    }
+    await toggleLearningFocus(item.id);
+  };
+
+  const handleDrop = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (confirm(`¿Descartar "${item.title}"?\n\nAl descartar, se liberará de tu enfoque activo y se desvinculará limpiamente de tus objetivos sin afectar su progreso.`)) {
+      await updateLearningItem(item.id, {
+        status: 'DROPPED',
+        is_focus: false,
+        isFocus: false,
+        dropped_reason: 'Descartado para evitar saturación',
+        droppedReason: 'Descartado para evitar saturación',
+      });
+    }
+  };
 
   const handleDelete = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (confirm(`¿Eliminar "${item.title}"?`)) {
+    if (confirm(`¿Eliminar definitivamente "${item.title}"?`)) {
       await deleteLearningItem(item.id);
     }
   };
@@ -77,6 +115,14 @@ export const LearningCard: React.FC<LearningCardProps> = ({
         {/* Top Header */}
         <div className="flex items-start justify-between gap-2 mb-3">
           <div className="flex items-center gap-2 flex-wrap">
+            {/* Focus indicator badge */}
+            {isFocus && (
+              <span className="px-2 py-0.5 text-[10px] font-extrabold rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1 shadow-sm">
+                <span>⭐</span>
+                <span>Enfoque</span>
+              </span>
+            )}
+
             {/* Resource Type Badge */}
             <span className={`px-2.5 py-0.5 text-xs font-bold rounded-full border shadow-sm flex items-center gap-1.5 ${currentType.badgeClass}`}>
               <span>{currentType.icon}</span>
@@ -89,19 +135,34 @@ export const LearningCard: React.FC<LearningCardProps> = ({
             </span>
 
             {/* Dormancy Warning Badge */}
-            {item.isDormant && (
+            {item.isDormant && item.status === 'IN_PROGRESS' && (
               <span
                 className="px-2 py-0.5 text-[10px] font-semibold rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1 animate-pulse"
                 title={`Sin avance en los últimos ${item.dormancyDays} días`}
               >
                 <span>⚠️</span>
-                <span>+{item.dormancyDays}d sin avance</span>
+                <span>+{item.dormancyDays}d inactivo</span>
               </span>
             )}
           </div>
 
           {/* Quick Actions (top right) */}
           <div className="flex items-center gap-1 opacity-70 group-hover:opacity-100 transition-opacity">
+            {/* Toggle Weekly Focus Button */}
+            {item.status !== 'DROPPED' && item.status !== 'COMPLETED' && (
+              <button
+                onClick={handleToggleFocus}
+                title={isFocus ? 'Quitar de mi Enfoque Semanal' : 'Fijar en mi Enfoque Semanal (máx 3)'}
+                className={`p-1.5 rounded-lg text-xs transition ${
+                  isFocus
+                    ? 'text-amber-400 bg-amber-500/20 hover:bg-amber-500/30'
+                    : 'text-slate-400 hover:text-amber-300 hover:bg-slate-800'
+                }`}
+              >
+                {isFocus ? '⭐' : '☆'}
+              </button>
+            )}
+
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -112,9 +173,20 @@ export const LearningCard: React.FC<LearningCardProps> = ({
             >
               📅
             </button>
+
+            {item.status !== 'DROPPED' && (
+              <button
+                onClick={handleDrop}
+                title="Descartar recurso (abandonar sin culpas)"
+                className="p-1.5 text-slate-400 hover:text-rose-300 hover:bg-slate-800 rounded-lg text-xs transition"
+              >
+                📦
+              </button>
+            )}
+
             <button
               onClick={handleDelete}
-              title="Eliminar recurso"
+              title="Eliminar recurso definitivamente"
               className="p-1.5 text-rose-400 hover:text-rose-200 hover:bg-rose-950/40 rounded-lg text-xs transition"
             >
               🗑️

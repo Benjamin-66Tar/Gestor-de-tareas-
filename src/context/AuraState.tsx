@@ -180,8 +180,11 @@ interface AuraContextProps {
   deleteLearningTopic: (learningId: string, topicId: string) => Promise<boolean>;
   quickIncrementLearning: (id: string, increment?: number, lastPoint?: string) => Promise<boolean>;
   scheduleStudySession: (learningId: string, data: { startTime: string; endTime: string; notes?: string; reminderMinutes?: number }) => Promise<boolean>;
-  learningViewMode: 'KANBAN' | 'LIST' | 'MATRIX';
-  setLearningViewMode: (mode: 'KANBAN' | 'LIST' | 'MATRIX') => void;
+  learningViewMode: 'KANBAN' | 'LIST' | 'MATRIX' | 'TABLE';
+  setLearningViewMode: (mode: 'KANBAN' | 'LIST' | 'MATRIX' | 'TABLE') => void;
+  bulkUpdateLearningItems: (itemIds: string[], action: 'UPDATE_STATUS' | 'SET_FOCUS' | 'LINK_GOAL' | 'SOFT_DELETE', payload?: any) => Promise<boolean>;
+  toggleLearningFocus: (id: string) => Promise<boolean>;
+  quickAddLearningItem: (rawInput: string) => Promise<boolean>;
   matrixRows: ProgressMatrixRow[];
   matrixLoading: boolean;
   matrixWeekOffset: number;
@@ -1098,6 +1101,87 @@ export const AuraProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [activeLearningItem, closeLearningDrawer]);
 
+  const bulkUpdateLearningItems = useCallback(async (
+    itemIds: string[],
+    action: 'UPDATE_STATUS' | 'SET_FOCUS' | 'LINK_GOAL' | 'SOFT_DELETE',
+    payload: any = {}
+  ): Promise<boolean> => {
+    try {
+      await api.bulkLearningActionApi(itemIds, action, payload);
+      await fetchLearningList();
+      await fetchGoalsList();
+      return true;
+    } catch (err) {
+      console.error('Error in bulkUpdateLearningItems:', err);
+      return false;
+    }
+  }, [fetchLearningList, fetchGoalsList]);
+
+  const toggleLearningFocus = useCallback(async (id: string): Promise<boolean> => {
+    const item = learningItems.find(i => i.id === id);
+    if (!item) return false;
+    const currentFocus = Boolean(item.is_focus ?? item.isFocus);
+    const newFocus = !currentFocus;
+    try {
+      const updated = await api.updateLearningItemApi(id, { is_focus: newFocus, isFocus: newFocus });
+      setLearningItems(prev => prev.map(i => i.id === id ? { ...i, ...updated, is_focus: newFocus, isFocus: newFocus } : i));
+      if (activeLearningItem?.id === id) {
+        setActiveLearningItem(prev => prev ? { ...prev, ...updated, is_focus: newFocus, isFocus: newFocus } : null);
+      }
+      return true;
+    } catch (err) {
+      console.error('Error toggling learning focus:', err);
+      return false;
+    }
+  }, [learningItems, activeLearningItem]);
+
+  const quickAddLearningItem = useCallback(async (rawInput: string): Promise<boolean> => {
+    const trimmed = rawInput.trim();
+    if (!trimmed) return false;
+
+    let title = trimmed;
+    let platformUrl = '';
+    let resourceType: ResourceType = 'COURSE';
+
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+      platformUrl = trimmed;
+      const lower = trimmed.toLowerCase();
+      if (lower.includes('youtube.com') || lower.includes('youtu.be')) {
+        title = 'Video de YouTube';
+        resourceType = 'COURSE';
+      } else if (lower.includes('medium.com') || lower.includes('dev.to') || lower.includes('blog')) {
+        title = 'Artículo Web';
+        resourceType = 'ARTICLE';
+      } else if (lower.includes('udemy.com')) {
+        title = 'Curso Udemy';
+        resourceType = 'COURSE';
+      } else if (lower.includes('coursera.org')) {
+        title = 'Curso Coursera';
+        resourceType = 'COURSE';
+      } else if (lower.includes('github.com')) {
+        title = 'Repositorio / Doc Técnica';
+        resourceType = 'TECH_DOC';
+      } else {
+        title = 'Recurso Web';
+        resourceType = 'ARTICLE';
+      }
+    }
+
+    try {
+      const created = await api.createLearningItemApi({
+        title,
+        platformUrl,
+        resourceType,
+        status: 'BACKLOG',
+      });
+      setLearningItems(prev => [created, ...prev]);
+      return true;
+    } catch (err) {
+      console.error('Error in quickAddLearningItem:', err);
+      return false;
+    }
+  }, []);
+
   const addLearningTopic = useCallback(async (learningId: string, title: string, sectionName?: string): Promise<boolean> => {
     try {
       const newTopic = await api.addLearningTopicApi(learningId, { title, sectionName });
@@ -1237,7 +1321,7 @@ export const AuraProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [fetchElementos, refreshNotifications]);
 
   // --- Progress & Habits Matrix State (Fase 2) ---
-  const [learningViewMode, setLearningViewMode] = useState<'KANBAN' | 'LIST' | 'MATRIX'>('KANBAN');
+  const [learningViewMode, setLearningViewMode] = useState<'KANBAN' | 'LIST' | 'MATRIX' | 'TABLE'>('KANBAN');
   const [matrixWeekOffset, setMatrixWeekOffset] = useState<number>(0);
   const [matrixSearch, setMatrixSearch] = useState<string>('');
   const [matrixRows, setMatrixRows] = useState<ProgressMatrixRow[]>([]);
@@ -1738,6 +1822,9 @@ export const AuraProvider: React.FC<{ children: React.ReactNode }> = ({ children
       createLearningItem,
       updateLearningItem,
       deleteLearningItem,
+      bulkUpdateLearningItems,
+      toggleLearningFocus,
+      quickAddLearningItem,
       addLearningTopic,
       toggleLearningTopic,
       deleteLearningTopic,

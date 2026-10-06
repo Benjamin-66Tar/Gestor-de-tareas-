@@ -25,6 +25,7 @@ const STATUS_OPTIONS: { status: LearningStatus; label: string }[] = [
   { status: 'IN_PROGRESS', label: 'En curso' },
   { status: 'PAUSED', label: 'En pausa' },
   { status: 'COMPLETED', label: 'Completado' },
+  { status: 'DROPPED', label: 'Descartado / Abandonado' },
 ];
 
 export const LearningDrawer: React.FC<LearningDrawerProps> = ({
@@ -40,6 +41,7 @@ export const LearningDrawer: React.FC<LearningDrawerProps> = ({
     addLearningTopic,
     toggleLearningTopic,
     deleteLearningTopic,
+    learningItems,
     goals,
     projects,
   } = useAuraState();
@@ -62,6 +64,8 @@ export const LearningDrawer: React.FC<LearningDrawerProps> = ({
   const [dormancyAlertDays, setDormancyAlertDays] = useState<number>(7);
   const [goalId, setGoalId] = useState<string>('');
   const [projectId, setProjectId] = useState<string>('');
+  const [isFocus, setIsFocus] = useState<boolean>(false);
+  const [droppedReason, setDroppedReason] = useState<string>('');
 
   // Inline topic creation state
   const [newTopicTitle, setNewTopicTitle] = useState('');
@@ -70,6 +74,37 @@ export const LearningDrawer: React.FC<LearningDrawerProps> = ({
 
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const handleUrlChange = (newUrl: string) => {
+    setPlatformUrl(newUrl);
+    if (!platformName || platformName.trim() === '') {
+      const u = newUrl.toLowerCase();
+      if (u.includes('youtube.com') || u.includes('youtu.be')) {
+        setPlatformName('YouTube');
+        setColorHex('#EF4444');
+      } else if (u.includes('udemy.com')) {
+        setPlatformName('Udemy');
+        setColorHex('#A435F0');
+      } else if (u.includes('coursera.org')) {
+        setPlatformName('Coursera');
+        setColorHex('#0056D2');
+      } else if (u.includes('platzi.com')) {
+        setPlatformName('Platzi');
+        setColorHex('#00BF63');
+      } else if (u.includes('edx.org')) {
+        setPlatformName('edX');
+        setColorHex('#D9381E');
+      } else if (u.includes('github.com')) {
+        setPlatformName('GitHub');
+        setColorHex('#6E5494');
+        setResourceType('TECH_DOC');
+      } else if (u.includes('medium.com')) {
+        setPlatformName('Medium');
+        setColorHex('#00AB6C');
+        setResourceType('ARTICLE');
+      }
+    }
+  };
 
   useEffect(() => {
     if (activeLearningItem) {
@@ -88,6 +123,8 @@ export const LearningDrawer: React.FC<LearningDrawerProps> = ({
       setDormancyAlertDays(activeLearningItem.dormancyAlertDays || 7);
       setGoalId(activeLearningItem.goalId || '');
       setProjectId(activeLearningItem.projectId || '');
+      setIsFocus(Boolean(activeLearningItem.is_focus ?? activeLearningItem.isFocus));
+      setDroppedReason(activeLearningItem.dropped_reason || activeLearningItem.droppedReason || '');
     } else {
       // New item defaults
       setTitle('');
@@ -105,6 +142,8 @@ export const LearningDrawer: React.FC<LearningDrawerProps> = ({
       setDormancyAlertDays(7);
       setGoalId('');
       setProjectId('');
+      setIsFocus(false);
+      setDroppedReason('');
     }
     setErrorMessage(null);
   }, [activeLearningItem, isOpen]);
@@ -116,6 +155,16 @@ export const LearningDrawer: React.FC<LearningDrawerProps> = ({
     if (!title.trim()) {
       setErrorMessage('El título del recurso es obligatorio.');
       return;
+    }
+
+    if (isFocus && !Boolean(activeLearningItem?.is_focus ?? activeLearningItem?.isFocus)) {
+      const activeCount = learningItems.filter(i => Boolean(i.is_focus ?? i.isFocus) && i.id !== activeLearningItem?.id).length;
+      if (activeCount >= 3) {
+        const proceed = confirm(
+          `Ya tienes ${activeCount} recursos fijados en tu Enfoque Semanal.\nSe sugiere mantener máximo 2 o 3 activos a la vez para no dispersarte.\n\n¿Deseas fijar este recurso de todos modos?`
+        );
+        if (!proceed) return;
+      }
     }
 
     setIsSaving(true);
@@ -135,7 +184,11 @@ export const LearningDrawer: React.FC<LearningDrawerProps> = ({
       lastPointReached: lastPointReached.trim(),
       takeawaysMarkdown: takeawaysMarkdown.trim(),
       dormancyAlertDays: Number(dormancyAlertDays) || 7,
-      goalId: goalId || null,
+      is_focus: isFocus,
+      isFocus: isFocus,
+      dropped_reason: droppedReason.trim(),
+      droppedReason: droppedReason.trim(),
+      goalId: status === 'DROPPED' ? null : (goalId || null),
       projectId: projectId || null,
     };
 
@@ -275,6 +328,25 @@ export const LearningDrawer: React.FC<LearningDrawerProps> = ({
             />
           </div>
 
+          {/* Weekly Focus Switch */}
+          <div className="flex items-center justify-between p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-2xl">
+            <div>
+              <span className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                <span>⭐</span>
+                <span>Fijar en Enfoque Semanal</span>
+              </span>
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                Destaca este recurso en la zona de enfoque superior (recomendado máx. 2–3 activos).
+              </p>
+            </div>
+            <input
+              type="checkbox"
+              checked={isFocus}
+              onChange={(e) => setIsFocus(e.target.checked)}
+              className="h-5 w-5 rounded border-slate-700 bg-slate-900 text-amber-500 focus:ring-amber-400 cursor-pointer accent-amber-500"
+            />
+          </div>
+
           {/* Status & Progress Mode Row */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
@@ -309,6 +381,25 @@ export const LearningDrawer: React.FC<LearningDrawerProps> = ({
             </div>
           </div>
 
+          {/* Dropped Reason (if status is DROPPED) */}
+          {status === 'DROPPED' && (
+            <div className="p-3.5 bg-rose-500/10 border border-rose-500/30 rounded-2xl space-y-1.5">
+              <label className="block text-xs font-bold text-rose-300">
+                Motivo del Descarte (Opcional)
+              </label>
+              <input
+                type="text"
+                placeholder="Ej. Material desactualizado, ya aprendí lo necesario..."
+                value={droppedReason}
+                onChange={(e) => setDroppedReason(e.target.value)}
+                className="w-full bg-slate-950 border border-rose-500/30 rounded-xl px-3.5 py-2 text-xs text-slate-100 focus:outline-none focus:border-rose-400"
+              />
+              <p className="text-[11px] text-slate-400">
+                Descartar liberará este recurso de tus objetivos y de tu límite activo sin penalizar tus métricas de éxito.
+              </p>
+            </div>
+          )}
+
           {/* Platform Name & URL */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
@@ -324,14 +415,15 @@ export const LearningDrawer: React.FC<LearningDrawerProps> = ({
               />
             </div>
             <div>
-              <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
-                Enlace / URL de Acceso Directo
+              <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                <span>Enlace / URL de Acceso</span>
+                <span className="text-[10px] text-purple-400 font-normal">Autodetecta plataforma</span>
               </label>
               <input
                 type="url"
                 placeholder="https://..."
                 value={platformUrl}
-                onChange={(e) => setPlatformUrl(e.target.value)}
+                onChange={(e) => handleUrlChange(e.target.value)}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-purple-500 transition"
               />
             </div>

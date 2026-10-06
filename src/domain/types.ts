@@ -154,7 +154,7 @@ export type TaskPriority = 'LOW' | 'MEDIUM' | 'HIGH';
 export type ProjectViewMode = 'KANBAN' | 'LIST';
 
 export interface TaskSubtask {
-  id: string;
+  id?: string | null;
   taskId?: string;
   title: string;
   isCompleted: boolean;
@@ -294,9 +294,11 @@ export interface AuthState {
 
 export type ResourceType = 'COURSE' | 'BOOK' | 'ARTICLE' | 'TECH_DOC';
 
-export type LearningStatus = 'BACKLOG' | 'IN_PROGRESS' | 'PAUSED' | 'COMPLETED';
+export type LearningStatus = 'BACKLOG' | 'IN_PROGRESS' | 'PAUSED' | 'COMPLETED' | 'DROPPED';
 
 export type LearningProgressMode = 'MANUAL' | 'TOPICS';
+
+export type LearningViewMode = 'KANBAN' | 'LIST' | 'MATRIX' | 'TABLE';
 
 export interface LearningTopic {
   id: string;
@@ -322,6 +324,12 @@ export interface LearningItem {
   totalUnits: number;
   lastPointReached?: string;
   takeawaysMarkdown?: string;
+  is_focus?: boolean;
+  isFocus?: boolean;
+  dropped_reason?: string | null;
+  droppedReason?: string | null;
+  dropped_at?: string | null;
+  droppedAt?: string | null;
   goalId?: string | null;
   goalTitle?: string | null;
   projectId?: string | null;

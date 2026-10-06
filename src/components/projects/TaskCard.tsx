@@ -206,7 +206,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, projectColor = '#6366F
                   <input
                     type="checkbox"
                     checked={sub.isCompleted}
-                    onChange={() => toggleSubtask(sub.id)}
+                    onChange={() => sub.id && toggleSubtask(sub.id)}
                     className="rounded bg-slate-800 border-slate-700 text-indigo-500 focus:ring-0 focus:ring-offset-0 w-3.5 h-3.5 cursor-pointer"
                   />
                   <span className={`text-[11px] truncate ${sub.isCompleted ? 'line-through text-slate-500' : ''}`}>

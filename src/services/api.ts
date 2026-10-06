@@ -815,6 +815,12 @@ export function transformLearningItemFromApi(raw: any): LearningItem {
     dormancyDays: raw.dormancy_days ?? raw.dormancyDays ?? 0,
     isDormant: Boolean(raw.is_dormant ?? raw.isDormant),
     dormancyAlertDays: raw.dormancy_alert_days ?? raw.dormancyAlertDays ?? 7,
+    is_focus: Boolean(raw.is_focus ?? raw.isFocus),
+    isFocus: Boolean(raw.is_focus ?? raw.isFocus),
+    dropped_reason: raw.dropped_reason ?? raw.droppedReason ?? null,
+    droppedReason: raw.dropped_reason ?? raw.droppedReason ?? null,
+    dropped_at: raw.dropped_at ?? raw.droppedAt ?? null,
+    droppedAt: raw.dropped_at ?? raw.droppedAt ?? null,
     topics: Array.isArray(raw.topics) ? raw.topics.map(transformLearningTopicFromApi) : undefined,
     createdAt: raw.created_at ?? raw.createdAt,
     updatedAt: raw.updated_at ?? raw.updatedAt,
@@ -862,6 +868,8 @@ export async function createLearningItemApi(itemData: Partial<LearningItem>): Pr
     last_point_reached: itemData.lastPointReached || '',
     takeaways_markdown: itemData.takeawaysMarkdown || '',
     dormancy_alert_days: itemData.dormancyAlertDays || 7,
+    is_focus: Boolean(itemData.isFocus ?? itemData.is_focus),
+    dropped_reason: itemData.droppedReason ?? itemData.dropped_reason ?? '',
     goal: itemData.goalId || null,
     project: itemData.projectId || null,
   };
@@ -887,6 +895,10 @@ export async function updateLearningItemApi(id: string, updates: Partial<Learnin
   if (updates.lastPointReached !== undefined) payload.last_point_reached = updates.lastPointReached;
   if (updates.takeawaysMarkdown !== undefined) payload.takeaways_markdown = updates.takeawaysMarkdown;
   if (updates.dormancyAlertDays !== undefined) payload.dormancy_alert_days = updates.dormancyAlertDays;
+  if (updates.isFocus !== undefined) payload.is_focus = updates.isFocus;
+  if (updates.is_focus !== undefined) payload.is_focus = updates.is_focus;
+  if (updates.droppedReason !== undefined) payload.dropped_reason = updates.droppedReason;
+  if (updates.dropped_reason !== undefined) payload.dropped_reason = updates.dropped_reason;
   if (updates.goalId !== undefined) payload.goal = updates.goalId;
   if (updates.projectId !== undefined) payload.project = updates.projectId;
 
@@ -895,6 +907,22 @@ export async function updateLearningItemApi(id: string, updates: Partial<Learnin
     body: JSON.stringify(payload),
   });
   return transformLearningItemFromApi(raw);
+}
+
+export async function bulkLearningActionApi(itemIds: string[], action: string, payload: any = {}): Promise<{
+  success: boolean;
+  action: string;
+  affected_count: number;
+  message?: string;
+}> {
+  return await apiRequest<any>('/learning-items/bulk/', {
+    method: 'PATCH',
+    body: JSON.stringify({
+      item_ids: itemIds,
+      action,
+      payload,
+    }),
+  });
 }
 
 export async function deleteLearningItemApi(id: string): Promise<void> {

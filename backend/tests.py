@@ -1913,3 +1913,112 @@ class ConnectedGoalAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['status'], 'COMPLETED')
         self.assertEqual(response.data['progress_percentage'], 100)
+
+
+class LearningBulkAndDroppedAPITests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="bulklearner", password="password123")
+        self.token = create_user_token(self.user)
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {self.token}')
+
+        self.goal = Goal.objects.create(
+            user=self.user,
+            title="DevOps Mastery",
+            category="Tecnología",
+            color_hex="#0EA5E9",
+            progress_mode="CONNECTED",
+            status="ACTIVE"
+        )
+        self.item1 = LearningItem.objects.create(
+            user=self.user,
+            title="Kubernetes Deep Dive",
+            resource_type="COURSE",
+            status="IN_PROGRESS",
+            goal=self.goal,
+            progress_percentage=40
+        )
+        self.item2 = LearningItem.objects.create(
+            user=self.user,
+            title="Terraform Cookbook",
+            resource_type="BOOK",
+            status="IN_PROGRESS",
+            goal=self.goal,
+            progress_percentage=60
+        )
+        self.item3 = LearningItem.objects.create(
+            user=self.user,
+            title="Prometheus Metrics",
+            resource_type="ARTICLE",
+            status="BACKLOG"
+        )
+
+    def test_url_platform_and_color_auto_detection(self):
+        """URL domain automatically sets platform name and color hex on creation"""
+        create_url = reverse('learning-items-list-create')
+        res = self.client.post(create_url, {
+            'title': 'React 19 Deep Dive',
+            'resource_type': 'COURSE',
+            'platform_url': 'https://www.youtube.com/watch?v=12345'
+        }, format='json')
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(res.data['platform_name'], 'YouTube')
+        self.assertEqual(res.data['color_hex'], '#EF4444')
+
+        res_udemy = self.client.post(create_url, {
+            'title': 'Advanced TypeScript',
+            'resource_type': 'COURSE',
+            'platform_url': 'https://www.udemy.com/course/advanced-typescript/'
+        }, format='json')
+        self.assertEqual(res_udemy.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(res_udemy.data['platform_name'], 'Udemy')
+        self.assertEqual(res_udemy.data['color_hex'], '#A435F0')
+
+    def test_bulk_update_status_and_dropped_unlinking(self):
+        """Bulk status update to DROPPED cleanly unlinks from goal and clears focus"""
+        bulk_url = reverse('learning-items-bulk')
+        res = self.client.patch(bulk_url, {
+            'item_ids': [str(self.item1.id), str(self.item2.id)],
+            'action': 'UPDATE_STATUS',
+            'payload': {'status': 'DROPPED', 'dropped_reason': 'Cambio de prioridades'}
+        }, format='json')
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data['affected_count'], 2)
+
+        self.item1.refresh_from_db()
+        self.item2.refresh_from_db()
+        self.assertEqual(self.item1.status, 'DROPPED')
+        self.assertIsNone(self.item1.goal)
+        self.assertIsNotNone(self.item1.dropped_at)
+        self.assertEqual(self.item1.dropped_reason, 'Cambio de prioridades')
+        self.assertFalse(self.item1.is_focus)
+
+    def test_bulk_set_focus(self):
+        """Bulk action toggles is_focus flag across selected items"""
+        bulk_url = reverse('learning-items-bulk')
+        res = self.client.patch(bulk_url, {
+            'item_ids': [str(self.item1.id), str(self.item3.id)],
+            'action': 'SET_FOCUS',
+            'payload': {'is_focus': True}
+        }, format='json')
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.item1.refresh_from_db()
+        self.item3.refresh_from_db()
+        self.assertTrue(self.item1.is_focus)
+        self.assertTrue(self.item3.is_focus)
+
+    def test_bulk_soft_delete(self):
+        """Bulk action soft deletes all specified items"""
+        bulk_url = reverse('learning-items-bulk')
+        res = self.client.patch(bulk_url, {
+            'item_ids': [str(self.item1.id), str(self.item3.id)],
+            'action': 'SOFT_DELETE'
+        }, format='json')
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.item1.refresh_from_db()
+        self.item3.refresh_from_db()
+        self.assertTrue(self.item1.is_deleted)
+        self.assertTrue(self.item3.is_deleted)
+

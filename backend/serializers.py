@@ -53,7 +53,7 @@ class GoalSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'parent_goal_id', 'parent_goal_title', 'is_achieved_100', 'is_deleted', 'deleted_at', 'created_at', 'updated_at']
 
     def get_linked_learning_count(self, obj):
-        return obj.learning_items.filter(is_deleted=False).count()
+        return obj.learning_items.filter(is_deleted=False).exclude(status='DROPPED').count()
 
     def get_linked_projects(self, obj):
         projects = obj.projects.filter(is_deleted=False)
@@ -69,7 +69,7 @@ class GoalSerializer(serializers.ModelSerializer):
         ]
 
     def get_linked_courses(self, obj):
-        courses = obj.learning_items.filter(is_deleted=False)
+        courses = obj.learning_items.filter(is_deleted=False).exclude(status='DROPPED')
         return [
             {
                 'id': str(c.id),
@@ -84,7 +84,7 @@ class GoalSerializer(serializers.ModelSerializer):
 
     def get_breakdown(self, obj):
         proj_list = list(obj.projects.filter(is_deleted=False))
-        course_list = list(obj.learning_items.filter(is_deleted=False))
+        course_list = list(obj.learning_items.filter(is_deleted=False).exclude(status='DROPPED'))
         milestones = list(obj.milestones.all())
 
         projects_avg = round(sum(p.progress_percentage for p in proj_list) / len(proj_list)) if proj_list else None
@@ -445,6 +445,7 @@ class LearningItemSerializer(serializers.ModelSerializer):
             'platform_name', 'platform_url', 'color_hex', 'status',
             'progress_mode', 'progress_percentage', 'current_unit',
             'total_units', 'last_point_reached', 'takeaways_markdown',
+            'is_focus', 'dropped_reason', 'dropped_at',
             'goal', 'goal_title', 'project', 'project_title', 'last_activity_at', 'dormancy_alert_days',
             'dormancy_days', 'is_dormant', 'topics_count', 'completed_topics_count',
             'created_at', 'updated_at'

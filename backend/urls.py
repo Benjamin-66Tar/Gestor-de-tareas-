@@ -36,6 +36,7 @@ from .views import (
     LearningItemListCreateAPI,
     LearningItemDetailAPI,
     LearningItemRestoreAPI,
+    LearningBulkActionAPI,
     LearningTopicListCreateAPI,
     LearningTopicToggleAPI,
     LearningScheduleSessionAPI,
@@ -102,6 +103,7 @@ urlpatterns = [
 
     # Learning Hub
     path('api/v1/learning-items/', LearningItemListCreateAPI.as_view(), name='learning-items-list-create'),
+    path('api/v1/learning-items/bulk/', LearningBulkActionAPI.as_view(), name='learning-items-bulk'),
     path('api/v1/learning-items/<uuid:pk>/', LearningItemDetailAPI.as_view(), name='learning-item-detail'),
     path('api/v1/learning-items/<uuid:pk>/restore/', LearningItemRestoreAPI.as_view(), name='learning-item-restore'),
     path('api/v1/learning-items/<uuid:learning_id>/topics/', LearningTopicListCreateAPI.as_view(), name='learning-topics-list-create'),

@@ -59,7 +59,7 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
       );
       setSubtasks(
         (taskToEdit.subtasks || []).map((s) => ({
-          id: s.id,
+          id: s.id || undefined,
           title: s.title,
           isCompleted: s.isCompleted,
         }))
@@ -168,7 +168,7 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
         reminderMinutes,
         reminder_minutes: reminderMinutes,
         subtasks: subtasks.map((s, idx) => ({
-          id: s.id && s.id.trim() !== '' ? s.id : undefined,
+          ...(s.id && s.id.trim() !== '' ? { id: s.id.trim() } : {}),
           taskId: taskToEdit?.id || '',
           title: s.title,
           isCompleted: s.isCompleted,
