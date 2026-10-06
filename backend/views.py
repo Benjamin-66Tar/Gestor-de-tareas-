@@ -631,8 +631,12 @@ class ProjectTaskStatusAPI(APIView):
         from .services import update_project_task_status
         from .serializers import ProjectTaskSerializer
         new_status = request.data.get('status')
-        if not new_status or new_status not in ['TODO', 'IN_PROGRESS', 'DONE']:
-            return Response({'error': 'Invalid status. Must be TODO, IN_PROGRESS, or DONE.'}, status=status.HTTP_400_BAD_REQUEST)
+        valid_statuses = [choice[0] for choice in ProjectTask.STATUS_CHOICES]
+        if not new_status or new_status not in valid_statuses:
+            return Response(
+                {'error': f'Invalid status. Must be one of: {", ".join(valid_statuses)}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         try:
             ProjectTask.objects.select_related('project').get(pk=pk, project__user=request.user)

@@ -745,46 +745,58 @@ export const AuraProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const moveTaskStatus = async (taskId: string, newStatus: TaskStatus): Promise<boolean> => {
-    if (activeProject) {
-      const oldTasks = activeProject.tasks || [];
-      const taskIndex = oldTasks.findIndex(t => t.id === taskId);
-      if (taskIndex !== -1) {
-        const optimisticTasks = oldTasks.map(t => t.id === taskId ? { ...t, status: newStatus } : t);
-        const completed = optimisticTasks.filter(t => t.status === 'DONE').length;
-        const total = optimisticTasks.length;
-        const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
-        setActiveProject({
-          ...activeProject,
-          tasks: optimisticTasks,
-          totalTasks: total,
-          completedTasks: completed,
-          progressPercentage: progress,
-        });
-      }
-    }
+    setActiveProject(prev => {
+      if (!prev) return null;
+      const oldTasks = prev.tasks || [];
+      const optimisticTasks = oldTasks.map(t => t.id === taskId ? { ...t, status: newStatus } : t);
+      const completed = optimisticTasks.filter(t => t.status === 'DONE').length;
+      const total = optimisticTasks.length;
+      const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
+      return {
+        ...prev,
+        tasks: optimisticTasks,
+        totalTasks: total,
+        completedTasks: completed,
+        progressPercentage: progress,
+      };
+    });
+
     try {
       const res = await api.updateTaskStatusApi(taskId, newStatus);
-      if (activeProject) {
-        const currentTasks = activeProject.tasks || [];
+      setActiveProject(prev => {
+        if (!prev) return null;
+        const currentTasks = prev.tasks || [];
         const updatedTasks = currentTasks.map(t => t.id === taskId ? res.task : t);
         const completed = updatedTasks.filter(t => t.status === 'DONE').length;
         const total = updatedTasks.length;
-        setActiveProject(prev => prev ? {
+        return {
           ...prev,
           tasks: updatedTasks,
-          status: res.projectStatus as any,
-          progressPercentage: res.projectProgressPercentage,
+          status: (res.projectStatus as any) || prev.status,
+          progressPercentage: res.projectProgressPercentage ?? prev.progressPercentage,
           totalTasks: total,
           completedTasks: completed,
-        } : null);
-        setProjects(prev => prev.map(p => p.id === activeProject.id ? {
-          ...p,
-          status: res.projectStatus as any,
-          progressPercentage: res.projectProgressPercentage,
-          totalTasks: total,
-          completedTasks: completed,
-        } : p));
-      }
+        };
+      });
+
+      setProjects(prev => prev.map(p => {
+        if (activeProject && p.id === activeProject.id) {
+          const currentTasks = p.tasks || [];
+          const updatedTasks = currentTasks.map(t => t.id === taskId ? res.task : t);
+          const completed = updatedTasks.filter(t => t.status === 'DONE').length;
+          const total = updatedTasks.length;
+          return {
+            ...p,
+            tasks: updatedTasks,
+            status: (res.projectStatus as any) || p.status,
+            progressPercentage: res.projectProgressPercentage ?? p.progressPercentage,
+            totalTasks: total,
+            completedTasks: completed,
+          };
+        }
+        return p;
+      }));
+
       return true;
     } catch (err) {
       console.error('Error moving task status:', err);

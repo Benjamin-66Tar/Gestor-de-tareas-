@@ -64,6 +64,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
     setIsDragOver(true);
   };
 
@@ -121,7 +122,11 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({
       </div>
 
       {/* Task Cards Container */}
-      <div className="flex-1 space-y-3 overflow-y-auto max-h-[calc(100vh-280px)] min-h-[140px] pr-1 scrollbar-thin">
+      <div
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
+        className="flex-1 space-y-3 overflow-y-auto max-h-[calc(100vh-280px)] min-h-[140px] pr-1 scrollbar-thin"
+      >
         {tasks.map((task) => (
           <TaskCard
             key={task.id}
@@ -132,7 +137,11 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({
         ))}
 
         {tasks.length === 0 && !isQuickAdding && (
-          <div className="h-28 flex flex-col items-center justify-center border-2 border-dashed border-slate-800/60 rounded-xl text-slate-500 text-xs text-center p-3">
+          <div
+            onDragOver={handleDragOver}
+            onDrop={handleDrop}
+            className="h-28 flex flex-col items-center justify-center border-2 border-dashed border-slate-800/60 rounded-xl text-slate-500 text-xs text-center p-3 pointer-events-auto"
+          >
             <span>Arrastra tareas aquí</span>
           </div>
         )}

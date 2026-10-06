@@ -24,6 +24,9 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ project, onEditTask })
   }, [project.tasks]);
 
   const handleDropTask = async (taskId: string, newStatus: TaskStatus) => {
+    const task = (project.tasks || []).find(t => t.id === taskId);
+    const currentStatus = task?.status === 'TODO' ? 'BACKLOG' : task?.status;
+    if (currentStatus === newStatus) return;
     await moveTaskStatus(taskId, newStatus);
   };
 
