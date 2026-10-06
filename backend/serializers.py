@@ -147,7 +147,7 @@ class GoalSerializer(serializers.ModelSerializer):
 
 
 class TaskSubtaskSerializer(serializers.ModelSerializer):
-    id = serializers.UUIDField(required=False)
+    id = serializers.CharField(required=False, allow_null=True, allow_blank=True)
 
     class Meta:
         model = TaskSubtask
@@ -174,7 +174,19 @@ class ProjectTaskSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         with transaction.atomic():
             subtasks_data = validated_data.pop('subtasks', [])
-            task = ProjectTask.objects.create(**validated_data)
+            try:
+                task = ProjectTask.objects.create(**validated_data)
+            except Exception as db_err:
+                err_msg = str(db_err).lower()
+                if 'no such column' in err_msg or 'column' in err_msg:
+                    legacy_data = {
+                        k: v for k, v in validated_data.items()
+                        if k not in ['start_date', 'estimated_days', 'deviation_reason']
+                    }
+                    task = ProjectTask.objects.create(**legacy_data)
+                else:
+                    raise db_err
+
             for idx, s_data in enumerate(subtasks_data):
                 s_data.pop('id', None)
                 if 'order' not in s_data:
@@ -187,12 +199,26 @@ class ProjectTaskSerializer(serializers.ModelSerializer):
             subtasks_data = validated_data.pop('subtasks', None)
             for attr, value in validated_data.items():
                 setattr(instance, attr, value)
-            instance.save()
+            try:
+                instance.save()
+            except Exception as db_err:
+                err_msg = str(db_err).lower()
+                if 'no such column' in err_msg or 'column' in err_msg:
+                    legacy_fields = [
+                        'title', 'description', 'status', 'priority', 'deadline',
+                        'reminder_minutes', 'order', 'updated_at'
+                    ]
+                    save_fields = [f for f in legacy_fields if hasattr(instance, f)]
+                    instance.save(update_fields=save_fields)
+                else:
+                    raise db_err
 
             if subtasks_data is not None:
                 existing_ids = []
                 for idx, s_data in enumerate(subtasks_data):
                     s_id = s_data.get('id', None)
+                    if not s_id or str(s_id).strip() == '':
+                        s_id = None
                     if 'order' not in s_data:
                         s_data['order'] = idx
                     if s_id and TaskSubtask.objects.filter(id=s_id, task=instance).exists():

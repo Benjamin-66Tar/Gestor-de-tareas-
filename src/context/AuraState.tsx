@@ -716,31 +716,43 @@ export const AuraProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const updateTask = async (taskId: string, taskData: Partial<ProjectTask>): Promise<boolean> => {
     try {
       const updated = await api.updateProjectTaskApi(taskId, taskData);
-      if (activeProject) {
-        const currentTasks = activeProject.tasks || [];
+      setActiveProject(prev => {
+        if (!prev) return null;
+        const currentTasks = prev.tasks || [];
         const updatedTasks = currentTasks.map(t => t.id === taskId ? updated : t);
         const completed = updatedTasks.filter(t => t.status === 'DONE').length;
         const total = updatedTasks.length;
-        const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
-        setActiveProject({
-          ...activeProject,
+        return {
+          ...prev,
           tasks: updatedTasks,
           totalTasks: total,
           completedTasks: completed,
-          progressPercentage: progress,
-        });
-        setProjects(prev => prev.map(p => p.id === activeProject.id ? {
-          ...p,
-          totalTasks: total,
-          completedTasks: completed,
-          progressPercentage: progress,
-        } : p));
-      }
+          progressPercentage: total > 0 ? Math.round((completed / total) * 100) : 0,
+        };
+      });
+
+      setProjects(prev => prev.map(p => {
+        if (activeProject && p.id === activeProject.id) {
+          const currentTasks = p.tasks || [];
+          const updatedTasks = currentTasks.map(t => t.id === taskId ? updated : t);
+          const completed = updatedTasks.filter(t => t.status === 'DONE').length;
+          const total = updatedTasks.length;
+          return {
+            ...p,
+            tasks: updatedTasks,
+            totalTasks: total,
+            completedTasks: completed,
+            progressPercentage: total > 0 ? Math.round((completed / total) * 100) : 0,
+          };
+        }
+        return p;
+      }));
+
       fetchElementos();
       return true;
     } catch (err) {
       console.error('Error updating task:', err);
-      return false;
+      throw err;
     }
   };
 

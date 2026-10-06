@@ -168,7 +168,7 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
         reminderMinutes,
         reminder_minutes: reminderMinutes,
         subtasks: subtasks.map((s, idx) => ({
-          id: s.id || '',
+          id: s.id && s.id.trim() !== '' ? s.id : undefined,
           taskId: taskToEdit?.id || '',
           title: s.title,
           isCompleted: s.isCompleted,
@@ -188,9 +188,9 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
       } else {
         setErrorMsg('Ocurrió un error al guardar la tarea. Inténtalo de nuevo.');
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      setErrorMsg('Error de conexión al guardar.');
+      setErrorMsg(err.message || 'Error al guardar la tarea.');
     } finally {
       setIsSubmitting(false);
     }

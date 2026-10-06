@@ -53,6 +53,13 @@ async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promi
           const val = parsed.details[firstKey];
           errorMessage = Array.isArray(val) ? val[0] : String(val);
         }
+        if (!errorMessage && parsed && typeof parsed === 'object') {
+          const firstKey = Object.keys(parsed)[0];
+          if (firstKey) {
+            const val = parsed[firstKey];
+            errorMessage = Array.isArray(val) ? `${firstKey}: ${val[0]}` : `${firstKey}: ${val}`;
+          }
+        }
       } catch {
         // not JSON
       }
@@ -460,11 +467,17 @@ export async function createProjectTaskApi(projectId: string, taskData: Partial<
     reminder_minutes: taskData.reminderMinutes !== undefined
       ? taskData.reminderMinutes
       : ((taskData as any).reminder_minutes !== undefined ? (taskData as any).reminder_minutes : 0),
-    subtasks: (taskData.subtasks || []).map((s, idx) => ({
-      title: s.title,
-      is_completed: s.isCompleted,
-      order: idx,
-    })),
+    subtasks: (taskData.subtasks || []).map((s, idx) => {
+      const item: any = {
+        title: s.title,
+        is_completed: s.isCompleted,
+        order: idx,
+      };
+      if (s.id && typeof s.id === 'string' && s.id.trim() !== '') {
+        item.id = s.id.trim();
+      }
+      return item;
+    }),
   };
 
   const raw = await apiRequest<any>(`/projects/${projectId}/tasks/`, {
@@ -490,12 +503,17 @@ export async function updateProjectTaskApi(taskId: string, taskData: Partial<Pro
   if (taskData.reminderMinutes !== undefined) payload.reminder_minutes = taskData.reminderMinutes;
   if ((taskData as any).reminder_minutes !== undefined) payload.reminder_minutes = (taskData as any).reminder_minutes;
   if (taskData.subtasks !== undefined) {
-    payload.subtasks = taskData.subtasks.map((s, idx) => ({
-      id: s.id,
-      title: s.title,
-      is_completed: s.isCompleted,
-      order: idx,
-    }));
+    payload.subtasks = taskData.subtasks.map((s, idx) => {
+      const item: any = {
+        title: s.title,
+        is_completed: s.isCompleted,
+        order: idx,
+      };
+      if (s.id && typeof s.id === 'string' && s.id.trim() !== '') {
+        item.id = s.id.trim();
+      }
+      return item;
+    });
   }
 
   const raw = await apiRequest<any>(`/tasks/${taskId}/`, {

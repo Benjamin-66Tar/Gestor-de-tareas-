@@ -581,10 +581,20 @@ class ProjectTaskListCreateAPI(APIView):
         data['project'] = str(project.id)
         serializer = ProjectTaskSerializer(data=data)
         if serializer.is_valid():
-            task = serializer.save(project=project)
-            calculate_project_progress(project)
-            return Response(ProjectTaskSerializer(task).data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            try:
+                task = serializer.save(project=project)
+                calculate_project_progress(project)
+                return Response(ProjectTaskSerializer(task).data, status=status.HTTP_201_CREATED)
+            except Exception as e:
+                return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        error_list = []
+        for f, errs in serializer.errors.items():
+            if isinstance(errs, list):
+                error_list.append(f"{f}: {errs[0]}")
+            else:
+                error_list.append(f"{f}: {errs}")
+        return Response({'error': "; ".join(error_list), 'details': serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class ProjectTaskDetailAPI(APIView):
@@ -609,10 +619,20 @@ class ProjectTaskDetailAPI(APIView):
         task = self.get_object(pk, request.user)
         serializer = ProjectTaskSerializer(task, data=request.data, partial=True)
         if serializer.is_valid():
-            updated = serializer.save()
-            calculate_project_progress(updated.project)
-            return Response(ProjectTaskSerializer(updated).data, status=status.HTTP_200_OK)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            try:
+                updated = serializer.save()
+                calculate_project_progress(updated.project)
+                return Response(ProjectTaskSerializer(updated).data, status=status.HTTP_200_OK)
+            except Exception as e:
+                return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        error_list = []
+        for f, errs in serializer.errors.items():
+            if isinstance(errs, list):
+                error_list.append(f"{f}: {errs[0]}")
+            else:
+                error_list.append(f"{f}: {errs}")
+        return Response({'error': "; ".join(error_list), 'details': serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
 
     def delete(self, request, pk):
         from .services import calculate_project_progress
