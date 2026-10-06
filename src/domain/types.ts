@@ -130,7 +130,7 @@ export interface Goal {
   linkedLearningCount?: number;
   linkedProjects?: LinkedProjectSummary[];
   linkedCourses?: LinkedLearningSummary[];
-  breakdown?: GoalProgressBreakdown;
+  breakdown?: GoalProgressBreakdown | null;
   isAchieved100?: boolean;
   createdAt: string;
   updatedAt: string;

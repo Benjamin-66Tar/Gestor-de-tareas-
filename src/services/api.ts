@@ -198,7 +198,7 @@ export function transformGoalFromApi(raw: any): Goal {
       projects: raw.breakdown.projects_avg ?? raw.breakdown.projects ?? null,
       learning: raw.breakdown.courses_avg ?? raw.breakdown.learning ?? null,
       milestones: raw.breakdown.milestones_avg ?? raw.breakdown.milestones ?? null,
-    } : null,
+    } : undefined,
     isAchieved100: Boolean(raw.is_achieved_100 ?? raw.isAchieved100 ?? (raw.progress_percentage >= 100)),
     progressMode: raw.progress_mode ?? raw.progressMode ?? 'MILESTONES',
     progressPercentage: typeof raw.progress_percentage === 'number'
