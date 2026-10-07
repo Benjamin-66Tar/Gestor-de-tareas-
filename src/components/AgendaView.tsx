@@ -17,20 +17,25 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
 }) => {
   // Filter elements to display only those falling in the active month
   const itemsFiltrados = elementos.filter(item => {
-    if (!item.fecha_limite) return false;
-    const date = new Date(item.fecha_limite);
-    return date.getFullYear() === anioActivo && date.getMonth() === mesActivo;
+    const rawDate = item.fecha_limite || item.fecha_inicio;
+    if (!rawDate) return false;
+    const localDateStr = toLocalDateString(rawDate);
+    if (!localDateStr) return false;
+    const [yearNum, monthNum] = localDateStr.split('-').map(Number);
+    return yearNum === anioActivo && monthNum - 1 === mesActivo;
   });
 
   // Sort items by date
   itemsFiltrados.sort((a, b) => {
-    return new Date(a.fecha_limite!).getTime() - new Date(b.fecha_limite!).getTime();
+    const dateA = a.fecha_limite || a.fecha_inicio || '';
+    const dateB = b.fecha_limite || b.fecha_inicio || '';
+    return new Date(dateA).getTime() - new Date(dateB).getTime();
   });
 
   // Group items by local date string for visual grouping
   const agrupadosPorDia: Record<string, PlanElemento[]> = {};
   itemsFiltrados.forEach(item => {
-    const localDateStr = toLocalDateString(item.fecha_limite);
+    const localDateStr = toLocalDateString(item.fecha_limite || item.fecha_inicio);
     if (!localDateStr) return;
     if (!agrupadosPorDia[localDateStr]) {
       agrupadosPorDia[localDateStr] = [];

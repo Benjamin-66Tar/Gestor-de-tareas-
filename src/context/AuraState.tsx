@@ -22,6 +22,7 @@ import {
   RegisterData,
   AuthSessionUser,
   LearningItem,
+  ResourceType,
   LearningFilterCriteria,
   ProgressMatrixRow,
   GoalFilterHorizon,
